@@ -277,3 +277,8 @@ class FollowUpActivityForm(forms.ModelForm):
             cleaned_data["status"] = FollowUpActivity.Status.PENDING
 
         return cleaned_data
+
+
+# Backward-compatible alias
+FollowUpStaffForm = FollowUpEmployeeForm
+

@@ -185,7 +185,7 @@ class FinanceApplication(models.Model):
 
             if not self.monthly_emi or self.monthly_emi <= Decimal("0"):
                 if self.emi_duration and int(self.emi_duration) in (3, 6):
-                    raw_emi = self.mobile_price / Decimal(self.emi_duration)
+                    raw_emi = self.financier_request_amount / Decimal(self.emi_duration)
                     self.monthly_emi = self.round_emi_to_tens(raw_emi)
             else:
                 # If shop owner customized EMI, round it to nearest 10s as well
@@ -201,7 +201,177 @@ class FinanceApplication(models.Model):
             random_suffix = uuid.uuid4().hex[:6].upper()
             self.application_number = f"APP-{date_prefix}-{random_suffix}"
 
+        is_new = self.pk is None
         super().save(*args, **kwargs)
+
+        if is_new:
+            self.generate_default_schedule_if_missing()
+
+    def generate_default_schedule_if_missing(self, force=False):
+        """
+        Generates customer EMI schedule installments:
+        - Exactly tenure months (3 or 6)
+        - Due dates calculated on monthly_due_day for each month
+        - Financed amount / tenure with final installment settling paise rounding
+        """
+        import calendar
+        from datetime import datetime, date
+        from payments.models import CustomerEMISchedule
+
+        if not force and self.emi_schedules.exists():
+            return
+
+        if force:
+            self.emi_schedules.all().delete()
+
+        tenure = int(self.emi_duration or 6)
+        financed = self.financier_request_amount or Decimal("0.00")
+        if financed <= Decimal("0.00") or tenure <= 0:
+            return
+
+        app_date = self.application_date or timezone.localdate()
+        if isinstance(app_date, str):
+            try:
+                app_date = datetime.strptime(app_date[:10], "%Y-%m-%d").date()
+            except Exception:
+                app_date = timezone.localdate()
+
+        due_day = self.monthly_due_day or self.calculate_monthly_due_day(app_date)
+
+        base_inst = (financed / Decimal(tenure)).quantize(Decimal("0.01"))
+        remainder = financed - (base_inst * (tenure - 1))
+
+        cur_year = app_date.year
+        cur_month = app_date.month
+
+        # Start first installment on next due cycle
+        if app_date.day >= due_day:
+            cur_month += 1
+            if cur_month > 12:
+                cur_month = 1
+                cur_year += 1
+
+        schedules = []
+        for i in range(1, tenure + 1):
+            _, last_day = calendar.monthrange(cur_year, cur_month)
+            inst_due_date = date(cur_year, cur_month, min(due_day, last_day))
+            inst_amount = remainder if i == tenure else base_inst
+
+            schedules.append(
+                CustomerEMISchedule(
+                    application=self,
+                    customer=self.customer,
+                    installment_number=i,
+                    due_date=inst_due_date,
+                    amount=inst_amount,
+                    amount_paid=Decimal("0.00"),
+                    is_paid=False,
+                    status=CustomerEMISchedule.InstallmentStatus.PENDING,
+                )
+            )
+
+            cur_month += 1
+            if cur_month > 12:
+                cur_month = 1
+                cur_year += 1
+
+        CustomerEMISchedule.objects.bulk_create(schedules)
+
+    def record_customer_payment(self, amount, payment_date=None, payment_mode="UPI", transaction_reference="", recorded_by=None, remarks=""):
+        """
+        Records a customer EMI payment and applies it sequentially across unpaid schedule installments.
+        """
+        from payments.models import CustomerEMIPayment, CustomerEMISchedule
+        if payment_date is None:
+            payment_date = timezone.localdate()
+        amt = Decimal(str(amount))
+        if amt <= Decimal("0.00"):
+            return None
+
+        self.generate_default_schedule_if_missing()
+
+        payment = CustomerEMIPayment.objects.create(
+            application=self,
+            customer=self.customer,
+            amount=amt,
+            payment_date=payment_date,
+            payment_mode=payment_mode,
+            transaction_reference=transaction_reference,
+            recorded_by=recorded_by,
+            remarks=remarks,
+        )
+
+        remaining_to_distribute = amt
+        unpaid_schedules = self.emi_schedules.filter(is_paid=False).order_by("installment_number")
+
+        for sched in unpaid_schedules:
+            if remaining_to_distribute <= Decimal("0.00"):
+                break
+            needed = sched.amount - sched.amount_paid
+            if remaining_to_distribute >= needed:
+                sched.amount_paid = sched.amount
+                sched.is_paid = True
+                sched.paid_date = payment_date
+                sched.status = CustomerEMISchedule.InstallmentStatus.PAID
+                remaining_to_distribute -= needed
+            else:
+                sched.amount_paid += remaining_to_distribute
+                sched.status = CustomerEMISchedule.InstallmentStatus.PARTIAL
+                remaining_to_distribute = Decimal("0.00")
+            sched.save(update_fields=["amount_paid", "is_paid", "paid_date", "status", "updated_at"])
+
+        return payment
+
+    @property
+    def total_customer_paid(self):
+        """Sum of all customer EMI payments received."""
+        total = self.customer_emi_payments.aggregate(total=models.Sum("amount"))["total"]
+        return total or Decimal("0.00")
+
+    @property
+    def customer_remaining_balance(self):
+        """Remaining EMI balance: Financed Amount - Total Customer Paid."""
+        financed = self.financier_request_amount or Decimal("0.00")
+        return max(Decimal("0.00"), financed - self.total_customer_paid)
+
+    @property
+    def next_unpaid_schedule(self):
+        """Next unpaid EMI installment."""
+        return self.emi_schedules.filter(is_paid=False).order_by("installment_number").first()
+
+    @property
+    def next_unpaid_due_date(self):
+        """Due date of the next unpaid installment."""
+        unpaid = self.next_unpaid_schedule
+        return unpaid.due_date if unpaid else None
+
+    def due_classification(self, today=None):
+        """
+        Classifies due status:
+        - PAID: When customer has no remaining balance or all installments paid
+        - DUE_TODAY: Next unpaid installment due date == today
+        - UPCOMING_DUE: Next unpaid installment due within next 2 days (excluding today)
+        - OVERDUE: Next unpaid installment due date < today
+        - NORMAL: More than 2 days in the future
+        """
+        from datetime import timedelta
+        if today is None:
+            today = timezone.localdate()
+
+        if self.customer_remaining_balance <= Decimal("0.00") or not self.next_unpaid_schedule:
+            return "PAID"
+
+        next_date = self.next_unpaid_due_date
+        if not next_date:
+            return "NORMAL"
+
+        if next_date == today:
+            return "DUE_TODAY"
+        elif today < next_date <= today + timedelta(days=2):
+            return "UPCOMING_DUE"
+        elif next_date < today:
+            return "OVERDUE"
+        return "NORMAL"
 
     def __str__(self):
         return f"{self.application_number} — {self.customer.name} ({self.mobile_model})"

@@ -13,14 +13,19 @@ urlpatterns = [
     # Applications Review & Approval (Pending, Approved, Rejected)
     path("applications/", views.admin_applications_list_view, name="admin_applications_list"),
 
-    # All Customers & Application Approvals
+    # All Customers & Customer Management
     path("customers/", views.admin_all_customers_view, name="admin_all_customers"),
     path("customers/<int:pk>/", views.admin_customer_detail_view, name="admin_customer_detail"),
+    path("customers/<int:pk>/update-status/", views.admin_customer_update_status_view, name="admin_customer_update_status"),
+    path("customers/<int:pk>/edit-due-date/", views.admin_customer_edit_due_date_view, name="admin_customer_edit_due_date"),
+    path("customers/<int:pk>/record-payment/", views.admin_customer_record_payment_view, name="admin_customer_record_payment"),
+    path("customers/export/<str:export_format>/", views.admin_customers_export_view, name="admin_customers_export"),
     path("customers/applications/<int:pk>/approval/", views.admin_application_approval_view, name="admin_application_approval"),
 
     # Shop-wise Customers
     path("shopwise-customers/", views.admin_shopwise_customers_view, name="admin_shopwise_customers"),
     path("shopwise-customers/<int:shop_id>/", views.admin_shopwise_detail_view, name="admin_shopwise_detail"),
+    path("shopwise-customers/<int:shop_id>/export/<str:export_format>/", views.admin_shopwise_export_view, name="admin_shopwise_export"),
 
     # Customer EMI Details
     path("emi-details/", views.admin_customer_emi_list_view, name="admin_customer_emi_list"),

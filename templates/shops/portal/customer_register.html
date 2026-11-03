@@ -352,9 +352,10 @@
             requestPreview.textContent = 'Financier Request: ₹' + reqAmount.toFixed(2);
         }
 
-        // Monthly EMI (auto-populate if not already customized by user)
+        // Monthly EMI = Financed Amount (Price - Down) / Duration (3 or 6)
         if (!emiInput.getAttribute('data-user-edited') && duration > 0 && price > 0) {
-            const rawEmi = price / duration;
+            const financedAmount = Math.max(0, price - down);
+            const rawEmi = financedAmount / duration;
             const roundedEmi = roundToTens(rawEmi);
             emiInput.value = roundedEmi.toFixed(2);
         }

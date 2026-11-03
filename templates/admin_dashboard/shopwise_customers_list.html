@@ -74,37 +74,35 @@
                         <div><i class="bi bi-telephone me-1 text-secondary"></i>{{ item.shop.phone }}</div>
                     </div>
 
-                    <!-- Metrics Badges -->
-                    <div class="row g-2 text-center mb-3">
+                    <!-- Customer EMI Statistics (Customer-to-Shop) -->
+                    <div class="row g-2 mb-3">
                         <div class="col-6">
-                            <div class="p-2 bg-light rounded-3 border">
-                                <div class="fs-4 fw-bold text-primary">{{ item.customer_count }}</div>
-                                <div class="text-muted small" style="font-size: 0.72rem;">Registered Customers</div>
+                            <div class="p-2 bg-light rounded-2 border text-center h-100">
+                                <span class="text-muted small d-block" style="font-size: 0.70rem;">Registered Customers</span>
+                                <div class="fs-5 fw-bold text-primary">{{ item.stats.total_customers }}</div>
                             </div>
                         </div>
                         <div class="col-6">
-                            <div class="p-2 bg-light rounded-3 border">
-                                <div class="fs-4 fw-bold text-dark">{{ item.application_count }}</div>
-                                <div class="text-muted small" style="font-size: 0.72rem;">Financed Loans</div>
+                            <div class="p-2 bg-light rounded-2 border text-center h-100">
+                                <span class="text-muted small d-block" style="font-size: 0.70rem;">Paid by Customers</span>
+                                <div class="fs-5 fw-bold text-success">₹{{ item.stats.total_amount_paid|floatformat:2 }}</div>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- Financial Summary -->
-                    <div class="small p-2 bg-light rounded-3 border mb-3">
-                        <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted">Total Payable:</span>
-                            <span class="fw-semibold text-dark">₹{{ item.financials.total_payable|floatformat:2 }}</span>
+                        <div class="col-6">
+                            <div class="p-2 bg-light rounded-2 border text-center h-100">
+                                <span class="text-muted small d-block" style="font-size: 0.70rem;">Pending This Month</span>
+                                <div class="fs-5 fw-bold {% if item.stats.total_pending_this_month > 0 %}text-warning-emphasis{% else %}text-muted{% endif %}">
+                                    ₹{{ item.stats.total_pending_this_month|floatformat:2 }}
+                                </div>
+                            </div>
                         </div>
-                        <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted">Paid by Admin:</span>
-                            <span class="fw-semibold text-success">₹{{ item.financials.total_paid|floatformat:2 }}</span>
-                        </div>
-                        <div class="d-flex justify-content-between pt-1 border-top">
-                            <span class="text-muted fw-bold">Remaining Due:</span>
-                            <span class="fw-bold {% if item.financials.remaining_due > 0 %}text-danger{% else %}text-muted{% endif %}">
-                                ₹{{ item.financials.remaining_due|floatformat:2 }}
-                            </span>
+                        <div class="col-6">
+                            <div class="p-2 bg-light rounded-2 border text-center h-100">
+                                <span class="text-muted small d-block" style="font-size: 0.70rem;">Pending All EMIs</span>
+                                <div class="fs-5 fw-bold {% if item.stats.total_pending_all_emis > 0 %}text-danger{% else %}text-muted{% endif %}">
+                                    ₹{{ item.stats.total_pending_all_emis|floatformat:2 }}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -113,7 +111,7 @@
                 <div>
                     <a href="{% url 'admin_shopwise_detail' shop_id=item.shop.id %}" class="btn btn-outline-primary w-100 d-flex align-items-center justify-content-center gap-2">
                         <i class="bi bi-people"></i>
-                        <span>View {{ item.shop.name }} Customers ({{ item.customer_count }})</span>
+                        <span>View {{ item.shop.name }} Customers ({{ item.stats.total_customers }})</span>
                     </a>
                 </div>
             </div>

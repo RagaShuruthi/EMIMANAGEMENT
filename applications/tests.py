@@ -150,7 +150,9 @@ class DueDateAndEmiCalculationTests(TestCase):
         shop = Shop.objects.create(name="Shop EMI", owner_name="Owner", phone="999", address="St")
         cust = Customer.objects.create(shop=shop, name="Cust", work_address="W", home_address="H", primary_mobile="9876543210", secondary_mobile="9876543211")
 
-        # 60,000 / 6 months with 10,000 down payment -> EMI is still 10,000!
+        # Financed Amount = Phone Purchase Price - Down Payment
+        # Monthly EMI = Financed Amount / Tenure (rounded to 10s)
+        # e.g., 60,000 - 10,000 = 50,000 / 6 -> 8330.00
         app6 = FinanceApplication.objects.create(
             shop=shop,
             customer=cust,
@@ -160,12 +162,25 @@ class DueDateAndEmiCalculationTests(TestCase):
             down_payment=Decimal("10000.00"),
             emi_duration=6,
         )
-        self.assertEqual(app6.monthly_emi, Decimal("10000.00"))
+        self.assertEqual(app6.monthly_emi, Decimal("8330.00"))
         self.assertEqual(app6.monthly_due_day, 5)
         # Financier Request Amount = Total Selling Price - Down Payment (60,000 - 10,000 = 50,000)
         self.assertEqual(app6.financier_request_amount, Decimal("50000.00"))
 
-        # 60,000 / 3 months with 5,000 down payment -> EMI is 20,000!
+        # User's exact verified example: Phone 30,000, Down 6,000, 6 Months -> Monthly EMI = 4,000.00
+        app_exact = FinanceApplication.objects.create(
+            shop=shop,
+            customer=cust,
+            application_date=datetime.date(2026, 5, 3),
+            mobile_model="Vivo V30",
+            mobile_price=Decimal("30000.00"),
+            down_payment=Decimal("6000.00"),
+            emi_duration=6,
+        )
+        self.assertEqual(app_exact.financier_request_amount, Decimal("24000.00"))
+        self.assertEqual(app_exact.monthly_emi, Decimal("4000.00"))
+
+        # 60,000 - 5,000 = 55,000 / 3 -> 18330.00
         app3 = FinanceApplication.objects.create(
             shop=shop,
             customer=cust,
@@ -175,7 +190,7 @@ class DueDateAndEmiCalculationTests(TestCase):
             down_payment=Decimal("5000.00"),
             emi_duration=3,
         )
-        self.assertEqual(app3.monthly_emi, Decimal("20000.00"))
+        self.assertEqual(app3.monthly_emi, Decimal("18330.00"))
         self.assertEqual(app3.monthly_due_day, 15)
         # Financier Request Amount = 60,000 - 5,000 = 55,000
         self.assertEqual(app3.financier_request_amount, Decimal("55000.00"))
@@ -331,8 +346,8 @@ class ShopDashboardOperationsTests(TestCase):
 
         app = FinanceApplication.objects.get(customer=customer)
         self.assertEqual(app.mobile_price, Decimal("60000.00"))
-        # Down payment is interest/profit, so EMI is 60,000 / 6 = 10,000
-        self.assertEqual(app.monthly_emi, Decimal("10000.00"))
+        # Financed is 60,000 - 10,000 = 50,000 / 6 = 8,330
+        self.assertEqual(app.monthly_emi, Decimal("8330.00"))
         # Due day edited to 25th
         self.assertEqual(app.monthly_due_day, 25)
         self.assertEqual(app.documents.count(), 2)

@@ -358,17 +358,21 @@ class AdminDashboardReworkTests(TestCase):
         )
 
     def test_all_shops_page_renders_financials_and_customer_counts(self):
-        """All Shops page shows shop ID, customer count, payable, paid, remaining, and status."""
+        """Shop Payouts page shows payable, paid, remaining, and status, while Partner Shops shows shop info."""
         self.client.login(username="admin_rework", password="AdminPassword123!")
+        # Partner shops page
         response = self.client.get(reverse("shop_list"))
-
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Alpha Mobile World")
         self.assertContains(response, "Beta Gadget Plaza")
         self.assertContains(response, f"#{self.shop1.id}")
-        self.assertContains(response, "₹25000.00")  # Alpha payable
-        self.assertContains(response, "₹18000.00")  # Beta payable
-        self.assertContains(response, "Unpaid")
+
+        # Dedicated Shop Payouts page
+        pay_response = self.client.get(reverse("admin_shop_payments"))
+        self.assertEqual(pay_response.status_code, 200)
+        self.assertContains(pay_response, "₹25000.00")  # Alpha payable
+        self.assertContains(pay_response, "₹18000.00")  # Beta payable
+        self.assertContains(pay_response, "Unpaid")
 
     def test_all_customers_page_filters_and_emi_details(self):
         """All Customers page lists customers across all shops with EMI details and filters."""

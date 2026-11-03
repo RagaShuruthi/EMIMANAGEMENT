@@ -3,6 +3,7 @@ Customer model for Private Finance EMI Management System.
 Stores registered customer contact and address details associated with a retail shop.
 """
 
+from django.conf import settings
 from django.db import models
 from shops.models import Shop
 
@@ -33,6 +34,24 @@ class Customer(models.Model):
         default="",
         help_text="Secondary mobile contact number (Mandatory)."
     )
+    latest_update_status = models.TextField(
+        blank=True,
+        default="",
+        help_text="Latest update or follow-up note regarding this customer."
+    )
+    latest_update_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp of the latest update."
+    )
+    latest_update_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="customer_latest_updates",
+        help_text="User who logged the latest update."
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -48,3 +67,41 @@ class Customer(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.primary_mobile})"
+
+
+class CustomerUpdateHistory(models.Model):
+    """
+    Historical log of updates, notes, and statuses logged for a customer.
+    Never overwrites past updates so complete history is preserved.
+    """
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=models.CASCADE,
+        related_name="update_history",
+        help_text="Customer this note relates to."
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="logged_customer_updates",
+        help_text="Staff or admin who entered this update."
+    )
+    notes = models.TextField(
+        help_text="Update note message."
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Date and time when this note was logged."
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Customer Update History"
+        verbose_name_plural = "Customer Update Histories"
+
+    def __str__(self):
+        author = self.user.username if self.user else "System"
+        return f"{self.customer.name} - {author} ({self.created_at.strftime('%Y-%m-%d %H:%M')})"
+

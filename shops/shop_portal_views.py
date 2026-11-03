@@ -247,7 +247,10 @@ def customer_registration_view(request):
         except Exception:
             monthly_due_day = FinanceApplication.calculate_monthly_due_day(app_date_str)
 
-        # Monthly EMI: Main Payment (Mobile Price) / Due Months, rounded to nearest 10s
+        # Financier Request Amount = Total Selling Price - Down Payment
+        calculated_request_amount = max(Decimal("0.00"), mobile_price - down_payment)
+
+        # Monthly EMI: Financed Amount / Due Months (3 or 6), rounded to nearest 10s
         # Editable by shop owner
         monthly_emi_str = request.POST.get("monthly_emi", "").replace(",", "").strip()
         custom_emi = None
@@ -260,11 +263,8 @@ def customer_registration_view(request):
         if custom_emi and custom_emi > Decimal("0"):
             calculated_monthly_emi = FinanceApplication.round_emi_to_tens(custom_emi)
         else:
-            raw_emi = (mobile_price / Decimal(emi_duration)) if (emi_duration in (3, 6) and mobile_price > Decimal("0")) else Decimal("0.00")
+            raw_emi = (calculated_request_amount / Decimal(emi_duration)) if (emi_duration in (3, 6) and calculated_request_amount > Decimal("0")) else Decimal("0.00")
             calculated_monthly_emi = FinanceApplication.round_emi_to_tens(raw_emi)
-
-        # Financier Request Amount = Total Selling Price - Down Payment
-        calculated_request_amount = max(Decimal("0.00"), mobile_price - down_payment)
 
         form_data = {
             "customer_name": customer_name,

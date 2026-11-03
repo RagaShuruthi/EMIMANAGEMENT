@@ -645,6 +645,22 @@ def followup_quick_update_view(request, pk):
 
     activity.save()
 
+    # Synchronize Customer latest update status and CustomerUpdateHistory
+    from customers.models import CustomerUpdateHistory
+    update_msg = f"{activity.get_outcome_display()}"
+    if notes:
+        update_msg += f": {notes}"
+    customer.latest_update_status = update_msg
+    customer.latest_update_at = timezone.now()
+    customer.latest_update_by = user
+    customer.save(update_fields=["latest_update_status", "latest_update_at", "latest_update_by", "updated_at"])
+
+    CustomerUpdateHistory.objects.create(
+        customer=customer,
+        user=user,
+        notes=update_msg
+    )
+
     next_url = request.POST.get("next") or request.GET.get("next")
     if next_url:
         return redirect(next_url)
@@ -737,6 +753,23 @@ def followup_customer_detail_view(request, pk):
                 activity.status = FollowUpActivity.Status.PENDING
                 messages.info(request, f"Follow-up recorded: Marked '{customer.name}' as Not Paid.")
             activity.save()
+
+            # Synchronize customer update status
+            from customers.models import CustomerUpdateHistory
+            note_str = f"{activity.get_outcome_display()}"
+            if activity.notes:
+                note_str += f": {activity.notes}"
+            customer.latest_update_status = note_str
+            customer.latest_update_at = timezone.now()
+            customer.latest_update_by = user
+            customer.save(update_fields=["latest_update_status", "latest_update_at", "latest_update_by", "updated_at"])
+
+            CustomerUpdateHistory.objects.create(
+                customer=customer,
+                user=user,
+                notes=note_str
+            )
+
             return redirect("followup_customer_detail", pk=customer.pk)
     else:
         form = FollowUpActivityForm(initial={"outcome": FollowUpActivity.Outcome.NOT_PAID})
@@ -756,3 +789,62 @@ def followup_customer_detail_view(request, pk):
         "form": form,
     }
     return render(request, "followups/portal/customer_detail.html", context)
+
+
+@require_POST
+@login_required
+@followup_required
+def followup_edit_due_date_view(request, pk):
+    """
+    Follow-up Employee Portal: Edit customer next due date for assigned shop customers.
+    """
+    user = request.user
+    customer = get_object_or_404(Customer.objects.select_related("shop"), pk=pk)
+
+    if not (user.is_admin_role or user.is_superuser):
+        is_assigned = FollowUpAssignment.objects.filter(
+            employee=user,
+            shop=customer.shop,
+            is_active=True
+        ).exists()
+        if not is_assigned:
+            return HttpResponseForbidden("Access Denied: You are not authorized to update records for this customer.")
+
+    new_date = request.POST.get("due_date", "").strip()
+    next_url = request.POST.get("next") or reverse("followup_dashboard")
+
+    if not new_date:
+        messages.error(request, "Please provide a valid due date.")
+        return redirect(next_url)
+
+    app = customer.applications.first()
+    if not app:
+        messages.error(request, "No active finance application for this customer.")
+        return redirect(next_url)
+
+    app.generate_default_schedule_if_missing()
+    next_sched = app.next_unpaid_schedule
+    if not next_sched:
+        messages.info(request, "All installments are already settled.")
+        return redirect(next_url)
+
+    old_date = next_sched.due_date
+    next_sched.due_date = new_date
+    next_sched.save(update_fields=["due_date", "updated_at"])
+
+    from customers.models import CustomerUpdateHistory
+    log_msg = f"Next due date changed from {old_date} to {new_date} by {user.username}."
+    customer.latest_update_status = log_msg
+    customer.latest_update_at = timezone.now()
+    customer.latest_update_by = user
+    customer.save(update_fields=["latest_update_status", "latest_update_at", "latest_update_by", "updated_at"])
+
+    CustomerUpdateHistory.objects.create(
+        customer=customer,
+        user=user,
+        notes=log_msg
+    )
+
+    messages.success(request, f"Updated next due date to {new_date} for '{customer.name}'.")
+    return redirect(next_url)
+
