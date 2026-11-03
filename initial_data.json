@@ -1,0 +1,896 @@
+[
+{
+  "model": "sessions.session",
+  "pk": "12utk77q447yc280y76ptqeffz8a0htd",
+  "fields": {
+    "session_data": ".eJxVjMsOgjAQRf-la9MwtQzUpXu-oZlHa1EDCYWV8d-VhIVu7znnvkykbS1xq2mJo5qLAXP63ZjkkaYd6J2m22xlntZlZLsr9qDVDrOm5_Vw_w4K1fKte0XMEM6dkigKZMDgvXfBJRZoxFPLWX2bQZVz6rzjwEiADUrqGc37A_QDOJM:1xM6am:b824sgUazSNP4eo9R9haef_uGjNOTxLRyspgeyOS744",
+    "expire_date": "2026-11-11T16:33:36.107Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "14ynoqtm0z8ut9rdtp0con8giidajm2c",
+  "fields": {
+    "session_data": ".eJxVjMsOgjAQRf-la9MwtQzUpXu-oZlHa1EDCYWV8d-VhIVu7znnvkykbS1xq2mJo5qLAXP63ZjkkaYd6J2m22xlntZlZLsr9qDVDrOm5_Vw_w4K1fKte0XMEM6dkigKZMDgvXfBJRZoxFPLWX2bQZVz6rzjwEiADUrqGc37A_QDOJM:1xMpxQ:e_8sM5s6l6z5Cro-L_owcaVWt68vDHz9YPxbO3GsQOw",
+    "expire_date": "2026-11-13T17:00:00.935Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "41h3g27ai04qij9h8cs5oyp3n836tkdg",
+  "fields": {
+    "session_data": ".eJxVjEEOwiAQRe_C2hAYKFNcuvcMZICpVA0kpV0Z765NutDtf-_9lwi0rSVsnZcwZ3EWRpx-t0jpwXUH-U711mRqdV3mKHdFHrTLa8v8vBzu30GhXr416pHIOKP9lDBZBxQValaWQeXIqBSz9wx5UsYmgxEtMIBx2tEwpFG8P9gzN2I:1xM7R7:d831d8hx_fZdC7VNxNT8lnvgsrKBBkFAvgTWopSUXEo",
+    "expire_date": "2026-11-11T17:27:41.725Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "5spohvfqqcuk8eb88gjmx5u9ygbfuhuq",
+  "fields": {
+    "session_data": ".eJxVjEEOwiAQRe_C2hAYKFNcuvcMZICpVA0kpV0Z765NutDtf-_9lwi0rSVsnZcwZ3EWRpx-t0jpwXUH-U711mRqdV3mKHdFHrTLa8v8vBzu30GhXr416pHIOKP9lDBZBxQValaWQeXIqBSz9wx5UsYmgxEtMIBx2tEwpFG8P9gzN2I:1xM7G5:zD-WITEztyW-7k6t5dqUlnOQIDRbW-DQCCuiLljBUv0",
+    "expire_date": "2026-11-11T17:16:17.261Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "7luqozjp39n7zmd5ddht20ccbv5kcblv",
+  "fields": {
+    "session_data": ".eJxVjEEOwiAQRe_C2hAYKFNcuvcMZICpVA0kpV0Z765NutDtf-_9lwi0rSVsnZcwZ3EWRpx-t0jpwXUH-U711mRqdV3mKHdFHrTLa8v8vBzu30GhXr416pHIOKP9lDBZBxQValaWQeXIqBSz9wx5UsYmgxEtMIBx2tEwpFG8P9gzN2I:1xM7MY:eWQKkjjgqYjcrlhXuQrXAE96Kf1rScae-Gsu90GNXOQ",
+    "expire_date": "2026-11-11T17:22:58.295Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "c1uns8wu0gu86ppnxmyn9rjga47llnvu",
+  "fields": {
+    "session_data": ".eJxVjMsOgjAQRf-la9MwtQzUpXu-oZlHa1EDCYWV8d-VhIVu7znnvkykbS1xq2mJo5qLAXP63ZjkkaYd6J2m22xlntZlZLsr9qDVDrOm5_Vw_w4K1fKte0XMEM6dkigKZMDgvXfBJRZoxFPLWX2bQZVz6rzjwEiADUrqGc37A_QDOJM:1xO9Ig:mWhuGOs5Nao6f23qgvMbKXN7pq5A3x96Suef-W-4IXc",
+    "expire_date": "2026-11-17T07:51:22.905Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "cp3vyp5g720p6b3dahg3c40xh56s4g1o",
+  "fields": {
+    "session_data": ".eJxVjEEOwiAQRe_C2hCmhQ64dO8ZCDCDVA0kpV0Z765NutDtf-_9l_BhW4vfOi9-JnEWWpx-txjSg-sO6B7qrcnU6rrMUe6KPGiX10b8vBzu30EJvXzr7KxGzBbcZJMZkxpVSBNoUGiiGZ3SmtWAyOyAyCAZBziAspldQjbi_QGv2zah:1xM7xG:-sVoWltdGpdEmNXYcVt1xvtFcIDqKoVDs2GxPw8wBJQ",
+    "expire_date": "2026-11-11T18:00:54.872Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "crlivbjflm7yaxef3wki8mocwg71wo43",
+  "fields": {
+    "session_data": ".eJxVjMsOgjAQRf-la9MwtQzUpXu-oZlHa1EDCYWV8d-VhIVu7znnvkykbS1xq2mJo5qLAXP63ZjkkaYd6J2m22xlntZlZLsr9qDVDrOm5_Vw_w4K1fKte0XMEM6dkigKZMDgvXfBJRZoxFPLWX2bQZVz6rzjwEiADUrqGc37A_QDOJM:1xM6aI:FtwtazWgGHxT0koW7KX5Rljlq_TDrEdqNS8fkzO7qa0",
+    "expire_date": "2026-11-11T16:33:06.776Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "ekmjggmprxfjopi2e9kywnycqway1tqj",
+  "fields": {
+    "session_data": ".eJxVjMsOgjAQRf-la9MwtQzUpXu-oZlHa1EDCYWV8d-VhIVu7znnvkykbS1xq2mJo5qLAXP63ZjkkaYd6J2m22xlntZlZLsr9qDVDrOm5_Vw_w4K1fKte0XMEM6dkigKZMDgvXfBJRZoxFPLWX2bQZVz6rzjwEiADUrqGc37A_QDOJM:1xMnBV:e1P1w727odcUVpNmZ-vqB55Ojam12LcLpQ2x2KaTCQI",
+    "expire_date": "2026-11-13T14:02:21.184Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "i9deawsc2lixbu2178n3xs8ptgdghrvy",
+  "fields": {
+    "session_data": ".eJxVjEEOwiAQAP_C2ZACAluP3n0DWWBXqgaS0p6MfzckPeh1ZjJvEXDfStg7rWHJ4iKsOP2yiOlJdYj8wHpvMrW6rUuUI5GH7fLWMr2uR_s3KNjL2EYNmTxlso6TZjKeABlIOwDQMygPMSErp2nmeGbjwUw-W0DLk0ri8wUGHThh:1xNQ6b:HC-XtfYll_zW-oLBa9RhKLAIWfGkPI76wvtINrFAEEk",
+    "expire_date": "2026-11-15T07:35:53.461Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "ii0640l5a7hm9wdo809ytne7e27jetg9",
+  "fields": {
+    "session_data": ".eJxVjMsOgjAQRf-la9MwtQzUpXu-oZlHa1EDCYWV8d-VhIVu7znnvkykbS1xq2mJo5qLAXP63ZjkkaYd6J2m22xlntZlZLsr9qDVDrOm5_Vw_w4K1fKte0XMEM6dkigKZMDgvXfBJRZoxFPLWX2bQZVz6rzjwEiADUrqGc37A_QDOJM:1xM7NU:c18B668Y7J3Mx0oYOJ38wySs_ogNcqHncMFJNFpsxP0",
+    "expire_date": "2026-11-11T17:23:56.598Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "irtf907z3t0o35orlk1arcek0fagayv3",
+  "fields": {
+    "session_data": ".eJxVjMsOgjAQRf-la9MwtQzUpXu-oZlHa1EDCYWV8d-VhIVu7znnvkykbS1xq2mJo5qLAXP63ZjkkaYd6J2m22xlntZlZLsr9qDVDrOm5_Vw_w4K1fKte0XMEM6dkigKZMDgvXfBJRZoxFPLWX2bQZVz6rzjwEiADUrqGc37A_QDOJM:1xMpxG:AzxAHwLe0DeME3oZJuuDCRAPV98QDPUurVKYXzGvny8",
+    "expire_date": "2026-11-13T16:59:50.028Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "j7umoe5srcmbpb11hs1bupd1hvd01vgs",
+  "fields": {
+    "session_data": ".eJxVjMsOgjAQRf-la9MwtQzUpXu-oZlHa1EDCYWV8d-VhIVu7znnvkykbS1xq2mJo5qLAXP63ZjkkaYd6J2m22xlntZlZLsr9qDVDrOm5_Vw_w4K1fKte0XMEM6dkigKZMDgvXfBJRZoxFPLWX2bQZVz6rzjwEiADUrqGc37A_QDOJM:1xM6V2:b2VoxzGJdwPDE0YShVs2ofcgjDgxiVwULhS4IGWdh2I",
+    "expire_date": "2026-11-11T16:27:40.610Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "mt95eov19a04b1ve06kot9xgf6vf0qc7",
+  "fields": {
+    "session_data": ".eJxVjEEOwiAQRe_C2hAYKFNcuvcMZICpVA0kpV0Z765NutDtf-_9lwi0rSVsnZcwZ3EWRpx-t0jpwXUH-U711mRqdV3mKHdFHrTLa8v8vBzu30GhXr416pHIOKP9lDBZBxQValaWQeXIqBSz9wx5UsYmgxEtMIBx2tEwpFG8P9gzN2I:1xM7Qm:UtvsIJm_qm_S3qn_9ktbTm-BTMImTeU_BZIA957wLRs",
+    "expire_date": "2026-11-11T17:27:20.710Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "nyr656rnnzzao6mlq9noalf5oef6rcw7",
+  "fields": {
+    "session_data": ".eJxVjEEOwiAQRe_C2hAYKFNcuvcMZICpVA0kpV0Z765NutDtf-_9lwi0rSVsnZcwZ3EWRpx-t0jpwXUH-U711mRqdV3mKHdFHrTLa8v8vBzu30GhXr416pHIOKP9lDBZBxQValaWQeXIqBSz9wx5UsYmgxEtMIBx2tEwpFG8P9gzN2I:1xM7RR:YFJ53WC5Uh2jHe7NhYFS2qe4KNuF_tpoZd7oIpdKidE",
+    "expire_date": "2026-11-11T17:28:01.482Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "t7l9g6e49b87tfstx3gqbagan3geuag2",
+  "fields": {
+    "session_data": ".eJxVjMsOgjAQRf-la9MwtQzUpXu-oZlHa1EDCYWV8d-VhIVu7znnvkykbS1xq2mJo5qLAXP63ZjkkaYd6J2m22xlntZlZLsr9qDVDrOm5_Vw_w4K1fKte0XMEM6dkigKZMDgvXfBJRZoxFPLWX2bQZVz6rzjwEiADUrqGc37A_QDOJM:1xO8oY:DaQJCYYU9ongjLr58njwni8wc4WeAOUp9E7P1Z7Qc-w",
+    "expire_date": "2026-11-17T07:20:14.987Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "zoz6eow722nj3hbxo7g0xzvcvxodky3e",
+  "fields": {
+    "session_data": ".eJxVjEEOwiAQRe_C2hAYKFNcuvcMZICpVA0kpV0Z765NutDtf-_9lwi0rSVsnZcwZ3EWRpx-t0jpwXUH-U711mRqdV3mKHdFHrTLa8v8vBzu30GhXr416pHIOKP9lDBZBxQValaWQeXIqBSz9wx5UsYmgxEtMIBx2tEwpFG8P9gzN2I:1xM7Mk:ZB9rzR07Sy_eDelYGoX_5QkWEfpLDGZhLwIHAzkitfk",
+    "expire_date": "2026-11-11T17:23:10.994Z"
+  }
+},
+{
+  "model": "accounts.user",
+  "fields": {
+    "password": "pbkdf2_sha256$1500000$9B8ml5a6AmmK7z721rVUpE$b/FBQ+K7MTAbip/3fnaPJwiR7kj7kTyi0qos0VxgZVE=",
+    "last_login": "2026-11-03T07:51:22.754Z",
+    "is_superuser": true,
+    "username": "admin",
+    "first_name": "",
+    "last_name": "",
+    "email": "admin@example.com",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2026-10-28T16:00:33.057Z",
+    "role": "ADMIN",
+    "phone": "",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "accounts.user",
+  "fields": {
+    "password": "pbkdf2_sha256$1500000$AgA7LvVYmNqZoRVOPxi5cP$ZhAwpoM4L8ByXdPBc4dsDo0UtAPsve1p3HQU/oM/KyU=",
+    "last_login": null,
+    "is_superuser": false,
+    "username": "shop_owner",
+    "first_name": "",
+    "last_name": "",
+    "email": "owner@example.com",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-10-28T16:00:34.433Z",
+    "role": "SHOP_OWNER",
+    "phone": "",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "accounts.user",
+  "fields": {
+    "password": "pbkdf2_sha256$1500000$On3kBeV48KWojlbElUsxVs$UX4k/X5GQZgq2JM361OOB5nFNtG4EjiDVhtnXr0JiS8=",
+    "last_login": "2026-10-30T13:59:49.518Z",
+    "is_superuser": false,
+    "username": "Atlas",
+    "first_name": "",
+    "last_name": "",
+    "email": "ragashuruthis@gmail.com",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-10-28T16:39:26.157Z",
+    "role": "SHOP_OWNER",
+    "phone": "",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "accounts.user",
+  "fields": {
+    "password": "pbkdf2_sha256$1500000$kF3LcxkYTnl6EC3yYPl7Z1$mDLI72KjgGFfn00ZwmRCbvXbGfPIZSZl2gNbC/MuY1E=",
+    "last_login": "2026-10-28T18:00:54.705Z",
+    "is_superuser": false,
+    "username": "t1",
+    "first_name": "",
+    "last_name": "",
+    "email": "",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-10-28T18:00:51.601Z",
+    "role": "SHOP_OWNER",
+    "phone": "",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "accounts.user",
+  "fields": {
+    "password": "pbkdf2_sha256$1500000$CGl7RrH75xoFalcF0pSBcA$P2HvdT6buZXmButpXRifFhHPGOvMczb1FbsblZXmO5c=",
+    "last_login": "2026-11-01T11:10:20.908Z",
+    "is_superuser": false,
+    "username": "Bhuvana",
+    "first_name": "Bhuvana",
+    "last_name": "",
+    "email": "bhuvana@gmail.com",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-11-01T07:35:12.227Z",
+    "role": "FOLLOWUP",
+    "phone": "67567892",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "accounts.user",
+  "fields": {
+    "password": "pbkdf2_sha256$1500000$qkm1NIHkkVT072gzClvgjF$219atFarRBhZMwiMe2WI0o6LRT/57IMzQ7Dn3x+EpXI=",
+    "last_login": null,
+    "is_superuser": false,
+    "username": "12345",
+    "first_name": "",
+    "last_name": "",
+    "email": "studio22cjb@gmail.com",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-11-03T07:55:19.688Z",
+    "role": "SHOP_OWNER",
+    "phone": "",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "shops.shop",
+  "pk": 1,
+  "fields": {
+    "name": "Atlas",
+    "owner_name": "Sowndar",
+    "phone": "6383957601",
+    "email": "ragashuruthis@gmail.com",
+    "address": "3A Sms layout, Ondipudur,Coimbatore",
+    "gpay": "",
+    "bank_account_holder_name": "",
+    "bank_name": "",
+    "bank_account_number": "",
+    "bank_ifsc_code": "",
+    "is_active": true,
+    "owner_account": [
+      "Atlas"
+    ],
+    "assigned_password": "Atlas@123",
+    "created_at": "2026-10-28T16:07:59.325Z",
+    "updated_at": "2026-10-28T17:05:43.279Z"
+  }
+},
+{
+  "model": "shops.shop",
+  "pk": 2,
+  "fields": {
+    "name": "S1",
+    "owner_name": "O1",
+    "phone": "1",
+    "email": null,
+    "address": "A",
+    "gpay": "",
+    "bank_account_holder_name": "",
+    "bank_name": "",
+    "bank_account_number": "",
+    "bank_ifsc_code": "",
+    "is_active": true,
+    "owner_account": [
+      "t1"
+    ],
+    "assigned_password": "",
+    "created_at": "2026-10-28T18:00:52.873Z",
+    "updated_at": "2026-10-28T18:00:52.873Z"
+  }
+},
+{
+  "model": "shops.shop",
+  "pk": 3,
+  "fields": {
+    "name": "NOVEMBER3",
+    "owner_name": "SOWNDAR",
+    "phone": "844556555552222",
+    "email": "studio22cjb@gmail.com",
+    "address": "RRRDD",
+    "gpay": "",
+    "bank_account_holder_name": "",
+    "bank_name": "",
+    "bank_account_number": "",
+    "bank_ifsc_code": "",
+    "is_active": true,
+    "owner_account": [
+      "12345"
+    ],
+    "assigned_password": "123456",
+    "created_at": "2026-11-03T07:55:20.616Z",
+    "updated_at": "2026-11-03T07:55:20.616Z"
+  }
+},
+{
+  "model": "customers.customer",
+  "pk": 1,
+  "fields": {
+    "shop": 1,
+    "name": "Karthik Raja",
+    "work_address": "Tech Park, Coimbatore",
+    "home_address": "45 Gandhi Road, Pollachi",
+    "primary_mobile": "9876501234",
+    "secondary_mobile": "",
+    "created_at": "2026-10-28T17:27:21.472Z",
+    "updated_at": "2026-10-28T17:27:21.472Z"
+  }
+},
+{
+  "model": "customers.customer",
+  "pk": 2,
+  "fields": {
+    "shop": 1,
+    "name": "45",
+    "work_address": "565",
+    "home_address": "66666665",
+    "primary_mobile": "5866666666",
+    "secondary_mobile": "5666666666",
+    "created_at": "2026-10-28T18:30:28.306Z",
+    "updated_at": "2026-10-28T18:30:28.306Z"
+  }
+},
+{
+  "model": "customers.customer",
+  "pk": 3,
+  "fields": {
+    "shop": 1,
+    "name": "hju",
+    "work_address": "9",
+    "home_address": "789",
+    "primary_mobile": "8877777777",
+    "secondary_mobile": "7888888888",
+    "created_at": "2026-10-28T18:31:48.518Z",
+    "updated_at": "2026-10-28T18:31:48.518Z"
+  }
+},
+{
+  "model": "customers.customer",
+  "pk": 4,
+  "fields": {
+    "shop": 1,
+    "name": "hyuuh",
+    "work_address": "55",
+    "home_address": "55",
+    "primary_mobile": "4554545555",
+    "secondary_mobile": "4555555555",
+    "created_at": "2026-10-28T19:15:31.725Z",
+    "updated_at": "2026-10-28T19:15:31.725Z"
+  }
+},
+{
+  "model": "applications.financeapplication",
+  "pk": 1,
+  "fields": {
+    "application_number": "APP-20261028-D7235E",
+    "shop": 1,
+    "customer": 1,
+    "application_date": "2026-10-28",
+    "mobile_model": "Apple iPhone 15 128GB",
+    "mobile_price": "65000.00",
+    "down_payment": "15000.00",
+    "monthly_emi": "4500.00",
+    "emi_duration": 12,
+    "monthly_due_day": 5,
+    "financier_request_amount": "50000.00",
+    "status": "UNDER_REVIEW",
+    "external_reference": "FIN-202610281727-1",
+    "submission_date": "2026-10-28T17:27:21.473Z",
+    "remarks": "",
+    "idempotency_key": "879c80ee-d4f5-4986-a352-731deb93bd7f",
+    "created_at": "2026-10-28T17:27:21.474Z",
+    "updated_at": "2026-11-03T07:59:59.313Z"
+  }
+},
+{
+  "model": "applications.financeapplication",
+  "pk": 2,
+  "fields": {
+    "application_number": "APP-20261028-6ACCFC",
+    "shop": 1,
+    "customer": 2,
+    "application_date": "2026-10-28",
+    "mobile_model": "+65",
+    "mobile_price": "50000.00",
+    "down_payment": "0.00",
+    "monthly_emi": "8330.00",
+    "emi_duration": 6,
+    "monthly_due_day": 30,
+    "financier_request_amount": "50000.00",
+    "status": "APPROVED",
+    "external_reference": "FIN-202610281830-1",
+    "submission_date": "2026-10-28T18:30:28.307Z",
+    "remarks": "",
+    "idempotency_key": "5890bb32-3073-4ef9-af68-8b74120ce39f",
+    "created_at": "2026-10-28T18:30:28.307Z",
+    "updated_at": "2026-10-30T16:41:16.069Z"
+  }
+},
+{
+  "model": "applications.financeapplication",
+  "pk": 3,
+  "fields": {
+    "application_number": "APP-20261028-82D630",
+    "shop": 1,
+    "customer": 3,
+    "application_date": "2026-10-28",
+    "mobile_model": "6",
+    "mobile_price": "60000.00",
+    "down_payment": "55555.00",
+    "monthly_emi": "10000.00",
+    "emi_duration": 6,
+    "monthly_due_day": 30,
+    "financier_request_amount": "4445.00",
+    "status": "APPROVED",
+    "external_reference": "FIN-202610281831-1",
+    "submission_date": "2026-10-28T18:31:48.519Z",
+    "remarks": "",
+    "idempotency_key": "d10f05bf-4fc5-48a2-b395-0e9016d92dc0",
+    "created_at": "2026-10-28T18:31:48.519Z",
+    "updated_at": "2026-11-03T08:39:50.353Z"
+  }
+},
+{
+  "model": "applications.financeapplication",
+  "pk": 4,
+  "fields": {
+    "application_number": "APP-20261028-04E8B0",
+    "shop": 1,
+    "customer": 4,
+    "application_date": "2026-10-28",
+    "mobile_model": "55",
+    "mobile_price": "60000.00",
+    "down_payment": "6000.00",
+    "monthly_emi": "10000.00",
+    "emi_duration": 6,
+    "monthly_due_day": 30,
+    "financier_request_amount": "54000.00",
+    "status": "PAID",
+    "external_reference": "FIN-202610281915-1",
+    "submission_date": "2026-10-28T19:15:31.726Z",
+    "remarks": "",
+    "idempotency_key": "eedc1a74-f8f0-4cee-bea2-74d3c3222abf",
+    "created_at": "2026-10-28T19:15:31.726Z",
+    "updated_at": "2026-10-30T16:45:57.450Z"
+  }
+},
+{
+  "model": "applications.customerdocument",
+  "pk": 1,
+  "fields": {
+    "application": 2,
+    "customer": 2,
+    "document_type": "PHOTOGRAPH",
+    "file": "documents/2026/10/TNEB_logo.png",
+    "original_filename": "TNEB logo.png",
+    "file_size": 2263116,
+    "mime_type": "image/png",
+    "uploaded_at": "2026-10-28T18:30:28.317Z"
+  }
+},
+{
+  "model": "applications.customerdocument",
+  "pk": 2,
+  "fields": {
+    "application": 2,
+    "customer": 2,
+    "document_type": "AADHAAR",
+    "file": "documents/2026/10/TNEB_LOGO1.png",
+    "original_filename": "TNEB_LOGO1.png",
+    "file_size": 2296092,
+    "mime_type": "image/png",
+    "uploaded_at": "2026-10-28T18:30:28.326Z"
+  }
+},
+{
+  "model": "applications.customerdocument",
+  "pk": 3,
+  "fields": {
+    "application": 3,
+    "customer": 3,
+    "document_type": "PHOTOGRAPH",
+    "file": "documents/2026/10/WhatsApp_Image_2026-09-03_at_18.48.40.jpeg",
+    "original_filename": "WhatsApp Image 2026-09-03 at 18.48.40.jpeg",
+    "file_size": 72590,
+    "mime_type": "image/jpeg",
+    "uploaded_at": "2026-10-28T18:31:48.521Z"
+  }
+},
+{
+  "model": "applications.customerdocument",
+  "pk": 4,
+  "fields": {
+    "application": 3,
+    "customer": 3,
+    "document_type": "AADHAAR",
+    "file": "documents/2026/10/WhatsApp_Image_2026-09-03_at_18.48.39.jpeg",
+    "original_filename": "WhatsApp Image 2026-09-03 at 18.48.39.jpeg",
+    "file_size": 100850,
+    "mime_type": "image/jpeg",
+    "uploaded_at": "2026-10-28T18:31:48.522Z"
+  }
+},
+{
+  "model": "applications.customerdocument",
+  "pk": 5,
+  "fields": {
+    "application": 4,
+    "customer": 4,
+    "document_type": "PHOTOGRAPH",
+    "file": "documents/2026/10/WhatsApp_Image_2026-09-03_at_18_APM6hES.48.40.jpeg",
+    "original_filename": "WhatsApp Image 2026-09-03 at 18.48.40.jpeg",
+    "file_size": 72590,
+    "mime_type": "image/jpeg",
+    "uploaded_at": "2026-10-28T19:15:31.728Z"
+  }
+},
+{
+  "model": "applications.customerdocument",
+  "pk": 6,
+  "fields": {
+    "application": 4,
+    "customer": 4,
+    "document_type": "AADHAAR",
+    "file": "documents/2026/10/WhatsApp_Image_2026-09-03_at_18_7Ze92GC.48.40.jpeg",
+    "original_filename": "WhatsApp Image 2026-09-03 at 18.48.40.jpeg",
+    "file_size": 72590,
+    "mime_type": "image/jpeg",
+    "uploaded_at": "2026-10-28T19:15:31.730Z"
+  }
+},
+{
+  "model": "applications.applicationhistory",
+  "pk": 1,
+  "fields": {
+    "application": 1,
+    "previous_status": "NEW",
+    "new_status": "SUBMITTED",
+    "actor": [
+      "Atlas"
+    ],
+    "notes": "Application registered by shop 'Atlas'. Financier Request: ₹50,000.00",
+    "timestamp": "2026-10-28T17:27:21.475Z"
+  }
+},
+{
+  "model": "applications.applicationhistory",
+  "pk": 2,
+  "fields": {
+    "application": 2,
+    "previous_status": "NEW",
+    "new_status": "SUBMITTED",
+    "actor": [
+      "Atlas"
+    ],
+    "notes": "Application registered by shop 'Atlas'. Financier Request: ₹50,000.00",
+    "timestamp": "2026-10-28T18:30:28.326Z"
+  }
+},
+{
+  "model": "applications.applicationhistory",
+  "pk": 3,
+  "fields": {
+    "application": 3,
+    "previous_status": "NEW",
+    "new_status": "SUBMITTED",
+    "actor": [
+      "Atlas"
+    ],
+    "notes": "Application registered by shop 'Atlas'. Financier Request: ₹60,000.00",
+    "timestamp": "2026-10-28T18:31:48.522Z"
+  }
+},
+{
+  "model": "applications.applicationhistory",
+  "pk": 4,
+  "fields": {
+    "application": 4,
+    "previous_status": "NEW",
+    "new_status": "SUBMITTED",
+    "actor": [
+      "Atlas"
+    ],
+    "notes": "Application registered by shop 'Atlas'. Financier Request: ₹54,000.00",
+    "timestamp": "2026-10-28T19:15:31.730Z"
+  }
+},
+{
+  "model": "applications.applicationhistory",
+  "pk": 5,
+  "fields": {
+    "application": 4,
+    "previous_status": "SUBMITTED",
+    "new_status": "APPROVED",
+    "actor": [
+      "admin"
+    ],
+    "notes": "Application approved by Administrator admin.",
+    "timestamp": "2026-10-30T16:41:08.460Z"
+  }
+},
+{
+  "model": "applications.applicationhistory",
+  "pk": 6,
+  "fields": {
+    "application": 2,
+    "previous_status": "SUBMITTED",
+    "new_status": "APPROVED",
+    "actor": [
+      "admin"
+    ],
+    "notes": "Application approved by Administrator admin.",
+    "timestamp": "2026-10-30T16:41:16.275Z"
+  }
+},
+{
+  "model": "applications.applicationhistory",
+  "pk": 7,
+  "fields": {
+    "application": 3,
+    "previous_status": "SUBMITTED",
+    "new_status": "APPROVED",
+    "actor": [
+      "admin"
+    ],
+    "notes": "Application approved by Administrator admin.",
+    "timestamp": "2026-10-30T16:42:11.188Z"
+  }
+},
+{
+  "model": "applications.applicationhistory",
+  "pk": 8,
+  "fields": {
+    "application": 1,
+    "previous_status": "SUBMITTED",
+    "new_status": "UNDER_REVIEW",
+    "actor": [
+      "admin"
+    ],
+    "notes": "Application kept as pending by Administrator admin.",
+    "timestamp": "2026-11-03T07:59:59.499Z"
+  }
+},
+{
+  "model": "applications.applicationhistory",
+  "pk": 9,
+  "fields": {
+    "application": 3,
+    "previous_status": "APPROVED",
+    "new_status": "REJECTED",
+    "actor": [
+      "admin"
+    ],
+    "notes": "Application declined by Administrator admin.",
+    "timestamp": "2026-11-03T08:00:23.697Z"
+  }
+},
+{
+  "model": "applications.applicationhistory",
+  "pk": 10,
+  "fields": {
+    "application": 3,
+    "previous_status": "REJECTED",
+    "new_status": "APPROVED",
+    "actor": [
+      "admin"
+    ],
+    "notes": "Application approved by Administrator admin.",
+    "timestamp": "2026-11-03T08:39:43.056Z"
+  }
+},
+{
+  "model": "applications.applicationhistory",
+  "pk": 11,
+  "fields": {
+    "application": 3,
+    "previous_status": "APPROVED",
+    "new_status": "APPROVED",
+    "actor": [
+      "admin"
+    ],
+    "notes": "Application approved by Administrator admin.",
+    "timestamp": "2026-11-03T08:39:43.398Z"
+  }
+},
+{
+  "model": "applications.applicationhistory",
+  "pk": 12,
+  "fields": {
+    "application": 3,
+    "previous_status": "APPROVED",
+    "new_status": "APPROVED",
+    "actor": [
+      "admin"
+    ],
+    "notes": "Application approved by Administrator admin.",
+    "timestamp": "2026-11-03T08:39:43.823Z"
+  }
+},
+{
+  "model": "applications.applicationhistory",
+  "pk": 13,
+  "fields": {
+    "application": 3,
+    "previous_status": "APPROVED",
+    "new_status": "APPROVED",
+    "actor": [
+      "admin"
+    ],
+    "notes": "Application approved by Administrator admin.",
+    "timestamp": "2026-11-03T08:39:44.198Z"
+  }
+},
+{
+  "model": "applications.applicationhistory",
+  "pk": 14,
+  "fields": {
+    "application": 3,
+    "previous_status": "APPROVED",
+    "new_status": "APPROVED",
+    "actor": [
+      "admin"
+    ],
+    "notes": "Application approved by Administrator admin.",
+    "timestamp": "2026-11-03T08:39:44.548Z"
+  }
+},
+{
+  "model": "applications.applicationhistory",
+  "pk": 15,
+  "fields": {
+    "application": 3,
+    "previous_status": "APPROVED",
+    "new_status": "APPROVED",
+    "actor": [
+      "admin"
+    ],
+    "notes": "Application approved by Administrator admin.",
+    "timestamp": "2026-11-03T08:39:45.106Z"
+  }
+},
+{
+  "model": "applications.applicationhistory",
+  "pk": 16,
+  "fields": {
+    "application": 3,
+    "previous_status": "APPROVED",
+    "new_status": "UNDER_REVIEW",
+    "actor": [
+      "admin"
+    ],
+    "notes": "Application kept as pending by Administrator admin.",
+    "timestamp": "2026-11-03T08:39:45.489Z"
+  }
+},
+{
+  "model": "applications.applicationhistory",
+  "pk": 17,
+  "fields": {
+    "application": 3,
+    "previous_status": "UNDER_REVIEW",
+    "new_status": "UNDER_REVIEW",
+    "actor": [
+      "admin"
+    ],
+    "notes": "Application kept as pending by Administrator admin.",
+    "timestamp": "2026-11-03T08:39:45.864Z"
+  }
+},
+{
+  "model": "applications.applicationhistory",
+  "pk": 18,
+  "fields": {
+    "application": 3,
+    "previous_status": "APPROVED",
+    "new_status": "APPROVED",
+    "actor": [
+      "admin"
+    ],
+    "notes": "Application approved by Administrator admin.",
+    "timestamp": "2026-11-03T08:39:46.273Z"
+  }
+},
+{
+  "model": "applications.applicationhistory",
+  "pk": 19,
+  "fields": {
+    "application": 3,
+    "previous_status": "APPROVED",
+    "new_status": "APPROVED",
+    "actor": [
+      "admin"
+    ],
+    "notes": "Application approved by Administrator admin.",
+    "timestamp": "2026-11-03T08:39:44.923Z"
+  }
+},
+{
+  "model": "applications.applicationhistory",
+  "pk": 20,
+  "fields": {
+    "application": 3,
+    "previous_status": "APPROVED",
+    "new_status": "APPROVED",
+    "actor": [
+      "admin"
+    ],
+    "notes": "Application approved by Administrator admin.",
+    "timestamp": "2026-11-03T08:39:50.547Z"
+  }
+},
+{
+  "model": "payments.financierpayment",
+  "pk": 1,
+  "fields": {
+    "shop": null,
+    "application": 4,
+    "amount_received": "54000.00",
+    "payment_date": "2026-10-30",
+    "payment_reference": "12",
+    "remarks": "Payment recorded by Administrator admin",
+    "is_discrepant": false,
+    "created_at": "2026-10-30T16:45:57.449Z"
+  }
+},
+{
+  "model": "followups.followupassignment",
+  "pk": 1,
+  "fields": {
+    "employee": [
+      "Bhuvana"
+    ],
+    "shop": 1,
+    "is_active": true,
+    "assigned_at": "2026-11-01T07:35:13.230Z",
+    "assigned_by": [
+      "admin"
+    ]
+  }
+},
+{
+  "model": "followups.followupassignment",
+  "pk": 2,
+  "fields": {
+    "employee": [
+      "Bhuvana"
+    ],
+    "shop": 2,
+    "is_active": true,
+    "assigned_at": "2026-11-03T08:42:14.611Z",
+    "assigned_by": [
+      "admin"
+    ]
+  }
+},
+{
+  "model": "followups.followupassignment",
+  "pk": 3,
+  "fields": {
+    "employee": [
+      "Bhuvana"
+    ],
+    "shop": 3,
+    "is_active": true,
+    "assigned_at": "2026-11-03T08:42:14.644Z",
+    "assigned_by": [
+      "admin"
+    ]
+  }
+}
+]

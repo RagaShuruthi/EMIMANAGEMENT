@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+
+{% block title %}All Customers — Mobile EMI Management System{% endblock %}
+
+{% block content %}
+<!-- Breadcrumbs & Header -->
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-1 small">
+                <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item active" aria-current="page">All Customers</li>
+            </ol>
+        </nav>
+        <h2 class="fw-bold text-dark mb-0">Customer Registry</h2>
+        <p class="text-muted small mb-0">Consolidated list of customers and financing applications from all partner shops.</p>
+    </div>
+</div>
+
+<!-- Filters & Search Form -->
+<div class="card rounded-3 mb-4 shadow-sm border-0">
+    <div class="card-body p-3 bg-light rounded-3">
+        <form method="get" action="{% url 'admin_all_customers' %}" class="row g-2 align-items-center">
+            <!-- Search Input -->
+            <div class="col-12 col-md-6 col-lg-7">
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-search"></i></span>
+                    <input type="text" name="q" class="form-control border-start-0" placeholder="Search by name, phone, model, app #..." value="{{ search_query }}">
+                </div>
+            </div>
+
+            <!-- Shop Filter -->
+            <div class="col-12 col-md-4 col-lg-3">
+                <div class="input-group">
+                    <label class="input-group-text bg-white text-muted small" for="shopFilter">Shop</label>
+                    <select name="shop_id" id="shopFilter" class="form-select" onchange="this.form.submit()">
+                        <option value="">All Shops</option>
+                        {% for s in all_shops %}
+                        <option value="{{ s.id }}" {% if shop_filter == s.id|stringformat:"s" %}selected{% endif %}>
+                            {{ s.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="col-12 col-md-2 col-lg-2 d-flex gap-1">
+                <button type="submit" class="btn btn-primary w-100" title="Apply Filters">
+                    <i class="bi bi-funnel me-1"></i> Filter
+                </button>
+                {% if search_query or shop_filter %}
+                <a href="{% url 'admin_all_customers' %}" class="btn btn-outline-secondary" title="Reset Filters">
+                    <i class="bi bi-x-circle"></i>
+                </a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Customer Data Table -->
+<div class="card rounded-3 overflow-hidden shadow-sm border-0">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom">
+        <h5 class="fw-bold mb-0 text-dark">
+            <i class="bi bi-people me-2 text-primary"></i>All Customers ({{ total_count }})
+        </h5>
+        {% if search_query or shop_filter %}
+            <span class="badge bg-light text-dark border">Filtered Results</span>
+        {% endif %}
+    </div>
+
+    <div class="table-responsive">
+        {% if customers %}
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light text-uppercase small text-muted" style="letter-spacing: 0.03em;">
+                <tr>
+                    <th scope="col">Customer & ID</th>
+                    <th scope="col">Contact</th>
+                    <th scope="col">Shop</th>
+                    <th scope="col">Phone Details</th>
+                    <th scope="col" class="text-end">Down Pay.</th>
+                    <th scope="col" class="text-end">Financed</th>
+                    <th scope="col" class="text-end">Monthly EMI</th>
+                    <th scope="col" class="text-center">Installments</th>
+                    <th scope="col">Next Due</th>
+                    <th scope="col" class="text-end">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in customers %}
+                <tr>
+                    <!-- Customer & ID -->
+                    <td>
+                        <div class="d-flex align-items-center gap-1">
+                            <span class="badge bg-secondary-subtle text-secondary font-monospace" style="font-size: 0.75rem;">#{{ item.customer.id }}</span>
+                            <a href="{% url 'admin_customer_detail' pk=item.customer.pk %}" class="fw-bold text-decoration-none text-dark hover-primary">
+                                {{ item.customer.name }}
+                            </a>
+                        </div>
+                        {% if item.customer.home_address %}
+                        <div class="text-truncate text-muted small mt-1" style="max-width: 180px;" title="{{ item.customer.home_address }}">
+                            <i class="bi bi-geo-alt me-1"></i>{{ item.customer.home_address }}
+                        </div>
+                        {% endif %}
+                    </td>
+
+                    <!-- Contact -->
+                    <td>
+                        <div class="small">
+                            <a href="tel:{{ item.customer.primary_mobile }}" class="text-decoration-none text-dark fw-semibold">
+                                <i class="bi bi-telephone me-1 text-primary"></i>{{ item.customer.primary_mobile }}
+                            </a>
+                        </div>
+                        {% if item.customer.secondary_mobile %}
+                        <div class="small text-muted">
+                            <i class="bi bi-phone me-1"></i>{{ item.customer.secondary_mobile }}
+                        </div>
+                        {% endif %}
+                    </td>
+
+                    <!-- Shop -->
+                    <td>
+                        <a href="{% url 'admin_shopwise_detail' shop_id=item.shop.id %}" class="text-decoration-none fw-semibold text-secondary small">
+                            <i class="bi bi-shop me-1 text-muted"></i>{{ item.shop.name }}
+                        </a>
+                    </td>
+
+                    <!-- Phone Brand & Model -->
+                    <td>
+                        <div class="fw-semibold text-dark small">{{ item.mobile_model }}</div>
+                        {% if item.mobile_price > 0 %}
+                        <div class="small text-muted">₹{{ item.mobile_price|floatformat:2 }}</div>
+                        {% endif %}
+                    </td>
+
+                    <!-- Initial Payment (Down Payment) -->
+                    <td class="text-end small">
+                        ₹{{ item.down_payment|floatformat:2 }}
+                    </td>
+
+                    <!-- Financed Amount -->
+                    <td class="text-end fw-semibold text-dark small">
+                        ₹{{ item.financier_request_amount|floatformat:2 }}
+                    </td>
+
+                    <!-- Monthly EMI -->
+                    <td class="text-end small">
+                        <span class="fw-semibold text-primary">₹{{ item.monthly_emi|floatformat:2 }}</span>
+                        {% if item.emi_duration > 0 %}
+                        <div class="text-muted" style="font-size: 0.72rem;">{{ item.emi_duration }} mos</div>
+                        {% endif %}
+                    </td>
+
+                    <!-- Installments -->
+                    <td class="text-center small">
+                        {% if item.total_installments > 0 %}
+                            <span class="badge bg-light text-dark border">
+                                {{ item.paid_installments }} / {{ item.total_installments }}
+                            </span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Next Due Date -->
+                    <td class="small">
+                        {% if item.next_due_date %}
+                            <span class="text-dark fw-semibold">{{ item.next_due_date|date:"M d, Y" }}</span>
+                            <div class="text-muted" style="font-size: 0.72rem;">Day {{ item.monthly_due_day }}</div>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Actions -->
+                    <td class="text-end">
+                        <a href="{% url 'admin_customer_detail' pk=item.customer.pk %}" class="btn btn-sm btn-outline-secondary" title="View Full Customer Dossier">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-people text-muted display-4 mb-3 d-block"></i>
+            <h5 class="fw-bold text-dark">No Customers Found</h5>
+            <p class="text-muted small">No customers match your selected query criteria.</p>
+            {% if search_query or shop_filter %}
+                <a href="{% url 'admin_all_customers' %}" class="btn btn-sm btn-secondary">Clear Filters</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Pagination Controls -->
+    {% if customers.has_other_pages %}
+    <div class="card-footer bg-white border-top py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span class="text-muted small">
+            Showing Page {{ customers.number }} of {{ customers.paginator.num_pages }}
+        </span>
+        <nav aria-label="Customer pagination">
+            <ul class="pagination pagination-sm mb-0">
+                {% if customers.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ customers.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if shop_filter %}&shop_id={{ shop_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if payment_status_filter %}&payment_status={{ payment_status_filter }}{% endif %}">Previous</a>
+                </li>
+                {% else %}
+                <li class="page-item disabled"><span class="page-link">Previous</span></li>
+                {% endif %}
+
+                {% for i in customers.paginator.page_range %}
+                    {% if customers.number == i %}
+                    <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+                    {% elif i > customers.number|add:'-3' and i < customers.number|add:'3' %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ i }}{% if search_query %}&q={{ search_query }}{% endif %}{% if shop_filter %}&shop_id={{ shop_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if payment_status_filter %}&payment_status={{ payment_status_filter }}{% endif %}">{{ i }}</a>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if customers.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ customers.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if shop_filter %}&shop_id={{ shop_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if payment_status_filter %}&payment_status={{ payment_status_filter }}{% endif %}">Next</a>
+                </li>
+                {% else %}
+                <li class="page-item disabled"><span class="page-link">Next</span></li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+

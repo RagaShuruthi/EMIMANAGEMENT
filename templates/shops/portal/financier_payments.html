@@ -1,0 +1,303 @@
+{% extends "shops/portal/shop_base.html" %}
+
+{% block title %}Day-by-Day Financier Payout History — {{ shop.name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h3 class="fw-bold text-dark mb-1">
+            <i class="bi bi-calendar2-check text-primary me-2"></i>Day-by-Day Payment History
+        </h3>
+        <p class="text-muted small mb-0">Track daily disbursements and settlement payouts received from the administrator</p>
+    </div>
+    {% if is_admin_user and eligible_apps %}
+    <div>
+        <button type="button" class="btn btn-outline-primary btn-sm shadow-sm" data-bs-toggle="modal" data-bs-target="#recordPaymentModal">
+            <i class="bi bi-plus-circle me-1"></i> Record Admin Payout
+        </button>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Financial Summary Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="metric-card border-primary-subtle shadow-sm h-100">
+            <div class="metric-label text-primary">Total Financier Requested</div>
+            <div class="metric-value text-primary fs-3">₹{{ total_requested|floatformat:2 }}</div>
+            <small class="text-muted">Total loan amount submitted to financier</small>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="metric-card border-success-subtle shadow-sm h-100">
+            <div class="metric-label text-success">Total Amount Received</div>
+            <div class="metric-value text-success fs-3">₹{{ total_received|floatformat:2 }}</div>
+            <small class="text-muted">Total credited by admin to date</small>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="metric-card border-warning-subtle shadow-sm h-100">
+            <div class="metric-label text-warning-emphasis">Outstanding Balance Due</div>
+            <div class="metric-value text-warning-emphasis fs-3">₹{{ outstanding|floatformat:2 }}</div>
+            <small class="text-muted">Balance yet to be received from admin</small>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="metric-card border-info-subtle shadow-sm h-100">
+            <div class="metric-label text-info-emphasis">Today's Admin Payout</div>
+            <div class="metric-value text-info-emphasis fs-3">₹{{ today_received|floatformat:2 }}</div>
+            <small class="text-muted">Disbursed today ({{ today_date }})</small>
+        </div>
+    </div>
+</div>
+
+<!-- Filter & Search Toolbar -->
+<div class="card border-0 shadow-sm rounded-3 mb-4">
+    <div class="card-body p-3">
+        <form method="get" class="row g-2 align-items-center">
+            <!-- Quick Filter Pills -->
+            <div class="col-12 col-md-auto d-flex gap-1 flex-wrap">
+                <a href="{% url 'shop_payments' %}" class="btn btn-sm {% if not period_filter and not date_filter %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                    All History
+                </a>
+                <a href="{% url 'shop_payments' %}?period=today" class="btn btn-sm {% if period_filter == 'today' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                    Today
+                </a>
+                <a href="{% url 'shop_payments' %}?period=month" class="btn btn-sm {% if period_filter == 'month' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                    This Month
+                </a>
+            </div>
+
+            <!-- Specific Date Picker Filter -->
+            <div class="col-12 col-sm-auto d-flex align-items-center gap-1 ms-md-auto">
+                <label for="filter_date" class="small text-muted fw-semibold mb-0 me-1">Date:</label>
+                <input type="date" id="filter_date" name="date" class="form-control form-control-sm" value="{{ date_filter }}" style="max-width: 160px;">
+                <button type="submit" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-funnel"></i> Filter
+                </button>
+            </div>
+
+            <!-- Search Field -->
+            <div class="col-12 col-sm-auto d-flex align-items-center gap-1">
+                <input type="text" name="search" class="form-control form-control-sm" placeholder="Search UTR / App #..." value="{{ search_query }}" style="max-width: 200px;">
+                <button type="submit" class="btn btn-sm btn-secondary">
+                    <i class="bi bi-search"></i>
+                </button>
+                {% if date_filter or period_filter or search_query %}
+                <a href="{% url 'shop_payments' %}" class="btn btn-sm btn-light border text-danger" title="Clear Filters">
+                    <i class="bi bi-x-circle"></i> Clear
+                </a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Day-by-Day Payment History Feed -->
+{% if daily_groups %}
+<div class="d-flex flex-column gap-4">
+    {% for day in daily_groups %}
+    <div class="card border-0 shadow-sm rounded-3 overflow-hidden">
+        <!-- Daily Group Header -->
+        <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <div class="bg-primary-subtle text-primary rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+                    <i class="bi bi-calendar-event fs-5"></i>
+                </div>
+                <div>
+                    <h6 class="fw-bold mb-0 text-dark">
+                        {{ day.date|date:"l, F d, Y" }}
+                        {% if day.is_today %}
+                        <span class="badge bg-success-subtle text-success ms-1 small fw-semibold">
+                            <i class="bi bi-dot"></i>Today
+                        </span>
+                        {% endif %}
+                    </h6>
+                    <small class="text-muted">
+                        {{ day.count }} payment settlement{% if day.count > 1 %}s{% endif %} received
+                    </small>
+                </div>
+            </div>
+            <div class="text-end">
+                <span class="badge bg-light text-secondary border me-2 py-2 px-3 fw-semibold">
+                    {{ day.count }} Application{% if day.count > 1 %}s{% endif %}
+                </span>
+                <span class="fs-5 fw-bold text-success font-monospace">
+                    +₹{{ day.total_day_amount|floatformat:2 }}
+                </span>
+            </div>
+        </div>
+
+        <!-- Payments Table for this day -->
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr class="text-secondary small">
+                        <th class="ps-3" style="width: 40px;">#</th>
+                        <th>Application Number</th>
+                        <th>Customer Details</th>
+                        <th>Mobile Model</th>
+                        <th class="text-end">Loan Requested</th>
+                        <th class="text-end">Amount Paid by Admin</th>
+                        <th>Bank UTR / Reference</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in day.payments %}
+                    <tr>
+                        <td class="ps-3 text-muted small">{{ forloop.counter }}</td>
+                        <td>
+                            <a href="{% url 'shop_application_detail' pk=p.application.pk %}" class="fw-bold text-decoration-none text-primary">
+                                {{ p.application.application_number }}
+                            </a>
+                            {% if p.remarks %}
+                            <div class="text-muted small" style="font-size: 0.75rem;">
+                                <i class="bi bi-chat-left-text me-1"></i>{{ p.remarks }}
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="fw-semibold text-dark">{{ p.application.customer.name }}</div>
+                            <div class="text-muted small font-monospace">{{ p.application.customer.primary_mobile }}</div>
+                        </td>
+                        <td>
+                            <span class="badge bg-light text-dark border">
+                                <i class="bi bi-phone me-1"></i>{{ p.application.mobile_model }}
+                            </span>
+                        </td>
+                        <td class="text-end font-monospace text-muted">
+                            ₹{{ p.application.financier_request_amount|floatformat:2 }}
+                        </td>
+                        <td class="text-end font-monospace fw-bold text-success fs-6">
+                            ₹{{ p.amount_received|floatformat:2 }}
+                        </td>
+                        <td>
+                            <span class="badge bg-light text-dark font-monospace border px-2 py-1">
+                                {{ p.payment_reference }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if p.is_discrepant %}
+                            <span class="badge bg-warning-subtle text-warning-emphasis" title="Received amount exceeds requested balance">
+                                <i class="bi bi-exclamation-triangle me-1"></i>Discrepancy
+                            </span>
+                            {% else %}
+                            <span class="badge bg-success-subtle text-success">
+                                <i class="bi bi-check-circle me-1"></i>Settled
+                            </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Daily Subtotal Footer -->
+        <div class="card-footer bg-light py-2 px-3 d-flex justify-content-between align-items-center small text-muted">
+            <span>
+                Settlement date: <strong>{{ day.date|date:"M d, Y" }}</strong>
+            </span>
+            <span>
+                Day Total Paid: <strong class="text-success font-monospace fs-6">₹{{ day.total_day_amount|floatformat:2 }}</strong>
+            </span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<!-- Clean Full-Width Alternative Empty State -->
+<div class="card border-0 shadow-sm rounded-3 py-5 text-center">
+    <div class="card-body p-4">
+        <div class="bg-primary-subtle text-primary rounded-circle d-inline-flex align-items-center justify-content-center p-4 mb-3">
+            <i class="bi bi-wallet2 fs-1"></i>
+        </div>
+        <h5 class="fw-bold text-dark mb-2">No Daily Payout Records Found</h5>
+        <p class="text-muted small mx-auto mb-4" style="max-width: 520px;">
+            {% if date_filter or period_filter or search_query %}
+            No payments match your current filter criteria. Try selecting another date or clearing your search.
+            {% else %}
+            No payouts have been credited by the administrator to your shop yet. When the administrator approves and disburses payments for your customers' finance applications, your day-by-day settlement history will be recorded and displayed here automatically.
+            {% endif %}
+        </p>
+        {% if date_filter or period_filter or search_query %}
+        <a href="{% url 'shop_payments' %}" class="btn btn-outline-primary btn-sm px-3">
+            <i class="bi bi-arrow-counterclockwise me-1"></i> Reset Filters
+        </a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% if is_admin_user and eligible_apps %}
+<!-- Admin Payout Modal -->
+<div class="modal fade" id="recordPaymentModal" tabindex="-1" aria-labelledby="recordPaymentModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header border-bottom">
+                <h6 class="modal-title fw-bold text-dark" id="recordPaymentModalLabel">
+                    <i class="bi bi-cash-coin me-1 text-primary"></i> Record Admin Payout to Shop
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" novalidate>
+                {% csrf_token %}
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label for="id_app_select" class="form-label small fw-semibold text-secondary">
+                            Select Application <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select" id="id_app_select" name="application_id" required>
+                            <option value="">-- Choose Application --</option>
+                            {% for app in eligible_apps %}
+                            <option value="{{ app.id }}">
+                                {{ app.application_number }} — {{ app.customer.name }} (Req: ₹{{ app.financier_request_amount|floatformat:0 }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="id_amount_received" class="form-label small fw-semibold text-secondary">
+                            Disbursed Amount (₹) <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light fw-bold">₹</span>
+                            <input type="number" step="0.01" min="1" class="form-control font-monospace fw-bold" id="id_amount_received" name="amount_received" placeholder="e.g. 15000" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="id_payment_date" class="form-label small fw-semibold text-secondary">
+                            Payment Credit Date <span class="text-danger">*</span>
+                        </label>
+                        <input type="date" class="form-control" id="id_payment_date" name="payment_date" value="{{ today_date }}" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="id_payment_reference" class="form-label small fw-semibold text-secondary">
+                            UTR / Bank Reference # <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control font-monospace" id="id_payment_reference" name="payment_reference" placeholder="e.g. UTR198273641 or NEFT..." required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="id_remarks" class="form-label small fw-semibold text-secondary">
+                            Remarks / Notes <span class="text-muted">(Optional)</span>
+                        </label>
+                        <textarea class="form-control small" id="id_remarks" name="remarks" rows="2" placeholder="Bank credit reference, deductions, etc."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-top bg-light">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm px-3 fw-semibold">
+                        <i class="bi bi-check-lg me-1"></i> Save Settlement Payout
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

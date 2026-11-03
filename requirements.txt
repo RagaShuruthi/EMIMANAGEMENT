@@ -1,0 +1,11 @@
+# EMI Management System — Requirements
+# Core
+Django>=5.1,<7.0
+python-dotenv>=1.0.0
+djangorestframework>=3.15.0
+
+# PostgreSQL driver (uncomment for production)
+# psycopg2-binary>=2.9
+
+# Production server (uncomment for deployment)
+# gunicorn>=22.0

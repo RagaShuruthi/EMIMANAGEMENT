@@ -1,0 +1,246 @@
+{% extends "shops/portal/shop_base.html" %}
+
+{% block title %}Shop Dashboard — {{ shop.name }} | Private Finance EMI{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h2 class="fw-bold text-dark mb-1">{{ shop.name }}</h2>
+        <p class="text-muted small mb-0">
+            <i class="bi bi-geo-alt me-1"></i>{{ shop.address }} | Contact: {{ shop.phone }}
+        </p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'shop_customer_add' %}" class="btn btn-primary shadow-sm px-3 py-2 fw-semibold">
+            <i class="bi bi-plus-lg me-1"></i> + Add New Customer
+        </a>
+    </div>
+</div>
+
+<!-- 9 Database-Driven Dashboard Statistics -->
+<div class="row g-3 mb-4">
+    <!-- 1. Total Customers -->
+    <div class="col-12 col-sm-6 col-xl-4">
+        <div class="metric-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="metric-label">Total Customers</div>
+                    <div class="metric-value">{{ total_customers }}</div>
+                    <small class="text-muted">Registered at this shop</small>
+                </div>
+                <div class="metric-icon-box bg-primary-subtle text-primary">
+                    <i class="bi bi-people-fill"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Total Applications -->
+    <div class="col-12 col-sm-6 col-xl-4">
+        <div class="metric-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="metric-label">Total Applications</div>
+                    <div class="metric-value">{{ total_applications }}</div>
+                    <small class="text-muted">All financing submissions</small>
+                </div>
+                <div class="metric-icon-box bg-secondary-subtle text-secondary">
+                    <i class="bi bi-file-earmark-text-fill"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Applications Submitted -->
+    <div class="col-12 col-sm-6 col-xl-4">
+        <div class="metric-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="metric-label text-primary">Applications Submitted</div>
+                    <div class="metric-value text-primary">{{ submitted_applications }}</div>
+                    <small class="text-muted">Dispatched to financier</small>
+                </div>
+                <div class="metric-icon-box bg-primary-subtle text-primary">
+                    <i class="bi bi-send-check-fill"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Applications Pending -->
+    <div class="col-12 col-sm-6 col-xl-4">
+        <div class="metric-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="metric-label text-warning">Applications Pending</div>
+                    <div class="metric-value text-warning">{{ pending_applications }}</div>
+                    <small class="text-muted">Drafts & under review</small>
+                </div>
+                <div class="metric-icon-box bg-warning-subtle text-warning">
+                    <i class="bi bi-clock-history"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. Applications Approved -->
+    <div class="col-12 col-sm-6 col-xl-4">
+        <div class="metric-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="metric-label text-success">Applications Approved</div>
+                    <div class="metric-value text-success">{{ approved_applications }}</div>
+                    <small class="text-muted">Cleared by financier</small>
+                </div>
+                <div class="metric-icon-box bg-success-subtle text-success">
+                    <i class="bi bi-check-circle-fill"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 6. Applications Rejected -->
+    <div class="col-12 col-sm-6 col-xl-4">
+        <div class="metric-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="metric-label text-danger">Applications Rejected</div>
+                    <div class="metric-value text-danger">{{ rejected_applications }}</div>
+                    <small class="text-muted">Declined requests</small>
+                </div>
+                <div class="metric-icon-box bg-danger-subtle text-danger">
+                    <i class="bi bi-x-circle-fill"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 7. Total Amount Requested from Financier -->
+    <div class="col-12 col-sm-6 col-xl-4">
+        <div class="metric-card border-primary-subtle">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="metric-label text-primary">Financier Requested</div>
+                    <div class="metric-value text-primary fs-3">₹{{ total_amount_requested|floatformat:2 }}</div>
+                    <small class="text-muted">Total loan amount submitted</small>
+                </div>
+                <div class="metric-icon-box bg-primary-subtle text-primary">
+                    <i class="bi bi-currency-rupee"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 8. Total Amount Received from Financier -->
+    <div class="col-12 col-sm-6 col-xl-4">
+        <div class="metric-card border-success-subtle">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="metric-label text-success">Amount Received</div>
+                    <div class="metric-value text-success fs-3">₹{{ total_amount_received|floatformat:2 }}</div>
+                    <small class="text-muted">Disbursed to shop account</small>
+                </div>
+                <div class="metric-icon-box bg-success-subtle text-success">
+                    <i class="bi bi-cash-stack"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 9. Outstanding Amount Yet to Be Received -->
+    <div class="col-12 col-sm-6 col-xl-4">
+        <div class="metric-card border-warning-subtle">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="metric-label text-warning-emphasis">Outstanding Balance</div>
+                    <div class="metric-value text-warning-emphasis fs-3">₹{{ outstanding_amount|floatformat:2 }}</div>
+                    <small class="text-muted">Pending disbursement</small>
+                </div>
+                <div class="metric-icon-box bg-warning-subtle text-warning-emphasis">
+                    <i class="bi bi-hourglass-split"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Applications Section -->
+<div class="card border-0 shadow-sm rounded-3">
+    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+            <h5 class="fw-bold mb-0 text-dark">Recent Finance Applications</h5>
+            <small class="text-muted">Latest mobile financing requests originating from this shop</small>
+        </div>
+        <a href="{% url 'shop_application_list' %}" class="btn btn-sm btn-outline-primary">
+            View All Applications <i class="bi bi-arrow-right ms-1"></i>
+        </a>
+    </div>
+
+    <div class="table-responsive">
+        {% if recent_applications %}
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col">Application #</th>
+                    <th scope="col">Customer Name</th>
+                    <th scope="col">Mobile Model</th>
+                    <th scope="col">Device Price</th>
+                    <th scope="col">Down Payment</th>
+                    <th scope="col">Financier Request</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Date</th>
+                    <th scope="col" class="text-end">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for app in recent_applications %}
+                <tr>
+                    <td>
+                        <a href="{% url 'shop_application_detail' pk=app.pk %}" class="fw-bold text-decoration-none text-primary">
+                            {{ app.application_number }}
+                        </a>
+                    </td>
+                    <td>
+                        <div class="fw-semibold text-dark">{{ app.customer.name }}</div>
+                        <small class="text-muted">{{ app.customer.primary_mobile }}</small>
+                    </td>
+                    <td>{{ app.mobile_model }}</td>
+                    <td>₹{{ app.mobile_price|floatformat:2 }}</td>
+                    <td>₹{{ app.down_payment|floatformat:2 }}</td>
+                    <td class="fw-bold text-dark">₹{{ app.financier_request_amount|floatformat:2 }}</td>
+                    <td>
+                        {% if app.status == 'APPROVED' %}
+                            <span class="badge bg-success-subtle text-success px-2 py-1"><i class="bi bi-check-circle me-1"></i>Approved</span>
+                        {% elif app.status == 'SUBMITTED' %}
+                            <span class="badge bg-primary-subtle text-primary px-2 py-1"><i class="bi bi-send-check me-1"></i>Submitted</span>
+                        {% elif app.status == 'REJECTED' %}
+                            <span class="badge bg-danger-subtle text-danger px-2 py-1"><i class="bi bi-x-circle me-1"></i>Rejected</span>
+                        {% elif app.status == 'PAID' %}
+                            <span class="badge bg-info-subtle text-info-emphasis px-2 py-1"><i class="bi bi-cash me-1"></i>Paid</span>
+                        {% else %}
+                            <span class="badge bg-warning-subtle text-warning-emphasis px-2 py-1"><i class="bi bi-clock me-1"></i>{{ app.get_status_display }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-muted small">{{ app.created_at|date:"M d, Y" }}</td>
+                    <td class="text-end">
+                        <a href="{% url 'shop_application_detail' pk=app.pk %}" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-eye"></i> Details
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="p-5 text-center text-muted">
+            <i class="bi bi-inbox fs-1 d-block mb-3 text-secondary"></i>
+            <h6 class="fw-semibold">No Finance Applications Yet</h6>
+            <p class="small mb-3">Begin by registering your first customer and submitting an EMI financing application.</p>
+            <a href="{% url 'shop_customer_add' %}" class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-lg me-1"></i> Add New Customer
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

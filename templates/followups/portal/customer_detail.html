@@ -1,0 +1,328 @@
+{% extends "base.html" %}
+
+{% block title %}Follow-up: {{ customer.name }} — EMI Management System{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb & Header -->
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-1 small">
+                <li class="breadcrumb-item"><a href="{% url 'followup_dashboard' %}">Follow-up Portal</a></li>
+                <li class="breadcrumb-item active" aria-current="page">{{ customer.name }}</li>
+            </ol>
+        </nav>
+        <h2 class="fw-bold text-dark mb-0">
+            <i class="bi bi-person-circle text-primary me-2"></i>{{ customer.name }}
+        </h2>
+        <div class="small text-muted mt-1">
+            Registered via <span class="badge bg-light text-primary border"><i class="bi bi-shop me-1"></i>{{ shop.name }}</span>
+        </div>
+    </div>
+    <div>
+        <a href="{% url 'followup_dashboard' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Back to Customers
+        </a>
+    </div>
+</div>
+
+{% if is_flagged %}
+<div class="alert alert-warning border border-warning shadow-sm d-flex align-items-center mb-4 p-3 rounded-3">
+    <i class="bi bi-flag-fill text-danger fs-3 me-3"></i>
+    <div>
+        <div class="fw-bold text-dark fs-6">Customer Flagged for Follow-up (Requested 2 Days Time)</div>
+        <div class="small text-muted">
+            Customer requested 2 days time. Scheduled callback date: <strong>{{ latest_activity.next_followup_date|date:"F d, Y" }}</strong>.
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="row g-4 mb-4">
+    <!-- Left Column: Customer Profile & Quick Call Actions -->
+    <div class="col-12 col-lg-5">
+        <div class="card rounded-3 shadow-sm mb-4">
+            <div class="card-header bg-white py-3 border-bottom">
+                <h5 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-person-lines-fill text-primary me-2"></i>Customer Information
+                </h5>
+            </div>
+            <div class="card-body p-4">
+                <div class="d-flex flex-column gap-3">
+                    <!-- Primary Phone -->
+                    <div class="p-3 bg-light rounded-3 border d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="text-muted small text-uppercase fw-semibold d-block">Primary Mobile</span>
+                            <span class="fs-5 fw-bold text-dark">{{ customer.primary_mobile }}</span>
+                        </div>
+                        <a href="tel:{{ customer.primary_mobile }}" class="btn btn-success btn-sm shadow-sm">
+                            <i class="bi bi-telephone-outbound-fill me-1"></i> Call Now
+                        </a>
+                    </div>
+
+                    <!-- Secondary Phone -->
+                    {% if customer.secondary_mobile %}
+                    <div class="p-3 bg-light rounded-3 border d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="text-muted small text-uppercase fw-semibold d-block">Secondary Mobile</span>
+                            <span class="fs-5 fw-bold text-dark">{{ customer.secondary_mobile }}</span>
+                        </div>
+                        <a href="tel:{{ customer.secondary_mobile }}" class="btn btn-outline-success btn-sm">
+                            <i class="bi bi-telephone me-1"></i> Call
+                        </a>
+                    </div>
+                    {% endif %}
+
+                    <!-- Home Address -->
+                    <div>
+                        <span class="text-muted small text-uppercase fw-semibold d-block">Home / Residential Address</span>
+                        <div class="p-2 border rounded bg-white small text-dark mt-1">
+                            <i class="bi bi-geo-alt text-danger me-1"></i>{{ customer.home_address|default:"Not specified" }}
+                        </div>
+                    </div>
+
+                    <!-- Work Address -->
+                    <div>
+                        <span class="text-muted small text-uppercase fw-semibold d-block">Work / Office Address</span>
+                        <div class="p-2 border rounded bg-white small text-dark mt-1">
+                            <i class="bi bi-briefcase text-secondary me-1"></i>{{ customer.work_address|default:"Not specified" }}
+                        </div>
+                    </div>
+
+                    <!-- Customer Reference -->
+                    <div class="d-flex justify-content-between border-top pt-3 small">
+                        <span class="text-muted">Customer ID:</span>
+                        <span class="fw-semibold font-monospace">#{{ customer.pk }}</span>
+                    </div>
+
+                    <!-- Customer Since -->
+                    <div class="d-flex justify-content-between small">
+                        <span class="text-muted">Customer Onboarding:</span>
+                        <span class="fw-semibold text-dark">{{ customer.created_at|date:"F d, Y" }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Log Follow-up Action Form -->
+        <div class="card rounded-3 shadow-sm border-primary">
+            <div class="card-header bg-primary text-white py-3">
+                <h5 class="fw-bold mb-0">
+                    <i class="bi bi-plus-circle-dotted me-2"></i>Log Follow-up Interaction
+                </h5>
+            </div>
+            <div class="card-body p-4">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger small mb-3">
+                        {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <!-- Follow-up Outcome (Paid, Not Paid, Need two days time) -->
+                    <div class="mb-3">
+                        <label for="{{ form.outcome.id_for_label }}" class="form-label fw-bold small text-dark">
+                            Follow-up Outcome <span class="text-danger">*</span>
+                        </label>
+                        {{ form.outcome }}
+                        <div class="form-text small text-muted">
+                            Selecting <em>"Need two days time"</em> automatically flags customer and schedules a callback in 2 days.
+                        </div>
+                        {% if form.outcome.errors %}
+                            <div class="text-danger small mt-1">{{ form.outcome.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-12 col-md-6">
+                            <label for="{{ form.activity_type.id_for_label }}" class="form-label fw-semibold small text-secondary">
+                                Interaction Type <span class="text-danger">*</span>
+                            </label>
+                            {{ form.activity_type }}
+                            {% if form.activity_type.errors %}
+                                <div class="text-danger small mt-1">{{ form.activity_type.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-12 col-md-6">
+                            <label for="{{ form.status.id_for_label }}" class="form-label fw-semibold small text-secondary">
+                                Status <span class="text-danger">*</span>
+                            </label>
+                            {{ form.status }}
+                            {% if form.status.errors %}
+                                <div class="text-danger small mt-1">{{ form.status.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.next_followup_date.id_for_label }}" class="form-label fw-semibold small text-secondary">
+                            Next Follow-up / Payment Due Date
+                        </label>
+                        {{ form.next_followup_date }}
+                        {% if form.next_followup_date.errors %}
+                            <div class="text-danger small mt-1">{{ form.next_followup_date.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.notes.id_for_label }}" class="form-label fw-semibold small text-secondary">
+                            Call / Visit Notes & Commitment Details
+                        </label>
+                        {{ form.notes }}
+                        {% if form.notes.errors %}
+                            <div class="text-danger small mt-1">{{ form.notes.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 shadow-sm">
+                        <i class="bi bi-save me-1"></i> Save Follow-up Record
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: EMI Applications & Interaction History -->
+    <div class="col-12 col-lg-7">
+        <!-- EMI Applications Card -->
+        <div class="card rounded-3 shadow-sm mb-4">
+            <div class="card-header bg-white py-3 border-bottom">
+                <h5 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-phone text-primary me-2"></i>EMI Financing Applications ({{ applications|length }})
+                </h5>
+            </div>
+            <div class="card-body p-3">
+                {% if applications %}
+                <div class="d-flex flex-column gap-3">
+                    {% for app in applications %}
+                    <div class="p-3 border rounded-3 bg-light">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                            <div>
+                                <h6 class="fw-bold text-dark mb-0">{{ app.mobile_model }}</h6>
+                                <span class="badge bg-secondary-subtle text-secondary small font-monospace">App #{{ app.id }}</span>
+                            </div>
+                            <span class="badge bg-primary px-3 py-1">
+                                Status: {{ app.status }}
+                            </span>
+                        </div>
+
+                        <div class="row g-2 text-center my-2">
+                            <div class="col-6 col-md-3">
+                                <div class="bg-white p-2 rounded border">
+                                    <div class="text-muted small">Retail Price</div>
+                                    <div class="fw-bold text-dark">₹{{ app.mobile_price|floatformat:2 }}</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="bg-white p-2 rounded border">
+                                    <div class="text-muted small">Down Payment</div>
+                                    <div class="fw-bold text-success">₹{{ app.down_payment|floatformat:2 }}</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="bg-white p-2 rounded border">
+                                    <div class="text-muted small">Financier Req.</div>
+                                    <div class="fw-bold text-primary">₹{{ app.financier_request_amount|floatformat:2 }}</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="bg-white p-2 rounded border">
+                                    <div class="text-muted small">Monthly EMI</div>
+                                    <div class="fw-bold text-danger">₹{{ app.monthly_emi|floatformat:2 }}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center small text-muted pt-2 border-top">
+                            <span>
+                                <i class="bi bi-clock-history me-1"></i>Scheme: <strong>{{ app.emi_duration }} Months</strong>
+                            </span>
+                            <span class="badge bg-warning-subtle text-warning-emphasis">
+                                <i class="bi bi-calendar-check me-1"></i>Due Day: {{ app.monthly_due_day }}th of month
+                            </span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-4 text-muted small">
+                    No financing applications found for this customer.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Follow-up Activity History Timeline -->
+        <div class="card rounded-3 shadow-sm">
+            <div class="card-header bg-white py-3 border-bottom">
+                <h5 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-clock-history text-primary me-2"></i>Follow-up Interaction History ({{ activities|length }})
+                </h5>
+            </div>
+            <div class="card-body p-4">
+                {% if activities %}
+                <div class="d-flex flex-column gap-3">
+                    {% for act in activities %}
+                    <div class="p-3 border rounded-3 bg-white position-relative">
+                        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
+                            <div>
+                                {% if act.is_flagged or act.outcome == 'NEED_TWO_DAYS' %}
+                                    <span class="badge bg-warning text-dark border border-warning shadow-sm me-1">
+                                        <i class="bi bi-flag-fill text-danger me-1"></i>Need 2 Days (Call Again)
+                                    </span>
+                                {% elif act.outcome == 'PAID' %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle me-1">
+                                        <i class="bi bi-check-circle-fill me-1"></i>Paid
+                                    </span>
+                                {% elif act.outcome == 'NOT_PAID' %}
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle me-1">
+                                        <i class="bi bi-x-circle-fill me-1"></i>Not Paid
+                                    </span>
+                                {% endif %}
+
+                                <span class="badge bg-light text-secondary border me-1">
+                                    {{ act.get_activity_type_display }}
+                                </span>
+
+                                {% if act.status == 'PENDING' %}
+                                    <span class="badge bg-warning-subtle text-warning-emphasis fw-semibold me-1">
+                                        <i class="bi bi-hourglass-split me-1"></i>Pending
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-success-subtle text-success fw-semibold me-1">
+                                        <i class="bi bi-check-circle me-1"></i>Completed
+                                    </span>
+                                {% endif %}
+                                <span class="small text-muted">by <strong>{{ act.employee.get_full_name|default:act.employee.username }}</strong></span>
+                            </div>
+                            <span class="small text-muted font-monospace">
+                                <i class="bi bi-clock me-1"></i>{{ act.created_at|date:"M d, Y H:i" }}
+                            </span>
+                        </div>
+
+                        <p class="text-dark mb-2 small" style="white-space: pre-wrap;">{{ act.notes }}</p>
+
+                        {% if act.next_followup_date %}
+                        <div class="d-flex align-items-center gap-2 small">
+                            <span class="badge bg-warning-subtle text-warning-emphasis">
+                                <i class="bi bi-calendar-event me-1"></i>Next Follow-up Due: {{ act.next_followup_date|date:"F d, Y" }}
+                            </span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-chat-square-text display-6 d-block mb-2"></i>
+                    No interactions logged yet for this customer. Use the form on the left to record your first call or visit.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

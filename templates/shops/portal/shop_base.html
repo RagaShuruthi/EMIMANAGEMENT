@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Shop Dashboard — Private Finance EMI{% endblock %}</title>
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- Google Fonts: Open Sans, Noto Sans & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@300;400;500;600;700;800&family=Open+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-navy: #0f172a;
+            --sidebar-navy: #0f172a;
+            --royal-blue: #1e40af;
+            --accent-blue: #2563eb;
+            --hover-blue: #1d4ed8;
+            --light-bg: #f8fafc;
+            --card-border: #e2e8f0;
+            --fin-radius: 8px;
+            --fin-radius-sm: 6px;
+        }
+
+        /* Base Typography: Open Sans / Noto Sans */
+        html {
+            font-size: 13.5px;
+        }
+
+        body {
+            font-family: 'Open Sans', 'Noto Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-feature-settings: "cv02", "cv03", "cv04", "cv11", "tnum";
+            -webkit-font-smoothing: antialiased;
+            background-color: var(--light-bg);
+            color: #0f172a;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            font-size: 0.85rem;
+            line-height: 1.45;
+            letter-spacing: -0.011em;
+        }
+
+        h1, .h1 { font-size: 1.35rem; font-weight: 700; color: #0f172a; }
+        h2, .h2 { font-size: 1.2rem; font-weight: 700; color: #0f172a; }
+        h3, .h3 { font-size: 1.05rem; font-weight: 700; color: #0f172a; }
+        h4, .h4 { font-size: 0.95rem; font-weight: 600; color: #0f172a; }
+        h5, .h5 { font-size: 0.88rem; font-weight: 600; color: #0f172a; }
+        h6, .h6 { font-size: 0.8rem; font-weight: 600; color: #0f172a; }
+
+        .font-monospace, code, .metric-value, .table-amount {
+            font-family: 'JetBrains Mono', ui-monospace, monospace !important;
+            font-variant-numeric: tabular-nums;
+            font-size: 0.82rem;
+        }
+
+        /* Card and Table Sizing */
+        .card {
+            border: 1px solid var(--card-border);
+            border-radius: var(--fin-radius);
+            box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.05), 0 1px 2px -1px rgba(15, 23, 42, 0.03);
+            background-color: #ffffff;
+        }
+        .table {
+            font-size: 0.82rem;
+            color: #0f172a;
+        }
+        .table > :not(caption) > * > * {
+            padding: 0.65rem 0.85rem;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .table thead th {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            background-color: #f8fafc;
+            color: #64748b;
+            padding: 0.65rem 0.85rem;
+            border-bottom: 1px solid var(--card-border);
+        }
+        .btn {
+            font-family: 'Open Sans', 'Noto Sans', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 600;
+            border-radius: var(--fin-radius-sm);
+            padding: 0.42rem 0.85rem;
+            letter-spacing: 0.01em;
+            transition: all 0.15s ease;
+        }
+        .btn-sm {
+            font-size: 0.72rem;
+            padding: 0.25rem 0.55rem;
+            border-radius: 4px;
+        }
+        .badge {
+            font-family: 'Open Sans', 'Noto Sans', sans-serif;
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 0.32rem 0.55rem;
+            border-radius: 4px;
+            border-width: 1px;
+            border-style: solid;
+        }
+        .form-control, .form-select, .input-group-text {
+            font-size: 0.82rem;
+            padding: 0.42rem 0.72rem;
+            border: 1px solid #cbd5e1;
+            border-radius: var(--fin-radius-sm);
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+            outline: none;
+        }
+
+        /* Top Navigation Header */
+        .shop-header {
+            background-color: #ffffff;
+            border-bottom: 1px solid var(--card-border);
+            height: 60px;
+            position: sticky;
+            top: 0;
+            z-index: 1030;
+        }
+        /* Layout Wrapper */
+        .portal-layout {
+            display: flex;
+            flex: 1;
+        }
+        /* Sidebar Navigation */
+        .shop-sidebar {
+            width: 245px;
+            background-color: var(--sidebar-navy);
+            color: #e2e8f0;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.25s ease;
+            border-right: 1px solid #1e293b;
+        }
+        .shop-sidebar .nav-link {
+            color: #94a3b8;
+            font-weight: 500;
+            font-size: 0.78rem;
+            padding: 0.48rem 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            margin: 0.1rem 0.5rem;
+            transition: all 0.15s ease;
+            border-left: 2px solid transparent;
+        }
+        .shop-sidebar .nav-link:hover {
+            color: #ffffff;
+            background-color: rgba(255, 255, 255, 0.06);
+            border-left-color: #64748b;
+        }
+        .shop-sidebar .nav-link.active {
+            color: #ffffff;
+            background-color: #1e293b;
+            font-weight: 600;
+            border-left-color: #3b82f6;
+        }
+        .shop-sidebar .nav-link i {
+            font-size: 0.95rem;
+        }
+        .sidebar-heading {
+            font-size: 0.62rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #64748b;
+            padding: 0.85rem 1rem 0.25rem;
+        }
+        /* Main Content Container */
+        .shop-content {
+            flex: 1;
+            padding: 1.5rem 1.75rem;
+            max-width: 100%;
+            overflow-x: hidden;
+        }
+        /* Metric & Feature Cards */
+        .metric-card {
+            background-color: #ffffff;
+            border: 1px solid var(--card-border);
+            border-radius: 0.85rem;
+            padding: 1.35rem 1.5rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+        }
+        .metric-value {
+            font-size: 1.9rem;
+            font-weight: 700;
+            color: #0f172a;
+            line-height: 1.15;
+        }
+        .metric-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: #64748b;
+        }
+        .metric-icon-box {
+            width: 46px;
+            height: 46px;
+            border-radius: 0.65rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.35rem;
+        }
+        /* Status Badges */
+        .badge-status {
+            padding: 0.35rem 0.75rem;
+            font-weight: 600;
+            font-size: 0.75rem;
+            border-radius: 50rem;
+        }
+        /* Mobile responsive adjustments */
+        @media (max-width: 991.98px) {
+            .shop-sidebar {
+                position: fixed;
+                top: 68px;
+                bottom: 0;
+                left: -270px;
+                z-index: 1020;
+            }
+            .shop-sidebar.show {
+                left: 0;
+            }
+            .shop-content {
+                padding: 1.25rem;
+            }
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Top Header Navigation -->
+    <header class="shop-header d-flex align-items-center justify-content-between px-3 px-md-4">
+        <div class="d-flex align-items-center gap-3">
+            <button class="btn btn-outline-secondary d-lg-none btn-sm" id="sidebarToggleBtn" type="button" aria-label="Toggle Sidebar">
+                <i class="bi bi-list fs-5"></i>
+            </button>
+            <div class="d-flex align-items-center gap-2">
+                <div class="bg-primary text-white rounded-3 p-2 d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+                    <i class="bi bi-phone-fill fs-5"></i>
+                </div>
+                <div>
+                    <span class="fw-bold fs-5 text-dark lh-1 d-block">{{ shop.name|default:"Phonemax Mobiles" }}</span>
+                    <small class="text-muted" style="font-size: 0.75rem;">Private Finance EMI Portal</small>
+                </div>
+            </div>
+
+            {% if all_shops %}
+            <!-- Admin Shop Switcher Dropdown -->
+            <div class="dropdown ms-2 d-none d-md-block">
+                <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-shop me-1"></i> Switch Shop: <strong>{{ shop.name }}</strong>
+                </button>
+                <ul class="dropdown-menu shadow-sm">
+                    <li><h6 class="dropdown-header">Registered Retail Shops</h6></li>
+                    {% for s in all_shops %}
+                    <li>
+                        <a class="dropdown-item {% if s.id == shop.id %}active{% endif %}" href="?shop_id={{ s.id }}">
+                            {{ s.name }} ({{ s.owner_name }})
+                        </a>
+                    </li>
+                    {% endfor %}
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item text-primary" href="{% url 'admin_dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> Go to Admin Dashboard</a></li>
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="d-flex align-items-center gap-2 gap-md-3">
+            <!-- Add New Customer Header Button -->
+            <a href="{% url 'shop_customer_add' %}" class="btn btn-primary d-inline-flex align-items-center gap-1 shadow-sm px-3 py-2 fw-semibold">
+                <i class="bi bi-person-plus-fill"></i>
+                <span class="d-none d-sm-inline">+ Add New Customer</span>
+            </a>
+
+            <!-- Notification Bell Icon -->
+            <div class="position-relative p-2 text-secondary" style="cursor: pointer;" title="Notifications">
+                <i class="bi bi-bell fs-5"></i>
+                {% if pending_applications %}
+                <span class="position-absolute top-1 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.65rem;">
+                    {{ pending_applications }}
+                </span>
+                {% endif %}
+            </div>
+
+            <!-- User Profile Dropdown -->
+            <div class="dropdown">
+                <button class="btn btn-light border d-flex align-items-center gap-2 py-1 px-2 rounded-3" type="button" data-bs-toggle="dropdown">
+                    <div class="bg-primary-subtle text-primary fw-bold rounded-circle d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                        {{ request.user.username|make_list|first|upper }}
+                    </div>
+                    <div class="text-start d-none d-md-block">
+                        <span class="d-block fw-semibold text-dark small lh-1">{{ request.user.username }}</span>
+                        <span class="text-muted" style="font-size: 0.7rem;">{{ request.user.get_role_display }}</span>
+                    </div>
+                    <i class="bi bi-chevron-down small text-muted"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0">
+                    <li class="px-3 py-2 border-bottom">
+                        <div class="fw-bold text-dark">{{ request.user.username }}</div>
+                        <div class="small text-muted">{{ shop.name }}</div>
+                    </li>
+                    {% if request.user.is_admin_role or request.user.is_superuser %}
+                    <li>
+                        <a class="dropdown-item py-2" href="{% url 'admin_dashboard' %}">
+                            <i class="bi bi-speedometer2 me-2 text-primary"></i> Admin Dashboard
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    {% endif %}
+                    <li>
+                        <a class="dropdown-item py-2" href="{% url 'shop_profile' %}">
+                            <i class="bi bi-shop me-2 text-secondary"></i> Shop Profile
+                        </a>
+                    </li>
+                    <li>
+                        <form method="post" action="{% url 'logout' %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="dropdown-item text-danger py-2">
+                                <i class="bi bi-box-arrow-right me-2"></i> Sign Out
+                            </button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Layout: Sidebar + Content -->
+    <div class="portal-layout">
+        <!-- 12-Item Collapsible Sidebar -->
+        <aside class="shop-sidebar" id="portalSidebar">
+            <div class="py-3">
+                <div class="sidebar-heading">Operations</div>
+                <nav class="nav flex-column">
+                    <!-- 1. Dashboard -->
+                    <a class="nav-link {% if active_nav == 'dashboard' %}active{% endif %}" href="{% url 'shop_dashboard' %}">
+                        <i class="bi bi-grid-fill"></i>
+                        <span>Dashboard</span>
+                    </a>
+
+                    <!-- 2. Add New Customer -->
+                    <a class="nav-link {% if active_nav == 'add_customer' %}active{% endif %}" href="{% url 'shop_customer_add' %}">
+                        <i class="bi bi-person-plus-fill"></i>
+                        <span>Add New Customer</span>
+                    </a>
+                </nav>
+
+                <div class="sidebar-heading">Applications</div>
+                <nav class="nav flex-column">
+                    <!-- 4. Finance Applications -->
+                    <a class="nav-link {% if active_nav == 'all_applications' %}active{% endif %}" href="{% url 'shop_application_list' %}">
+                        <i class="bi bi-file-earmark-text-fill"></i>
+                        <span>Finance Applications</span>
+                    </a>
+
+                    <!-- 5. Submitted Applications -->
+                    <a class="nav-link {% if active_nav == 'submitted_apps' %}active{% endif %}" href="{% url 'shop_application_list' %}?status=SUBMITTED">
+                        <i class="bi bi-send-check-fill"></i>
+                        <span>Submitted Applications</span>
+                    </a>
+
+                    <!-- 6. Pending Applications -->
+                    <a class="nav-link {% if active_nav == 'pending_apps' %}active{% endif %}" href="{% url 'shop_application_list' %}?status=PENDING">
+                        <i class="bi bi-clock-history"></i>
+                        <span>Pending Applications</span>
+                    </a>
+
+                    <!-- 7. Approved Applications -->
+                    <a class="nav-link {% if active_nav == 'approved_apps' %}active{% endif %}" href="{% url 'shop_application_list' %}?status=APPROVED">
+                        <i class="bi bi-check-circle-fill"></i>
+                        <span>Approved Applications</span>
+                    </a>
+
+                    <!-- 8. Rejected Applications -->
+                    <a class="nav-link {% if active_nav == 'rejected_apps' %}active{% endif %}" href="{% url 'shop_application_list' %}?status=REJECTED">
+                        <i class="bi bi-x-circle-fill"></i>
+                        <span>Rejected Applications</span>
+                    </a>
+                </nav>
+
+                <div class="sidebar-heading">Financials & Settings</div>
+                <nav class="nav flex-column">
+                    <!-- 9. Financier Payments -->
+                    <a class="nav-link {% if active_nav == 'financier_payments' %}active{% endif %}" href="{% url 'shop_payments' %}">
+                        <i class="bi bi-wallet2"></i>
+                        <span>Financier Payments</span>
+                    </a>
+
+                    <!-- 10. Reports -->
+                    <a class="nav-link {% if active_nav == 'reports' %}active{% endif %}" href="{% url 'shop_reports' %}">
+                        <i class="bi bi-bar-chart-line-fill"></i>
+                        <span>Reports</span>
+                    </a>
+
+                    <!-- 11. Shop Profile -->
+                    <a class="nav-link {% if active_nav == 'profile' %}active{% endif %}" href="{% url 'shop_profile' %}">
+                        <i class="bi bi-shop"></i>
+                        <span>Shop Profile</span>
+                    </a>
+
+                    <!-- 12. Logout -->
+                    <form method="post" action="{% url 'logout' %}" class="mt-2">
+                        {% csrf_token %}
+                        <button type="submit" class="nav-link border-0 bg-transparent text-danger w-100 text-start" style="cursor: pointer;">
+                            <i class="bi bi-box-arrow-right"></i>
+                            <span>Logout</span>
+                        </button>
+                    </form>
+                </nav>
+            </div>
+        </aside>
+
+        <!-- Main Workspace -->
+        <main class="shop-content">
+            <!-- Global Flash Messages -->
+            {% if messages %}
+            <div class="mb-4">
+                {% for message in messages %}
+                <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show shadow-sm border-0" role="alert">
+                    <i class="bi {% if message.tags == 'success' %}bi-check-circle-fill{% elif message.tags == 'warning' %}bi-exclamation-triangle-fill{% elif message.tags == 'danger' or message.tags == 'error' %}bi-x-octagon-fill{% else %}bi-info-circle-fill{% endif %} me-2"></i>
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Responsive sidebar toggle for mobile devices
+        const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
+        const portalSidebar = document.getElementById('portalSidebar');
+        if (sidebarToggleBtn && portalSidebar) {
+            sidebarToggleBtn.addEventListener('click', function() {
+                portalSidebar.classList.toggle('show');
+            });
+        }
+
+        // Global Phone Number Validator & Exactly 10-Digit Enforcer
+        (function() {
+            function isPhoneField(el) {
+                if (!el || el.tagName !== 'INPUT') return false;
+                var t = (el.type || '').toLowerCase();
+                var n = (el.name || '').toLowerCase();
+                var id = (el.id || '').toLowerCase();
+                if (t === 'tel') return true;
+                if (n.includes('phone') || n.includes('mobile') || n.includes('gpay')) return true;
+                if (id.includes('phone') || id.includes('mobile') || id.includes('gpay')) return true;
+                return false;
+            }
+
+            function sanitizePhone(el) {
+                if (!isPhoneField(el)) return;
+                // Only digits, maximum exactly 10 digits
+                var val = el.value.replace(/[^0-9]/g, '');
+                if (val.length > 10) {
+                    val = val.slice(0, 10);
+                }
+                if (el.value !== val) {
+                    el.value = val;
+                }
+            }
+
+            document.addEventListener('input', function(e) {
+                if (isPhoneField(e.target)) {
+                    sanitizePhone(e.target);
+                }
+            });
+
+            document.addEventListener('paste', function(e) {
+                if (isPhoneField(e.target)) {
+                    setTimeout(function() { sanitizePhone(e.target); }, 0);
+                }
+            });
+
+            document.addEventListener('DOMContentLoaded', function() {
+                var inputs = document.querySelectorAll('input');
+                inputs.forEach(function(inp) {
+                    if (isPhoneField(inp)) {
+                        inp.setAttribute('maxlength', '10');
+                        inp.setAttribute('pattern', '\\d{10}');
+                        inp.setAttribute('inputmode', 'numeric');
+                    }
+                });
+            });
+        })();
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,118 @@
+{% extends "shops/portal/shop_base.html" %}
+
+{% block title %}All Customers — {{ shop.name }} | Private Finance EMI{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h3 class="fw-bold text-dark mb-1">Customer Directory</h3>
+        <p class="text-muted small mb-0">Total {{ total_count }} customer{{ total_count|pluralize }} registered at {{ shop.name }}</p>
+    </div>
+    <a href="{% url 'shop_customer_add' %}" class="btn btn-primary shadow-sm">
+        <i class="bi bi-person-plus-fill me-1"></i> + Add New Customer
+    </a>
+</div>
+
+<!-- Search Bar -->
+<div class="card border-0 shadow-sm rounded-3 mb-4">
+    <div class="card-body p-3">
+        <form method="get" class="row g-2">
+            <div class="col-12 col-md-10">
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" name="q" class="form-control border-start-0 ps-0" placeholder="Search by customer name, mobile number, or address..." value="{{ search_query }}">
+                </div>
+            </div>
+            <div class="col-12 col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-primary w-100">Search</button>
+                {% if search_query %}
+                <a href="{% url 'shop_customer_list' %}" class="btn btn-outline-secondary" title="Clear search">Clear</a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Customers Table -->
+<div class="card border-0 shadow-sm rounded-3">
+    <div class="table-responsive">
+        {% if customers %}
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col">Customer Name</th>
+                    <th scope="col">Primary Mobile</th>
+                    <th scope="col">Secondary Mobile</th>
+                    <th scope="col">Residential Address</th>
+                    <th scope="col">Workplace</th>
+                    <th scope="col">Applications</th>
+                    <th scope="col">Registered</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for customer in customers %}
+                <tr>
+                    <td>
+                        <div class="fw-bold text-dark">{{ customer.name }}</div>
+                    </td>
+                    <td>
+                        <a href="tel:{{ customer.primary_mobile }}" class="text-decoration-none text-dark fw-semibold">
+                            <i class="bi bi-telephone text-primary me-1"></i>{{ customer.primary_mobile }}
+                        </a>
+                    </td>
+                    <td>
+                        {% if customer.secondary_mobile %}
+                            <span class="text-secondary">{{ customer.secondary_mobile }}</span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="text-truncate d-inline-block text-secondary" style="max-width: 220px;" title="{{ customer.home_address }}">
+                            {{ customer.home_address }}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="text-truncate d-inline-block text-secondary" style="max-width: 200px;" title="{{ customer.work_address }}">
+                            {{ customer.work_address }}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge bg-primary-subtle text-primary px-2 py-1">
+                            {{ customer.applications.count }} application{{ customer.applications.count|pluralize }}
+                        </span>
+                    </td>
+                    <td class="text-muted small">{{ customer.created_at|date:"M d, Y" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="p-5 text-center text-muted">
+            <i class="bi bi-people fs-1 d-block mb-3 text-secondary"></i>
+            <h6 class="fw-semibold">No Customers Found</h6>
+            <p class="small mb-3">No customer records match your filter criteria.</p>
+            <a href="{% url 'shop_customer_add' %}" class="btn btn-primary btn-sm">+ Register New Customer</a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Pagination -->
+    {% if customers.has_other_pages %}
+    <div class="card-footer bg-white border-top py-3 d-flex justify-content-between align-items-center">
+        <small class="text-muted">Showing page {{ customers.number }} of {{ customers.paginator.num_pages }}</small>
+        <nav aria-label="Page navigation">
+            <ul class="pagination pagination-sm mb-0">
+                {% if customers.has_previous %}
+                <li class="page-item"><a class="page-link" href="?page={{ customers.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}">Previous</a></li>
+                {% endif %}
+                <li class="page-item active"><span class="page-link">{{ customers.number }}</span></li>
+                {% if customers.has_next %}
+                <li class="page-item"><a class="page-link" href="?page={{ customers.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}">Next</a></li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

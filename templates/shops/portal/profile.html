@@ -1,0 +1,56 @@
+{% extends "shops/portal/shop_base.html" %}
+
+{% block title %}Shop Profile — {{ shop.name }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-md-8 col-lg-7">
+        <h3 class="fw-bold text-dark mb-4">Shop Profile</h3>
+
+        <div class="card border-0 shadow-sm rounded-3">
+            <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-shop fs-4 text-primary"></i>
+                    <h5 class="fw-bold mb-0 text-dark">{{ shop.name }}</h5>
+                </div>
+                {% if shop.is_active %}
+                <span class="badge bg-success-subtle text-success px-2 py-1"><i class="bi bi-check-circle me-1"></i>Active</span>
+                {% else %}
+                <span class="badge bg-danger-subtle text-danger px-2 py-1"><i class="bi bi-x-circle me-1"></i>Inactive</span>
+                {% endif %}
+            </div>
+
+            <div class="card-body p-4">
+                <div class="row g-3">
+                    <div class="col-12 col-sm-6">
+                        <span class="text-muted small text-uppercase fw-semibold d-block">Authorized Contact Person</span>
+                        <span class="fs-6 fw-bold text-dark">{{ shop.owner_name }}</span>
+                    </div>
+                    <div class="col-12 col-sm-6">
+                        <span class="text-muted small text-uppercase fw-semibold d-block">Primary Phone</span>
+                        <span class="fs-6 fw-bold text-dark">{{ shop.phone }}</span>
+                    </div>
+                    <div class="col-12 col-sm-6">
+                        <span class="text-muted small text-uppercase fw-semibold d-block">Official Email</span>
+                        <span class="fs-6 text-dark">{{ shop.email|default:"Not specified" }}</span>
+                    </div>
+                    <div class="col-12 col-sm-6">
+                        <span class="text-muted small text-uppercase fw-semibold d-block">Portal Username</span>
+                        <span class="fs-6 fw-bold text-primary">{{ request.user.username }}</span>
+                    </div>
+                    <div class="col-12">
+                        <span class="text-muted small text-uppercase fw-semibold d-block mb-1">Retail Address</span>
+                        <div class="p-2 bg-light rounded text-secondary" style="white-space: pre-wrap;">{{ shop.address }}</div>
+                    </div>
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between text-muted small border-top pt-3">
+                            <span>Registered On: <strong>{{ shop.created_at|date:"M d, Y" }}</strong></span>
+                            <span>Last Updated: <strong>{{ shop.updated_at|date:"M d, Y" }}</strong></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

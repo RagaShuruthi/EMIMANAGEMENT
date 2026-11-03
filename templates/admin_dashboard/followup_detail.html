@@ -1,0 +1,355 @@
+{% extends "base.html" %}
+
+{% block title %}Employee Profile: {{ employee.get_full_name|default:employee.username }} — EMI Management System{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb & Header -->
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-1 small">
+                <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'admin_followup_list' %}">Follow-up Staff</a></li>
+                <li class="breadcrumb-item active" aria-current="page">{{ employee.username }}</li>
+            </ol>
+        </nav>
+        <h2 class="fw-bold text-dark mb-0">
+            <i class="bi bi-person-badge text-primary me-2"></i>{{ employee.get_full_name|default:employee.username }}
+        </h2>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'admin_followup_edit' pk=employee.pk %}" class="btn btn-outline-primary">
+            <i class="bi bi-pencil me-1"></i> Edit Profile & Shops
+        </a>
+        <form method="post" action="{% url 'admin_followup_status' pk=employee.pk %}" class="d-inline" onsubmit="return confirm('Are you sure you want to {% if employee.is_active %}deactivate{% else %}activate{% endif %} this employee?');">
+            {% csrf_token %}
+            <button type="submit" class="btn {% if employee.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %}">
+                <i class="bi {% if employee.is_active %}bi-person-dash{% else %}bi-person-check{% endif %} me-1"></i>
+                {% if employee.is_active %}Deactivate Employee{% else %}Activate Employee{% endif %}
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Password Setup & Access Workflow Card -->
+<div class="card rounded-3 shadow-sm border-primary-subtle bg-light mb-4">
+    <div class="card-body p-4">
+        <div class="row g-3 align-items-center">
+            <div class="col-12 col-lg-8">
+                <div class="d-flex align-items-start gap-3">
+                    <div class="p-2 bg-primary text-white rounded-3 fs-4">
+                        <i class="bi bi-shield-lock"></i>
+                    </div>
+                    <div>
+                        <h5 class="fw-bold text-dark mb-1">Secure Password Setup & Account Activation</h5>
+                        <p class="text-muted small mb-2">
+                            Share this one-time cryptographic activation link with <strong>{{ employee.get_full_name|default:employee.username }}</strong>.
+                            The employee can securely set their own password upon clicking. Passwords are never stored in plain text.
+                        </p>
+                        <div class="input-group">
+                            <span class="input-group-text bg-white small text-muted"><i class="bi bi-link-45deg"></i></span>
+                            <input type="text" id="setupUrlInput" class="form-control font-monospace small bg-white" value="{{ setup_url }}" readonly>
+                            <button class="btn btn-primary" type="button" onclick="copySetupUrl()">
+                                <i class="bi bi-clipboard me-1"></i> Copy Link
+                            </button>
+                        </div>
+                        <div id="copyAlert" class="small text-success mt-1 d-none">
+                            <i class="bi bi-check-circle me-1"></i>Activation link copied to clipboard!
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-lg-4 text-lg-end">
+                <form method="post" action="{% url 'admin_followup_reset_password' pk=employee.pk %}" class="d-inline" onsubmit="return confirm('Generate a fresh password setup link for this employee?');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-danger btn-sm shadow-sm">
+                        <i class="bi bi-arrow-repeat me-1"></i> Reset / Re-generate Link
+                    </button>
+                </form>
+                <div class="small text-muted mt-2">
+                    Invalidates any previous links and generates a new secure token.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Employee Header Card & Metrics -->
+<div class="row g-4 mb-4">
+    <!-- Profile Overview Card -->
+    <div class="col-12 col-lg-5">
+        <div class="card rounded-3 shadow-sm h-100">
+            <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold mb-0 text-dark">Profile Details</h5>
+                {% if employee.is_active %}
+                    <span class="badge badge-active px-2 py-1"><i class="bi bi-check-circle me-1"></i>Active</span>
+                {% else %}
+                    <span class="badge badge-inactive px-2 py-1"><i class="bi bi-x-circle me-1"></i>Inactive</span>
+                {% endif %}
+            </div>
+            <div class="card-body p-4">
+                <div class="d-flex align-items-center gap-3 mb-4">
+                    <div class="bg-primary-subtle text-primary rounded-circle d-flex align-items-center justify-content-center" style="width: 56px; height: 56px;">
+                        <i class="bi bi-person-fill fs-2"></i>
+                    </div>
+                    <div>
+                        <h5 class="fw-bold mb-0 text-dark">{{ employee.get_full_name|default:employee.username }}</h5>
+                        <div class="text-muted font-monospace small">@{{ employee.username }}</div>
+                        <span class="badge bg-secondary-subtle text-secondary small">Follow-up Officer</span>
+                    </div>
+                </div>
+
+                <div class="list-group list-group-flush small">
+                    <div class="list-group-item px-0 d-flex justify-content-between">
+                        <span class="text-muted"><i class="bi bi-telephone me-2"></i>Phone Number</span>
+                        <span class="fw-semibold text-dark">
+                            {% if employee.phone %}
+                                <a href="tel:{{ employee.phone }}" class="text-decoration-none">{{ employee.phone }}</a>
+                            {% else %}
+                                <span class="text-muted">Not specified</span>
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="list-group-item px-0 d-flex justify-content-between">
+                        <span class="text-muted"><i class="bi bi-envelope me-2"></i>Email Address</span>
+                        <span class="fw-semibold text-dark">
+                            {% if employee.email %}
+                                <a href="mailto:{{ employee.email }}" class="text-decoration-none">{{ employee.email }}</a>
+                            {% else %}
+                                <span class="text-muted">Not specified</span>
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="list-group-item px-0 d-flex justify-content-between">
+                        <span class="text-muted"><i class="bi bi-calendar-event me-2"></i>Date Registered</span>
+                        <span class="fw-semibold text-dark">{{ employee.date_joined|date:"F d, Y" }}</span>
+                    </div>
+                    <div class="list-group-item px-0 d-flex justify-content-between">
+                        <span class="text-muted"><i class="bi bi-clock-history me-2"></i>Last Login</span>
+                        <span class="fw-semibold text-dark">
+                            {% if employee.last_login %}
+                                {{ employee.last_login|date:"F d, Y H:i" }}
+                            {% else %}
+                                <span class="text-muted">Never logged in</span>
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Metrics Cards -->
+    <div class="col-12 col-lg-7">
+        <div class="row g-3 h-100">
+            <div class="col-12 col-sm-4">
+                <div class="stat-card h-100 border-primary-subtle">
+                    <div class="stat-label text-primary">Assigned Shops</div>
+                    <div class="stat-value text-primary">{{ assigned_shops|length }}</div>
+                    <small class="text-muted">Authorized retail locations</small>
+                </div>
+            </div>
+            <div class="col-12 col-sm-4">
+                <div class="stat-card h-100 border-info-subtle">
+                    <div class="stat-label text-info-emphasis">Monitored Customers</div>
+                    <div class="stat-value text-info-emphasis">{{ total_customers }}</div>
+                    <small class="text-muted">Across assigned shops</small>
+                </div>
+            </div>
+            <div class="col-12 col-sm-4">
+                <div class="stat-card h-100 border-success-subtle">
+                    <div class="stat-label text-success">Activities Logged</div>
+                    <div class="stat-value text-success">{{ activities|length }}</div>
+                    <small class="text-muted">Interactions & collection calls</small>
+                </div>
+            </div>
+            <div class="col-12">
+                <!-- Portal Access Info -->
+                <div class="card rounded-3 bg-light border-0 p-3 h-100 d-flex flex-column justify-content-center">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="fs-1 text-primary"><i class="bi bi-shield-check"></i></div>
+                        <div>
+                            <h6 class="fw-bold text-dark mb-1">Follow-up Portal Scoping & Tenant Security</h6>
+                            <p class="text-muted small mb-0">
+                                This employee logs in with role <code>FOLLOWUP</code> and is restricted to the
+                                <strong>{{ assigned_shops|length }} assigned shop(s)</strong>. They cannot view or modify data
+                                from any unauthorized shops.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Assigned Retail Shops Table -->
+<div class="card rounded-3 shadow-sm mb-4">
+    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+        <div>
+            <h5 class="fw-bold mb-0 text-dark">
+                <i class="bi bi-shop text-primary me-2"></i>Assigned Retail Shops ({{ assigned_shops|length }})
+            </h5>
+            <small class="text-muted">Shops this employee is authorized to monitor</small>
+        </div>
+        <a href="{% url 'admin_followup_edit' pk=employee.pk %}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-plus-slash-minus me-1"></i> Modify Assignments
+        </a>
+    </div>
+    <div class="table-responsive">
+        {% if assignments %}
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col">Shop Name</th>
+                    <th scope="col">Owner</th>
+                    <th scope="col">Phone</th>
+                    <th scope="col">Address</th>
+                    <th scope="col">Assignment Status</th>
+                    <th scope="col">Assigned On</th>
+                    <th scope="col" class="text-end">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in assignments %}
+                <tr>
+                    <td>
+                        <a href="{% url 'shop_detail' pk=a.shop.pk %}" class="fw-bold text-decoration-none text-dark">
+                            <i class="bi bi-shop me-1 text-primary"></i>{{ a.shop.name }}
+                        </a>
+                    </td>
+                    <td>{{ a.shop.owner_name }}</td>
+                    <td>
+                        <a href="tel:{{ a.shop.phone }}" class="text-decoration-none text-secondary">
+                            {{ a.shop.phone }}
+                        </a>
+                    </td>
+                    <td class="text-muted small">{{ a.shop.address|truncatewords:6 }}</td>
+                    <td>
+                        {% if a.is_active %}
+                            <span class="badge badge-active px-2 py-1"><i class="bi bi-check-circle me-1"></i>Active</span>
+                        {% else %}
+                            <span class="badge badge-inactive px-2 py-1"><i class="bi bi-x-circle me-1"></i>Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-muted small">{{ a.assigned_at|date:"M d, Y" }}</td>
+                    <td class="text-end">
+                        <a href="{% url 'shop_detail' pk=a.shop.pk %}" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-eye"></i> View Shop
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="text-center py-4 text-muted">
+            <i class="bi bi-shop-window display-6 d-block mb-2"></i>
+            No retail shops currently assigned to this employee.
+            <div class="mt-2">
+                <a href="{% url 'admin_followup_edit' pk=employee.pk %}" class="btn btn-sm btn-primary">
+                    <i class="bi bi-plus-circle me-1"></i> Assign Shops
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Activity Log Timeline -->
+<div class="card rounded-3 shadow-sm">
+    <div class="card-header bg-white py-3 border-bottom">
+        <h5 class="fw-bold mb-0 text-dark">
+            <i class="bi bi-clock-history text-primary me-2"></i>Recent Follow-up Activity ({{ activities|length }})
+        </h5>
+        <small class="text-muted">Interactions, calls, and visit notes logged by this employee</small>
+    </div>
+    <div class="table-responsive">
+        {% if activities %}
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col">Date & Time</th>
+                    <th scope="col">Customer</th>
+                    <th scope="col">Shop</th>
+                    <th scope="col">Activity Type</th>
+                    <th scope="col" style="min-width: 250px;">Notes / Remarks</th>
+                    <th scope="col">Next Due Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for act in activities %}
+                <tr>
+                    <td class="text-muted small text-nowrap">
+                        <i class="bi bi-clock me-1"></i>{{ act.created_at|date:"M d, Y H:i" }}
+                    </td>
+                    <td>
+                        <span class="fw-bold text-dark">{{ act.customer.name }}</span>
+                        <div class="small text-muted font-monospace">{{ act.customer.primary_mobile }}</div>
+                    </td>
+                    <td>
+                        <span class="badge bg-light text-primary border">
+                            <i class="bi bi-shop me-1"></i>{{ act.shop.name }}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge bg-secondary-subtle text-secondary-emphasis">
+                            {{ act.get_activity_type_display }}
+                        </span>
+                    </td>
+                    <td>{{ act.notes|default:"—" }}</td>
+                    <td>
+                        {% if act.next_followup_date %}
+                            <span class="badge bg-info-subtle text-info-emphasis">
+                                <i class="bi bi-calendar-event me-1"></i>{{ act.next_followup_date|date:"M d, Y" }}
+                            </span>
+                        {% else %}
+                            <span class="text-muted small">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="text-center py-4 text-muted">
+            <i class="bi bi-chat-left-dots display-6 d-block mb-2"></i>
+            No follow-up activities recorded by this employee yet.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function copySetupUrl() {
+    var input = document.getElementById('setupUrlInput');
+    if (!input) return;
+    input.select();
+    input.setSelectionRange(0, 99999);
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(input.value).then(function() {
+            showCopyFeedback();
+        });
+    } else {
+        try {
+            document.execCommand('copy');
+            showCopyFeedback();
+        } catch (e) {
+            prompt('Copy setup URL:', input.value);
+        }
+    }
+}
+function showCopyFeedback() {
+    var alertBox = document.getElementById('copyAlert');
+    if (alertBox) {
+        alertBox.classList.remove('d-none');
+        setTimeout(function() {
+            alertBox.classList.add('d-none');
+        }, 3000);
+    }
+}
+</script>
+{% endblock %}
+

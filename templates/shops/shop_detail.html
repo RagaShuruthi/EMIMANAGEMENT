@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+
+{% block title %}{{ shop.name }} — Shop Details | Mobile EMI Management{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-3 small">
+        <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'shop_list' %}">All Shops</a></li>
+        <li class="breadcrumb-item active" aria-current="page">{{ shop.name }}</li>
+    </ol>
+</nav>
+
+<!-- Shop Header Card -->
+<div class="card rounded-3 shadow-sm border-0 mb-4">
+    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-3">
+            <div class="bg-primary-subtle text-primary p-3 rounded-circle">
+                <i class="bi bi-shop fs-3"></i>
+            </div>
+            <div>
+                <div class="d-flex align-items-center gap-2">
+                    <h4 class="fw-bold mb-0 text-dark">{{ shop.name }}</h4>
+                    <span class="badge bg-secondary-subtle text-secondary font-monospace">Shop ID #{{ shop.id }}</span>
+                </div>
+                <div class="text-muted small">Registered Mobile Phone Retail Partner</div>
+            </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            {% if shop.is_active %}
+                <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2"><i class="bi bi-check-circle me-1"></i>Active Partner</span>
+            {% else %}
+                <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-3 py-2"><i class="bi bi-pause-circle me-1"></i>Inactive / Suspended</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Shop Details Body -->
+    <div class="card-body p-4">
+        <div class="row g-4">
+            <!-- Owner Name -->
+            <div class="col-12 col-md-6 col-lg-3">
+                <div class="p-3 bg-light rounded-3 border h-100">
+                    <span class="text-muted small text-uppercase fw-semibold d-block mb-1">
+                        <i class="bi bi-person me-1"></i> Owner / Contact Person
+                    </span>
+                    <div class="fs-5 fw-bold text-dark">{{ shop.owner_name }}</div>
+                </div>
+            </div>
+
+            <!-- Contact Phone Number -->
+            <div class="col-12 col-md-6 col-lg-3">
+                <div class="p-3 bg-light rounded-3 border h-100">
+                    <span class="text-muted small text-uppercase fw-semibold d-block mb-1">
+                        <i class="bi bi-telephone me-1"></i> Contact Number
+                    </span>
+                    <div class="fs-5 fw-bold text-dark font-monospace">
+                        <a href="tel:{{ shop.phone }}" class="text-decoration-none text-dark">{{ shop.phone }}</a>
+                    </div>
+                    <span class="text-muted small">Primary shop phone</span>
+                </div>
+            </div>
+
+            <!-- Email Address -->
+            <div class="col-12 col-md-6 col-lg-3">
+                <div class="p-3 bg-light rounded-3 border h-100">
+                    <span class="text-muted small text-uppercase fw-semibold d-block mb-1">
+                        <i class="bi bi-envelope me-1"></i> Email Address
+                    </span>
+                    <div class="fs-6 fw-semibold text-dark mt-1">
+                        {% if shop.email %}
+                            <a href="mailto:{{ shop.email }}" class="text-decoration-none text-primary">{{ shop.email }}</a>
+                        {% else %}
+                            <span class="text-muted fst-italic">Not provided</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- GPay Number (Stored Separately) -->
+            <div class="col-12 col-md-6 col-lg-3">
+                <div class="p-3 bg-light rounded-3 border h-100">
+                    <span class="text-muted small text-uppercase fw-semibold d-block mb-1">
+                        <i class="bi bi-phone text-success me-1"></i> GPay Number
+                    </span>
+                    <div class="fs-5 fw-bold text-dark font-monospace">
+                        {% if shop.gpay %}
+                            <span class="text-dark">{{ shop.gpay }}</span>
+                        {% else %}
+                            <span class="text-muted fst-italic fs-6">Not provided</span>
+                        {% endif %}
+                    </div>
+                    <span class="text-muted small">Digital payment mobile</span>
+                </div>
+            </div>
+
+            <!-- Associated User Account & Password Management -->
+            <div class="col-12 col-md-6">
+                <div class="p-3 bg-light rounded-3 border h-100 d-flex flex-column justify-content-between">
+                    <div>
+                        <span class="text-muted small text-uppercase fw-semibold d-block mb-1">
+                            <i class="bi bi-person-badge me-1"></i> Portal Login Account & Password
+                        </span>
+                        <div class="fs-5 fw-semibold text-dark mb-2">
+                            {% if shop.owner_account %}
+                                <i class="bi bi-person-check text-success me-1"></i>
+                                <span class="text-dark">{{ shop.owner_account.username }}</span>
+                                <span class="badge bg-secondary-subtle text-secondary small ms-2">{{ shop.owner_account.get_role_display }}</span>
+                            {% else %}
+                                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning px-2 py-1">
+                                    <i class="bi bi-exclamation-triangle me-1"></i> No Login Account
+                                </span>
+                            {% endif %}
+                        </div>
+
+                        {% if is_admin %}
+                        <div class="mt-2 mb-2 p-2 bg-white rounded border">
+                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                <small class="text-muted fw-semibold" style="font-size: 0.72rem; letter-spacing: 0.04em;">
+                                    <i class="bi bi-shield-lock me-1 text-primary"></i>ADMIN-ASSIGNED PASSWORD:
+                                </small>
+                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size: 0.68rem;">Admin Visible</span>
+                            </div>
+                            {% if shop.assigned_password %}
+                            <div class="d-flex align-items-center justify-content-between gap-2">
+                                <div>
+                                    <span class="font-monospace fw-bold text-dark fs-6" id="detailMaskedPwd">••••••••••••</span>
+                                    <span class="font-monospace fw-bold text-primary fs-6 d-none" id="detailPlainPwd">{{ shop.assigned_password }}</span>
+                                </div>
+                                <div class="btn-group btn-group-sm">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="detailToggleBtn" onclick="toggleDetailPassword()" title="Click to view/hide password">
+                                        <i class="bi bi-eye" id="detailEyeIcon"></i> <span id="detailToggleText">Show</span>
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copyToClipboard('{{ shop.assigned_password|escapejs }}')" title="Copy password">
+                                        <i class="bi bi-clipboard"></i> Copy
+                                    </button>
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="text-muted small fst-italic py-1">
+                                <i class="bi bi-info-circle me-1"></i>No password recorded yet.
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    {% if is_admin %}
+                    <div class="pt-2 border-top">
+                        <a href="{% url 'shop_account' pk=shop.pk %}" class="btn btn-sm {% if shop.owner_account %}btn-outline-secondary{% else %}btn-primary{% endif %} d-inline-flex align-items-center gap-1">
+                            <i class="bi bi-key-fill"></i>
+                            <span>{% if shop.owner_account %}Change / Reset Password{% else %}Create Login & Password{% endif %}</span>
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Address -->
+            <div class="col-12 col-md-6">
+                <div class="p-3 bg-light rounded-3 border h-100">
+                    <span class="text-muted small text-uppercase fw-semibold d-block mb-1">
+                        <i class="bi bi-geo-alt me-1"></i> Physical Retail Address
+                    </span>
+                    <div class="text-dark" style="white-space: pre-wrap;">{{ shop.address|default:"Not specified" }}</div>
+                </div>
+            </div>
+
+            <!-- Digital & Bank Payout Details -->
+            <div class="col-12 col-md-6">
+                <div class="p-3 bg-light rounded-3 border h-100">
+                    <span class="text-muted small text-uppercase fw-semibold d-block mb-2">
+                        <i class="bi bi-wallet2 me-1 text-primary"></i> Digital & Bank Payout Details
+                    </span>
+
+                    <div class="mb-2">
+                        <span class="text-muted small">GPay / UPI Number:</span>
+                        <div class="fw-bold text-dark">
+                            {% if shop.gpay %}
+                                <i class="bi bi-phone text-success me-1"></i>{{ shop.gpay }}
+                            {% else %}
+                                <span class="text-muted fst-italic fw-normal">Not provided</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="small border-top pt-2">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted">Account Holder:</span>
+                            <span class="fw-semibold text-dark">{{ shop.bank_account_holder_name|default:"—" }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted">Bank Name:</span>
+                            <span class="fw-semibold text-dark">{{ shop.bank_name|default:"—" }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted">Account Number:</span>
+                            <code class="fw-bold text-primary">{{ shop.bank_account_number|default:"—" }}</code>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">IFSC Code:</span>
+                            <span class="font-monospace fw-semibold text-dark">{{ shop.bank_ifsc_code|default:"—" }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Timestamps -->
+            <div class="col-12">
+                <div class="d-flex justify-content-between text-muted small border-top pt-3 flex-wrap gap-2">
+                    <span><i class="bi bi-calendar-plus me-1"></i> Registered On: <strong>{{ shop.created_at|date:"F d, Y H:i" }}</strong></span>
+                    <span><i class="bi bi-clock-history me-1"></i> Last Updated: <strong>{{ shop.updated_at|date:"F d, Y H:i" }}</strong></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card Actions Footer -->
+    <div class="card-footer bg-white border-top py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <a href="{% url 'shop_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Back to Shops
+        </a>
+
+        {% if is_admin %}
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'admin_shopwise_detail' shop_id=shop.id %}" class="btn btn-outline-info">
+                <i class="bi bi-people me-1"></i> Shop-wise Customers
+            </a>
+
+            <a href="{% url 'shop_account' pk=shop.pk %}" class="btn btn-outline-dark">
+                <i class="bi bi-key-fill me-1"></i> Password
+            </a>
+
+            <a href="{% url 'edit_shop' pk=shop.pk %}" class="btn btn-primary shadow-sm">
+                <i class="bi bi-pencil me-1"></i> Edit Details
+            </a>
+
+            <!-- Status toggle button -->
+            {% if shop.is_active %}
+            <form method="post" action="{% url 'shop_status' pk=shop.pk %}" class="d-inline confirm-form" data-confirm="Are you sure you want to deactivate this shop?">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button type="submit" class="btn btn-outline-danger">
+                    <i class="bi bi-pause-circle me-1"></i> Deactivate Shop
+                </button>
+            </form>
+            {% else %}
+            <form method="post" action="{% url 'shop_status' pk=shop.pk %}" class="d-inline confirm-form" data-confirm="Are you sure you want to activate this shop?">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-play-circle me-1"></i> Activate Shop
+                </button>
+            </form>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleDetailPassword() {
+    const masked = document.getElementById('detailMaskedPwd');
+    const plain = document.getElementById('detailPlainPwd');
+    const icon = document.getElementById('detailEyeIcon');
+    const text = document.getElementById('detailToggleText');
+    if (!masked || !plain) return;
+    if (plain.classList.contains('d-none')) {
+        plain.classList.remove('d-none');
+        masked.classList.add('d-none');
+        icon.className = 'bi bi-eye-slash';
+        text.innerText = 'Hide';
+    } else {
+        plain.classList.add('d-none');
+        masked.classList.remove('d-none');
+        icon.className = 'bi bi-eye';
+        text.innerText = 'Show';
+    }
+}
+
+function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(function() {
+            alert('Password copied to clipboard!');
+        });
+    } else {
+        var textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            alert('Password copied to clipboard!');
+        } catch (err) {
+            prompt('Copy password:', text);
+        }
+        document.body.removeChild(textArea);
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+
+{% block title %}{{ action_title }} — EMI Management System{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-8 col-xl-7">
+        <!-- Breadcrumb -->
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-3 small">
+                <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'shop_list' %}">Shops</a></li>
+                <li class="breadcrumb-item active" aria-current="page">{{ action_title }}</li>
+            </ol>
+        </nav>
+
+        <div class="card rounded-3 shadow-sm border-0">
+            <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-shop me-2 text-primary"></i>{{ action_title }}
+                </h5>
+                {% if shop %}
+                    <span class="badge {% if shop.is_active %}badge-active{% else %}badge-inactive{% endif %} px-2 py-1">
+                        {{ shop.is_active|yesno:"Active,Inactive" }}
+                    </span>
+                {% endif %}
+            </div>
+
+            <div class="card-body p-4">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger mb-4">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        {{ form.non_field_errors.0 }}
+                    </div>
+                    {% endif %}
+
+                    <!-- Section: Shop Information -->
+                    <h6 class="fw-bold text-dark text-uppercase small letter-spacing-1 border-bottom pb-2 mb-3">
+                        <i class="bi bi-info-circle me-1 text-primary"></i> 1. Shop Details
+                    </h6>
+
+                    <!-- Shop Name -->
+                    <div class="mb-3">
+                        <label for="{{ form.name.id_for_label }}" class="form-label fw-semibold text-secondary small">
+                            Shop Commercial Name <span class="text-danger">*</span>
+                        </label>
+                        {{ form.name }}
+                        {% if form.name.help_text %}
+                            <div class="form-text text-muted small">{{ form.name.help_text }}</div>
+                        {% endif %}
+                        {% if form.name.errors %}
+                            <div class="text-danger small mt-1">{{ form.name.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Owner / Contact Person -->
+                    <div class="mb-3">
+                        <label for="{{ form.owner_name.id_for_label }}" class="form-label fw-semibold text-secondary small">
+                            Owner / Contact Person's Full Name <span class="text-danger">*</span>
+                        </label>
+                        {{ form.owner_name }}
+                        {% if form.owner_name.help_text %}
+                            <div class="form-text text-muted small">{{ form.owner_name.help_text }}</div>
+                        {% endif %}
+                        {% if form.owner_name.errors %}
+                            <div class="text-danger small mt-1">{{ form.owner_name.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Contact Number, Email Address, and GPay Number in row -->
+                    <div class="row g-3 mb-3">
+                        <!-- Contact Number -->
+                        <div class="col-12 col-md-4">
+                            <label for="{{ form.phone.id_for_label }}" class="form-label fw-semibold text-secondary small">
+                                Contact Number <span class="text-danger">* (10 digits)</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light"><i class="bi bi-telephone"></i></span>
+                                {{ form.phone }}
+                            </div>
+                            <div class="form-text text-muted small">Primary shop phone (exactly 10 digits).</div>
+                            {% if form.phone.errors %}
+                                <div class="text-danger small mt-1">{{ form.phone.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Email Address -->
+                        <div class="col-12 col-md-4">
+                            <label for="{{ form.email.id_for_label }}" class="form-label fw-semibold text-secondary small">
+                                Email Address <span class="text-muted">(Optional)</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light"><i class="bi bi-envelope"></i></span>
+                                {{ form.email }}
+                            </div>
+                            <div class="form-text text-muted small">Official correspondence email.</div>
+                            {% if form.email.errors %}
+                                <div class="text-danger small mt-1">{{ form.email.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <!-- GPay Number (Stored separately from Contact Number) -->
+                        <div class="col-12 col-md-4">
+                            <label for="{{ form.gpay.id_for_label }}" class="form-label fw-semibold text-secondary small">
+                                GPay Number <span class="text-muted">(10 digits, Optional)</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light"><i class="bi bi-phone text-success"></i></span>
+                                {{ form.gpay }}
+                            </div>
+                            <div class="form-text text-muted small">Google Pay mobile (stored separately).</div>
+                            {% if form.gpay.errors %}
+                                <div class="text-danger small mt-1">{{ form.gpay.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Shop Physical Address -->
+                    <div class="mb-3">
+                        <label for="{{ form.address.id_for_label }}" class="form-label fw-semibold text-secondary small">
+                            Physical Shop Address <span class="text-danger">*</span>
+                        </label>
+                        {{ form.address }}
+                        {% if form.address.help_text %}
+                            <div class="form-text text-muted small">{{ form.address.help_text }}</div>
+                        {% endif %}
+                        {% if form.address.errors %}
+                            <div class="text-danger small mt-1">{{ form.address.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Active Status Checkbox -->
+                    <div class="mb-4 form-check">
+                        {{ form.is_active }}
+                        <label class="form-check-label fw-semibold text-dark" for="{{ form.is_active.id_for_label }}">
+                            Shop is Active & Authorized
+                        </label>
+                        {% if form.is_active.errors %}
+                            <div class="text-danger small mt-1">{{ form.is_active.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Section: Bank Account Details -->
+                    <h6 class="fw-bold text-dark text-uppercase small letter-spacing-1 border-bottom pb-2 mb-3 mt-4">
+                        <i class="bi bi-bank me-1 text-primary"></i> 2. Bank Account Details (Optional)
+                    </h6>
+
+                    <!-- Bank Details Card -->
+                    <div class="card bg-light border p-3 mb-4 rounded-3">
+                        <div class="fw-bold text-dark small mb-3">
+                            <i class="bi bi-bank me-1 text-primary"></i> Bank Account Information for Payouts
+                        </div>
+
+                        <!-- Account Holder Name & Bank Name -->
+                        <div class="row g-3 mb-3">
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.bank_account_holder_name.id_for_label }}" class="form-label small fw-semibold text-secondary">
+                                    Account Holder Name
+                                </label>
+                                {{ form.bank_account_holder_name }}
+                                {% if form.bank_account_holder_name.errors %}
+                                    <div class="text-danger small mt-1">{{ form.bank_account_holder_name.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.bank_name.id_for_label }}" class="form-label small fw-semibold text-secondary">
+                                    Bank Name
+                                </label>
+                                {{ form.bank_name }}
+                                {% if form.bank_name.errors %}
+                                    <div class="text-danger small mt-1">{{ form.bank_name.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Account Number & IFSC -->
+                        <div class="row g-3">
+                            <div class="col-12 col-md-7">
+                                <label for="{{ form.bank_account_number.id_for_label }}" class="form-label small fw-semibold text-secondary">
+                                    Bank Account Number
+                                </label>
+                                {{ form.bank_account_number }}
+                                {% if form.bank_account_number.errors %}
+                                    <div class="text-danger small mt-1">{{ form.bank_account_number.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="col-12 col-md-5">
+                                <label for="{{ form.bank_ifsc_code.id_for_label }}" class="form-label small fw-semibold text-secondary">
+                                    Bank IFSC Code
+                                </label>
+                                {{ form.bank_ifsc_code }}
+                                {% if form.bank_ifsc_code.errors %}
+                                    <div class="text-danger small mt-1">{{ form.bank_ifsc_code.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section: Shop Owner Login Account & Password -->
+                    <h6 class="fw-bold text-dark text-uppercase small letter-spacing-1 border-bottom pb-2 mb-3 mt-4">
+                        <i class="bi bi-key me-1 text-primary"></i> 3. Shop Owner Login & Password
+                    </h6>
+
+                    <!-- Create New Account & Password Card -->
+                    <div class="card bg-light border p-3 mb-4 rounded-3">
+                        <div class="form-check mb-2">
+                            {{ form.create_credentials }}
+                            <label class="form-check-label fw-bold text-dark" for="{{ form.create_credentials.id_for_label }}">
+                                Create new login credentials (Username & Password) for this shop owner
+                            </label>
+                            <div class="small text-muted">
+                                If checked, an authorized Shop Owner account will be created immediately with the specified password.
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mt-1">
+                            <div class="col-12">
+                                <label for="{{ form.login_username.id_for_label }}" class="form-label small fw-semibold text-secondary">
+                                    Login Username
+                                </label>
+                                {{ form.login_username }}
+                                {% if form.login_username.errors %}
+                                    <div class="text-danger small mt-1">{{ form.login_username.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.login_password.id_for_label }}" class="form-label small fw-semibold text-secondary">
+                                    Login Password
+                                </label>
+                                {{ form.login_password }}
+                                {% if form.login_password.errors %}
+                                    <div class="text-danger small mt-1">{{ form.login_password.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label for="{{ form.confirm_password.id_for_label }}" class="form-label small fw-semibold text-secondary">
+                                    Confirm Password
+                                </label>
+                                {{ form.confirm_password }}
+                                {% if form.confirm_password.errors %}
+                                    <div class="text-danger small mt-1">{{ form.confirm_password.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Actions -->
+                    <div class="d-flex justify-content-end gap-2">
+                        {% if shop %}
+                            <a href="{% url 'shop_detail' pk=shop.pk %}" class="btn btn-outline-secondary px-4">Cancel</a>
+                        {% else %}
+                            <a href="{% url 'shop_list' %}" class="btn btn-outline-secondary px-4">Cancel</a>
+                        {% endif %}
+                        <button type="submit" class="btn btn-primary px-4 shadow-sm">
+                            <i class="bi bi-check-lg me-1"></i> Save Shop Record
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

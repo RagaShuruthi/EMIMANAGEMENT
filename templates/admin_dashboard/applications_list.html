@@ -1,0 +1,544 @@
+{% extends "base.html" %}
+
+{% block title %}Applications Review — Mobile EMI Management{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h3 class="fw-bold text-dark mb-0">Finance Applications</h3>
+        <p class="text-muted small mb-0">Review, verify, and approve or reject mobile phone loan applications from partner shops.</p>
+    </div>
+</div>
+
+<!-- Three Status Summary Cards -->
+<div class="row g-3 mb-4">
+    <!-- Total Applications -->
+    <div class="col-6 col-md-3">
+        <a href="{% url 'admin_applications_list' %}" class="text-decoration-none">
+            <div class="card border-0 shadow-sm rounded-3 p-3 text-center h-100 {% if status_filter == 'all' %}border-start border-4 border-primary bg-primary-subtle bg-opacity-25{% endif %}">
+                <span class="text-muted small text-uppercase fw-semibold d-block mb-1">Total Applications</span>
+                <h3 class="fw-bold text-dark mb-0">{{ total_count }}</h3>
+            </div>
+        </a>
+    </div>
+
+    <!-- 1. Pending Status -->
+    <div class="col-6 col-md-3">
+        <a href="{% url 'admin_applications_list' %}?status=pending" class="text-decoration-none">
+            <div class="card border-0 shadow-sm rounded-3 p-3 text-center h-100 {% if status_filter == 'pending' %}border-start border-4 border-warning bg-warning-subtle bg-opacity-25{% endif %}">
+                <span class="text-warning-emphasis small text-uppercase fw-semibold d-block mb-1">
+                    <i class="bi bi-clock-history me-1"></i> Pending
+                </span>
+                <h3 class="fw-bold text-warning-emphasis mb-0">{{ pending_count }}</h3>
+            </div>
+        </a>
+    </div>
+
+    <!-- 2. Approved Status -->
+    <div class="col-6 col-md-3">
+        <a href="{% url 'admin_applications_list' %}?status=approved" class="text-decoration-none">
+            <div class="card border-0 shadow-sm rounded-3 p-3 text-center h-100 {% if status_filter == 'approved' %}border-start border-4 border-success bg-success-subtle bg-opacity-25{% endif %}">
+                <span class="text-success small text-uppercase fw-semibold d-block mb-1">
+                    <i class="bi bi-check-circle-fill me-1"></i> Approved
+                </span>
+                <h3 class="fw-bold text-success mb-0">{{ approved_count }}</h3>
+            </div>
+        </a>
+    </div>
+
+    <!-- 3. Rejected Status -->
+    <div class="col-6 col-md-3">
+        <a href="{% url 'admin_applications_list' %}?status=rejected" class="text-decoration-none">
+            <div class="card border-0 shadow-sm rounded-3 p-3 text-center h-100 {% if status_filter == 'rejected' %}border-start border-4 border-danger bg-danger-subtle bg-opacity-25{% endif %}">
+                <span class="text-danger small text-uppercase fw-semibold d-block mb-1">
+                    <i class="bi bi-x-circle-fill me-1"></i> Declined / Rejected
+                </span>
+                <h3 class="fw-bold text-danger mb-0">{{ rejected_count }}</h3>
+            </div>
+        </a>
+    </div>
+</div>
+
+<!-- Filter Bar with 3 Status Filter Options Alone -->
+<div class="card rounded-3 mb-4 shadow-sm border-0">
+    <div class="card-body p-3 bg-light rounded-3">
+        <form method="get" action="{% url 'admin_applications_list' %}" class="row g-2 align-items-center">
+            <!-- Search Input -->
+            <div class="col-12 col-md-6 col-lg-7">
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-search"></i></span>
+                    <input type="text" name="q" class="form-control border-start-0" placeholder="Search by customer name, phone, app #, model, or shop..." value="{{ search_query }}">
+                </div>
+            </div>
+
+            <!-- Status Filter: Exactly 3 Status Options Alone -->
+            <div class="col-12 col-md-4 col-lg-3">
+                <div class="input-group">
+                    <label class="input-group-text bg-white text-muted small" for="appStatusFilter">Status</label>
+                    <select name="status" id="appStatusFilter" class="form-select" onchange="this.form.submit()">
+                        <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Applications ({{ total_count }})</option>
+                        <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending ({{ pending_count }})</option>
+                        <option value="approved" {% if status_filter == 'approved' %}selected{% endif %}>Approved ({{ approved_count }})</option>
+                        <option value="rejected" {% if status_filter == 'rejected' %}selected{% endif %}>Declined / Rejected ({{ rejected_count }})</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="col-12 col-md-2 col-lg-2 d-flex gap-1">
+                <button type="submit" class="btn btn-primary flex-grow-1" title="Apply Filter">
+                    <i class="bi bi-funnel me-1"></i> Filter
+                </button>
+                {% if search_query or status_filter != 'all' %}
+                <a href="{% url 'admin_applications_list' %}" class="btn btn-outline-secondary" title="Reset Filter">
+                    <i class="bi bi-x-circle"></i>
+                </a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Applications Data Table -->
+<div class="card rounded-3 shadow-sm border-0 overflow-hidden mb-4">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom">
+        <h5 class="fw-bold mb-0 text-dark">
+            <i class="bi bi-file-earmark-text text-primary me-2"></i>Applications List ({{ applications.paginator.count }})
+        </h5>
+        <div class="d-flex align-items-center gap-2">
+            {% if status_filter == 'pending' %}
+                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Filtered: Pending</span>
+            {% elif status_filter == 'approved' %}
+                <span class="badge bg-success-subtle text-success border border-success-subtle">Filtered: Approved</span>
+            {% elif status_filter == 'rejected' %}
+                <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Filtered: Rejected</span>
+            {% endif %}
+            {% if search_query %}
+                <span class="badge bg-light text-dark border">Search: "{{ search_query }}"</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        {% if applications %}
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light text-uppercase small text-muted" style="letter-spacing: 0.03em;">
+                <tr>
+                    <th scope="col">Application #</th>
+                    <th scope="col">Customer</th>
+                    <th scope="col">Shop</th>
+                    <th scope="col">Phone Model</th>
+                    <th scope="col" class="text-end">Retail Price</th>
+                    <th scope="col" class="text-end">Down Pay.</th>
+                    <th scope="col" class="text-end">Financed</th>
+                    <th scope="col" class="text-end">Monthly EMI</th>
+                    <th scope="col" class="text-center">Status</th>
+                    <th scope="col">Date</th>
+                    <th scope="col" class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for app in applications %}
+                <tr>
+                    <!-- Application # & Documents -->
+                    <td>
+                        <button type="button" class="btn btn-link p-0 text-decoration-none" data-bs-toggle="modal" data-bs-target="#appDetailModal{{ app.id }}" title="Click to view full application details">
+                            <span class="badge bg-secondary-subtle text-secondary font-monospace">{{ app.application_number }}</span>
+                        </button>
+                        {% if app.documents.all %}
+                        <div class="mt-1">
+                            <button type="button" class="badge bg-light text-primary border border-primary-subtle p-1 text-decoration-none" data-bs-toggle="modal" data-bs-target="#appDetailModal{{ app.id }}" title="{{ app.documents.count }} Document(s) Uploaded">
+                                <i class="bi bi-paperclip me-1"></i>{{ app.documents.count }} Doc(s)
+                            </button>
+                        </div>
+                        {% endif %}
+                    </td>
+
+                    <!-- Customer (Opens Application Modal directly, no customer page redirect) -->
+                    <td>
+                        <button type="button" class="btn btn-link p-0 text-start text-decoration-none text-dark hover-primary fw-bold d-block" data-bs-toggle="modal" data-bs-target="#appDetailModal{{ app.id }}" title="Click to view application details">
+                            {{ app.customer.name }}
+                        </button>
+                        <div class="small text-muted">
+                            <i class="bi bi-telephone me-1"></i>{{ app.customer.primary_mobile }}
+                        </div>
+                    </td>
+
+                    <!-- Shop -->
+                    <td>
+                        <span class="fw-semibold text-secondary small">
+                            <i class="bi bi-shop me-1 text-muted"></i>{{ app.shop.name }}
+                        </span>
+                    </td>
+
+                    <!-- Phone Model -->
+                    <td>
+                        <div class="fw-semibold text-dark small">{{ app.mobile_model }}</div>
+                    </td>
+
+                    <!-- Retail Price -->
+                    <td class="text-end small">
+                        ₹{{ app.mobile_price|floatformat:2 }}
+                    </td>
+
+                    <!-- Down Payment -->
+                    <td class="text-end small text-muted">
+                        ₹{{ app.down_payment|floatformat:2 }}
+                    </td>
+
+                    <!-- Financed Loan Amount -->
+                    <td class="text-end fw-bold text-primary small">
+                        ₹{{ app.financier_request_amount|floatformat:2 }}
+                    </td>
+
+                    <!-- Monthly EMI & Tenure -->
+                    <td class="text-end small">
+                        <span class="fw-semibold text-dark">₹{{ app.monthly_emi|floatformat:2 }}</span>
+                        <div class="text-muted" style="font-size: 0.72rem;">{{ app.emi_duration }} Months</div>
+                    </td>
+
+                    <!-- Status -->
+                    <td class="text-center">
+                        {% if app.status == 'APPROVED' or app.status == 'PAID' or app.status == 'PARTIALLY_PAID' %}
+                            <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                                <i class="bi bi-check-circle me-1"></i>Approved
+                            </span>
+                        {% elif app.status == 'REJECTED' %}
+                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
+                                <i class="bi bi-x-circle me-1"></i>Declined
+                            </span>
+                        {% else %}
+                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1">
+                                <i class="bi bi-clock me-1"></i>Pending
+                            </span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Created Date -->
+                    <td class="small text-muted">
+                        {{ app.created_at|date:"M d, Y" }}
+                    </td>
+
+                    <!-- View Details & Actions -->
+                    <td class="text-end">
+                        <button type="button" class="btn btn-sm btn-outline-primary fw-semibold" data-bs-toggle="modal" data-bs-target="#appDetailModal{{ app.id }}" title="View Application Details and Decisions">
+                            <i class="bi bi-eye me-1"></i> View Details
+                        </button>
+
+                        <!-- Comprehensive Application Details Modal -->
+                        <div class="modal fade" id="appDetailModal{{ app.id }}" tabindex="-1" aria-labelledby="appDetailModalLabel{{ app.id }}" aria-hidden="true">
+                            <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+                                <div class="modal-content border-0 shadow text-start">
+                                    <!-- Modal Header -->
+                                    <div class="modal-header bg-light border-bottom">
+                                        <div>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <h5 class="modal-title fw-bold text-dark mb-0" id="appDetailModalLabel{{ app.id }}">
+                                                    <i class="bi bi-file-earmark-text text-primary me-1"></i> Application Details: {{ app.application_number }}
+                                                </h5>
+                                                {% if app.status == 'APPROVED' or app.status == 'PAID' or app.status == 'PARTIALLY_PAID' %}
+                                                    <span class="badge bg-success-subtle text-success border border-success-subtle">Approved</span>
+                                                {% elif app.status == 'REJECTED' %}
+                                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Declined</span>
+                                                {% else %}
+                                                    <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Pending Review</span>
+                                                {% endif %}
+                                            </div>
+                                            <div class="text-muted small mt-1">
+                                                Applied On: <strong>{{ app.created_at|date:"F d, Y H:i" }}</strong> | Partner: <strong>{{ app.shop.name }}</strong>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+
+                                    <!-- Modal Body -->
+                                    <div class="modal-body p-4">
+                                        <!-- Customer & Shop Profiles -->
+                                        <div class="row g-3 mb-4">
+                                            <!-- Customer Profile -->
+                                            <div class="col-12 col-md-6">
+                                                <div class="p-3 bg-light rounded-3 border h-100">
+                                                    <div class="d-flex align-items-center justify-content-between mb-2">
+                                                        <span class="text-muted small text-uppercase fw-bold">
+                                                            <i class="bi bi-person me-1 text-primary"></i> Customer Information
+                                                        </span>
+                                                        <span class="badge bg-secondary-subtle text-secondary font-monospace">#{{ app.customer.id }}</span>
+                                                    </div>
+                                                    <h6 class="fw-bold text-dark mb-2">{{ app.customer.name }}</h6>
+                                                    <div class="small mb-1">
+                                                        <span class="text-muted">Primary Phone:</span>
+                                                        <a href="tel:{{ app.customer.primary_mobile }}" class="fw-semibold text-primary text-decoration-none ms-1">
+                                                            <i class="bi bi-telephone-fill me-1"></i>{{ app.customer.primary_mobile }}
+                                                        </a>
+                                                    </div>
+                                                    {% if app.customer.secondary_mobile %}
+                                                    <div class="small mb-1">
+                                                        <span class="text-muted">Secondary Phone:</span>
+                                                        <span class="fw-semibold text-dark ms-1">{{ app.customer.secondary_mobile }}</span>
+                                                    </div>
+                                                    {% endif %}
+                                                    {% if app.customer.email %}
+                                                    <div class="small mb-1">
+                                                        <span class="text-muted">Email:</span>
+                                                        <span class="text-dark ms-1">{{ app.customer.email }}</span>
+                                                    </div>
+                                                    {% endif %}
+                                                    <div class="small mb-1">
+                                                        <span class="text-muted">Home Address:</span>
+                                                        <span class="text-dark ms-1">{{ app.customer.home_address|default:"Not specified" }}</span>
+                                                    </div>
+                                                    {% if app.customer.work_address %}
+                                                    <div class="small">
+                                                        <span class="text-muted">Work Address:</span>
+                                                        <span class="text-dark ms-1">{{ app.customer.work_address }}</span>
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+
+                                            <!-- Shop Information -->
+                                            <div class="col-12 col-md-6">
+                                                <div class="p-3 bg-light rounded-3 border h-100">
+                                                    <span class="text-muted small text-uppercase fw-bold d-block mb-2">
+                                                        <i class="bi bi-shop me-1 text-primary"></i> Originating Shop
+                                                    </span>
+                                                    <h6 class="fw-bold text-dark mb-2">{{ app.shop.name }}</h6>
+                                                    <div class="small mb-1">
+                                                        <span class="text-muted">Owner:</span>
+                                                        <span class="fw-semibold text-dark ms-1">{{ app.shop.owner_name }}</span>
+                                                    </div>
+                                                    <div class="small mb-1">
+                                                        <span class="text-muted">Contact:</span>
+                                                        <span class="fw-semibold text-dark ms-1">{{ app.shop.phone }}</span>
+                                                    </div>
+                                                    <div class="small">
+                                                        <span class="text-muted">Address:</span>
+                                                        <span class="text-dark ms-1">{{ app.shop.address|default:"Not specified" }}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Device & Financing Terms Breakdown -->
+                                        <div class="card border rounded-3 mb-4 overflow-hidden">
+                                            <div class="card-header bg-white py-2 border-bottom">
+                                                <span class="text-muted small text-uppercase fw-bold">
+                                                    <i class="bi bi-phone me-1 text-primary"></i> Device & EMI Financing Breakdown
+                                                </span>
+                                            </div>
+                                            <div class="card-body p-3">
+                                                <div class="row g-3">
+                                                    <div class="col-6 col-md-3">
+                                                        <div class="p-2 bg-light rounded border text-center">
+                                                            <span class="text-muted small d-block">Device Model</span>
+                                                            <span class="fw-bold text-dark">{{ app.mobile_model }}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-6 col-md-3">
+                                                        <div class="p-2 bg-light rounded border text-center">
+                                                            <span class="text-muted small d-block">Retail Price</span>
+                                                            <span class="fw-bold text-dark font-monospace">₹{{ app.mobile_price|floatformat:2 }}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-6 col-md-3">
+                                                        <div class="p-2 bg-light rounded border text-center">
+                                                            <span class="text-muted small d-block">Down Payment</span>
+                                                            <span class="fw-bold text-muted font-monospace">₹{{ app.down_payment|floatformat:2 }}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-6 col-md-3">
+                                                        <div class="p-2 bg-light rounded border text-center">
+                                                            <span class="text-muted small d-block">Financed Amount</span>
+                                                            <span class="fw-bold text-primary font-monospace">₹{{ app.financier_request_amount|floatformat:2 }}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="col-6 col-md-4">
+                                                        <div class="p-2 bg-light rounded border text-center">
+                                                            <span class="text-muted small d-block">Monthly EMI</span>
+                                                            <span class="fw-bold text-success font-monospace">₹{{ app.monthly_emi|floatformat:2 }}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-6 col-md-4">
+                                                        <div class="p-2 bg-light rounded border text-center">
+                                                            <span class="text-muted small d-block">Tenure Duration</span>
+                                                            <span class="fw-bold text-dark">{{ app.emi_duration }} Months</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-12 col-md-4">
+                                                        <div class="p-2 bg-light rounded border text-center">
+                                                            <span class="text-muted small d-block">Monthly Due Day</span>
+                                                            <span class="fw-bold text-dark">Day {{ app.monthly_due_day }} of month</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Uploaded KYC Documents -->
+                                        <div class="mb-4">
+                                            <span class="text-muted small text-uppercase fw-bold d-block mb-2">
+                                                <i class="bi bi-file-earmark-check me-1 text-primary"></i> Attached KYC Documents
+                                            </span>
+                                            {% if app.documents.all %}
+                                            <div class="row g-2">
+                                                {% for doc in app.documents.all %}
+                                                <div class="col-12 col-sm-6">
+                                                    <div class="p-2 bg-light rounded-3 border d-flex align-items-center justify-content-between">
+                                                        <div class="d-flex align-items-center gap-2">
+                                                            <i class="bi bi-file-earmark-pdf fs-4 text-danger"></i>
+                                                            <div>
+                                                                <div class="fw-semibold text-dark small">{{ doc.get_document_type_display }}</div>
+                                                                <div class="text-muted" style="font-size: 0.72rem;">Uploaded: {{ doc.uploaded_at|date:"M d, Y" }}</div>
+                                                            </div>
+                                                        </div>
+                                                        {% if doc.file %}
+                                                        <a href="{{ doc.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary" title="View Document">
+                                                            <i class="bi bi-box-arrow-up-right me-1"></i> Open
+                                                        </a>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                            {% else %}
+                                            <div class="p-3 bg-light rounded border text-muted small fst-italic">
+                                                <i class="bi bi-info-circle me-1"></i> No KYC documents uploaded for this application.
+                                            </div>
+                                            {% endif %}
+                                        </div>
+
+                                        <!-- Decision & Status Control (Approve, Decline, Keep as Pending) -->
+                                        <div class="card border border-primary-subtle rounded-3 bg-light mb-4">
+                                            <div class="card-header bg-white py-2 border-bottom">
+                                                <span class="fw-bold text-dark small text-uppercase">
+                                                    <i class="bi bi-shield-check me-1 text-primary"></i> Application Status Decision
+                                                </span>
+                                            </div>
+                                            <div class="card-body p-3">
+                                                <form method="post" action="{% url 'admin_application_approval' pk=app.id %}">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+
+                                                    <div class="mb-3">
+                                                        <label class="form-label fw-semibold small text-dark" for="remarks_{{ app.id }}">Verification Notes / Reason</label>
+                                                        <textarea name="remarks" id="remarks_{{ app.id }}" class="form-control form-control-sm" rows="2" placeholder="Enter remarks or justification for approval, decline, or pending status...">{{ app.remarks }}</textarea>
+                                                    </div>
+
+                                                    <div class="d-flex flex-wrap gap-2 pt-2 border-top">
+                                                        <!-- 1. Approve Button -->
+                                                        <button type="submit" name="decision" value="APPROVED" class="btn btn-success fw-semibold flex-grow-1">
+                                                            <i class="bi bi-check-circle-fill me-1"></i> Approve
+                                                        </button>
+
+                                                        <!-- 2. Decline Button -->
+                                                        <button type="submit" name="decision" value="REJECTED" class="btn btn-danger fw-semibold flex-grow-1" onclick="return confirm('Confirm declining application {{ app.application_number }}?');">
+                                                            <i class="bi bi-x-circle-fill me-1"></i> Decline
+                                                        </button>
+
+                                                        <!-- 3. Keep Pending Button -->
+                                                        <button type="submit" name="decision" value="PENDING" class="btn btn-warning text-dark fw-semibold flex-grow-1">
+                                                            <i class="bi bi-clock-history me-1"></i> Keep as Pending
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+
+                                        <!-- Audit Trail History Log -->
+                                        {% if app.history.all %}
+                                        <div>
+                                            <span class="text-muted small text-uppercase fw-bold d-block mb-2">
+                                                <i class="bi bi-clock-history me-1 text-secondary"></i> Decision & Verification History
+                                            </span>
+                                            <div class="bg-light p-3 rounded-3 border small">
+                                                <ul class="list-unstyled mb-0">
+                                                    {% for h in app.history.all %}
+                                                    <li class="mb-2 d-flex align-items-start gap-2">
+                                                        <i class="bi bi-record-circle text-primary mt-1"></i>
+                                                        <div>
+                                                            <span class="fw-semibold text-dark">{{ h.get_new_status_display }}</span>
+                                                            {% if h.previous_status %}
+                                                            <span class="text-muted">(from {{ h.get_previous_status_display }})</span>
+                                                            {% endif %}
+                                                            <span class="text-muted ms-2">— {{ h.timestamp|date:"M d, Y H:i" }}</span>
+                                                            {% if h.actor %}
+                                                            <span class="badge bg-white text-secondary border ms-1">{{ h.actor.username }}</span>
+                                                            {% endif %}
+                                                            {% if h.notes %}
+                                                            <div class="text-secondary mt-1">{{ h.notes }}</div>
+                                                            {% endif %}
+                                                        </div>
+                                                    </li>
+                                                    {% endfor %}
+                                                </ul>
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+
+                                    <!-- Modal Footer -->
+                                    <div class="modal-footer bg-light py-2">
+                                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-file-earmark-x text-muted display-4 mb-3 d-block"></i>
+            <h5 class="fw-bold text-dark">No Applications Found</h5>
+            <p class="text-muted small">No finance applications match the chosen status or search filter.</p>
+            {% if search_query or status_filter != 'all' %}
+                <a href="{% url 'admin_applications_list' %}" class="btn btn-sm btn-secondary">Clear Filters</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Pagination -->
+    {% if applications.has_other_pages %}
+    <div class="card-footer bg-white border-top py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span class="text-muted small">
+            Showing Page {{ applications.number }} of {{ applications.paginator.num_pages }}
+        </span>
+        <nav aria-label="Page navigation">
+            <ul class="pagination pagination-sm mb-0">
+                {% if applications.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ applications.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}">Previous</a>
+                </li>
+                {% else %}
+                <li class="page-item disabled"><span class="page-link">Previous</span></li>
+                {% endif %}
+
+                {% for i in applications.paginator.page_range %}
+                    {% if applications.number == i %}
+                    <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+                    {% elif i > applications.number|add:'-3' and i < applications.number|add:'3' %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ i }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}">{{ i }}</a>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if applications.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ applications.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}">Next</a>
+                </li>
+                {% else %}
+                <li class="page-item disabled"><span class="page-link">Next</span></li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+

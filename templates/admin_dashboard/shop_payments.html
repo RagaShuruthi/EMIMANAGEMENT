@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+
+{% block title %}Shop Payments — Mobile EMI Management System{% endblock %}
+
+{% block content %}
+<!-- Breadcrumbs & Header -->
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-1 small">
+                <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Shop Payments</li>
+            </ol>
+        </nav>
+        <h2 class="fw-bold text-dark mb-0">Shop Payouts & Liabilities</h2>
+        <p class="text-muted small mb-0">Track and disburse funds owed by the admin/financier to mobile phone partner shops.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'shop_list' %}" class="btn btn-outline-primary d-flex align-items-center gap-2 shadow-sm">
+            <i class="bi bi-shop"></i>
+            <span>All Shops</span>
+        </a>
+    </div>
+</div>
+
+<!-- Financial Aggregate KPI Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-md-4">
+        <div class="card rounded-3 shadow-sm border-0 border-start border-primary border-4">
+            <div class="card-body p-4">
+                <span class="text-muted small text-uppercase fw-semibold d-block mb-1">
+                    <i class="bi bi-receipt me-1 text-primary"></i> Total Payable to All Shops
+                </span>
+                <h3 class="fw-bold text-dark mb-1">₹{{ total_system_payable|floatformat:2 }}</h3>
+                <span class="text-muted small">Sum of requested financed loan volumes</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-4">
+        <div class="card rounded-3 shadow-sm border-0 border-start border-success border-4">
+            <div class="card-body p-4">
+                <span class="text-muted small text-uppercase fw-semibold d-block mb-1">
+                    <i class="bi bi-check2-circle me-1 text-success"></i> Total Amount Already Paid
+                </span>
+                <h3 class="fw-bold text-success mb-1">₹{{ total_system_paid|floatformat:2 }}</h3>
+                <span class="text-muted small">Total payouts confirmed via bank UTR</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-4">
+        <div class="card rounded-3 shadow-sm border-0 border-start border-danger border-4">
+            <div class="card-body p-4">
+                <span class="text-muted small text-uppercase fw-semibold d-block mb-1">
+                    <i class="bi bi-hourglass-split me-1 text-danger"></i> Total Remaining Due
+                </span>
+                <h3 class="fw-bold {% if total_system_remaining > 0 %}text-danger{% else %}text-muted{% endif %} mb-1">
+                    ₹{{ total_system_remaining|floatformat:2 }}
+                </h3>
+                <span class="text-muted small">Current outstanding liability balance</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Search & Status Filter Form -->
+<div class="card rounded-3 mb-4 shadow-sm border-0">
+    <div class="card-body p-3 bg-light rounded-3">
+        <form method="get" action="{% url 'admin_shop_payments' %}" class="row g-2 align-items-center">
+            <div class="col-12 col-md-7">
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-search"></i></span>
+                    <input type="text" name="q" class="form-control border-start-0" placeholder="Search shops by name, owner, or contact..." value="{{ search_query }}">
+                </div>
+            </div>
+
+            <div class="col-12 col-md-3">
+                <select name="status" class="form-select" onchange="this.form.submit()">
+                    <option value="">Payment Status (All)</option>
+                    <option value="UNPAID" {% if status_filter == 'UNPAID' %}selected{% endif %}>Unpaid Only</option>
+                    <option value="PARTIALLY_PAID" {% if status_filter == 'PARTIALLY_PAID' %}selected{% endif %}>Partially Paid</option>
+                    <option value="PAID" {% if status_filter == 'PAID' %}selected{% endif %}>Fully Paid</option>
+                    <option value="NO_OBLIGATIONS" {% if status_filter == 'NO_OBLIGATIONS' %}selected{% endif %}>No Obligations</option>
+                </select>
+            </div>
+
+            <div class="col-12 col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-primary flex-grow-1">Filter</button>
+                {% if search_query or status_filter %}
+                <a href="{% url 'admin_shop_payments' %}" class="btn btn-outline-secondary" title="Reset">
+                    <i class="bi bi-x-circle"></i>
+                </a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Shop Payment Balances Table -->
+<div class="card rounded-3 overflow-hidden shadow-sm border-0 mb-4">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom">
+        <h5 class="fw-bold mb-0 text-dark">
+            <i class="bi bi-wallet2 me-2 text-primary"></i>Shop Payout Balances
+        </h5>
+        {% if search_query or status_filter %}
+            <span class="badge bg-light text-dark border">Filtered</span>
+        {% endif %}
+    </div>
+
+    <div class="table-responsive">
+        {% if payment_rows %}
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light text-uppercase small text-muted" style="letter-spacing: 0.03em;">
+                <tr>
+                    <th scope="col">Shop & ID</th>
+                    <th scope="col">Owner / Phone</th>
+                    <th scope="col" class="text-end">Total Payable</th>
+                    <th scope="col" class="text-end">Amount Paid</th>
+                    <th scope="col" class="text-end">Remaining Due</th>
+                    <th scope="col" class="text-center">Payment Status</th>
+                    <th scope="col" class="text-center">Pending Loans</th>
+                    <th scope="col" class="text-end">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in payment_rows %}
+                <tr>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge bg-secondary-subtle text-secondary font-monospace" style="font-size: 0.72rem;">#{{ row.shop.id }}</span>
+                            <a href="{% url 'shop_detail' pk=row.shop.pk %}" class="fw-bold text-decoration-none text-dark hover-primary">
+                                {{ row.shop.name }}
+                            </a>
+                        </div>
+                    </td>
+
+                    <td>
+                        <div class="small fw-semibold text-dark">{{ row.shop.owner_name }}</div>
+                        <div class="small text-muted">{{ row.shop.phone }}</div>
+                    </td>
+
+                    <td class="text-end fw-semibold text-dark">
+                        ₹{{ row.financials.total_payable|floatformat:2 }}
+                    </td>
+
+                    <td class="text-end fw-semibold text-success">
+                        ₹{{ row.financials.total_paid|floatformat:2 }}
+                    </td>
+
+                    <td class="text-end fw-bold {% if row.financials.remaining_due > 0 %}text-danger{% else %}text-muted{% endif %}">
+                        ₹{{ row.financials.remaining_due|floatformat:2 }}
+                    </td>
+
+                    <td class="text-center">
+                        <span class="badge bg-{{ row.financials.badge_class }}-subtle text-{{ row.financials.badge_class }} border border-{{ row.financials.badge_class }}-subtle px-2 py-1">
+                            {{ row.financials.payment_status_display }}
+                        </span>
+                    </td>
+
+                    <td class="text-center">
+                        <span class="badge bg-light text-dark border">
+                            {{ row.pending_apps_count }}
+                        </span>
+                    </td>
+
+                    <td class="text-end">
+                        {% if row.financials.remaining_due > 0 %}
+                        <a href="{% url 'shop_detail' pk=row.shop.pk %}" class="btn btn-sm btn-success shadow-xs d-inline-flex align-items-center gap-1">
+                            <i class="bi bi-cash-stack"></i>
+                            <span>Mark as Paid</span>
+                        </a>
+                        {% else %}
+                        <a href="{% url 'shop_detail' pk=row.shop.pk %}" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-eye me-1"></i> Details
+                        </a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-wallet2 text-muted display-4 mb-3 d-block"></i>
+            <h5 class="fw-bold text-dark">No Payment Records Found</h5>
+            <p class="text-muted small">No shops matched the specified filter.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Recent Admin Payout Ledger -->
+<div class="card rounded-3 shadow-sm border-0 mb-4">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom">
+        <h5 class="fw-bold mb-0 text-dark">
+            <i class="bi bi-clock-history me-2 text-primary"></i>Recent Admin Payout Transactions
+        </h5>
+        <span class="text-muted small">Live sync with Shop Dashboard</span>
+    </div>
+
+    <div class="table-responsive">
+        {% if recent_payments %}
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light text-uppercase small text-muted">
+                <tr>
+                    <th>Date</th>
+                    <th>Shop Name</th>
+                    <th>Application / Customer</th>
+                    <th>Bank Reference / UTR</th>
+                    <th class="text-end">Amount Paid</th>
+                    <th>Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in recent_payments %}
+                <tr>
+                    <td class="fw-semibold text-dark">{{ p.payment_date|date:"M d, Y" }}</td>
+                    <td>
+                        <a href="{% url 'shop_detail' pk=p.application.shop.pk %}" class="fw-semibold text-decoration-none text-dark hover-primary">
+                            {{ p.application.shop.name }}
+                        </a>
+                    </td>
+                    <td>
+                        <span class="badge bg-light text-secondary border font-monospace">{{ p.application.application_number }}</span>
+                        <div class="small text-muted">{{ p.application.customer.name }} ({{ p.application.mobile_model }})</div>
+                    </td>
+                    <td>
+                        <code class="text-primary fw-bold">{{ p.payment_reference }}</code>
+                    </td>
+                    <td class="text-end fw-bold text-success">
+                        ₹{{ p.amount_received|floatformat:2 }}
+                    </td>
+                    <td class="small text-muted">{{ p.remarks|default:"—" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="text-center py-4">
+            <p class="text-muted small mb-0">No payment transactions recorded yet.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+

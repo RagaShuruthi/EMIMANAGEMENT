@@ -1,0 +1,157 @@
+{% extends "shops/portal/shop_base.html" %}
+
+{% block title %}Finance Applications — {{ shop.name }} | Private Finance EMI{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h3 class="fw-bold text-dark mb-1">Finance Applications</h3>
+        <p class="text-muted small mb-0">Track customer mobile phone financing applications and approval status</p>
+    </div>
+    <a href="{% url 'shop_customer_add' %}" class="btn btn-primary shadow-sm">
+        <i class="bi bi-person-plus-fill me-1"></i> + Add New Customer
+    </a>
+</div>
+
+<!-- Status Navigation Tabs -->
+<ul class="nav nav-pills mb-4 gap-2 flex-wrap">
+    <li class="nav-item">
+        <a class="nav-link {% if not status_filter %}active{% else %}bg-white border text-dark{% endif %}" href="{% url 'shop_application_list' %}">
+            All Applications
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if status_filter == 'SUBMITTED' %}active{% else %}bg-white border text-dark{% endif %}" href="{% url 'shop_application_list' %}?status=SUBMITTED">
+            Submitted
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if status_filter == 'PENDING' %}active{% else %}bg-white border text-dark{% endif %}" href="{% url 'shop_application_list' %}?status=PENDING">
+            Pending / Under Review
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if status_filter == 'APPROVED' %}active{% else %}bg-white border text-dark{% endif %}" href="{% url 'shop_application_list' %}?status=APPROVED">
+            Approved
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if status_filter == 'REJECTED' %}active{% else %}bg-white border text-dark{% endif %}" href="{% url 'shop_application_list' %}?status=REJECTED">
+            Rejected
+        </a>
+    </li>
+</ul>
+
+<!-- Search Bar -->
+<div class="card border-0 shadow-sm rounded-3 mb-4">
+    <div class="card-body p-3">
+        <form method="get" class="row g-2">
+            {% if status_filter %}
+            <input type="hidden" name="status" value="{{ status_filter }}">
+            {% endif %}
+            <div class="col-12 col-md-10">
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" name="q" class="form-control border-start-0 ps-0" placeholder="Search by application number, customer name, mobile, phone model..." value="{{ search_query }}">
+                </div>
+            </div>
+            <div class="col-12 col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-primary w-100">Search</button>
+                {% if search_query %}
+                <a href="{% url 'shop_application_list' %}{% if status_filter %}?status={{ status_filter }}{% endif %}" class="btn btn-outline-secondary" title="Clear">Clear</a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Applications Table -->
+<div class="card border-0 shadow-sm rounded-3">
+    <div class="table-responsive">
+        {% if applications %}
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col">Application #</th>
+                    <th scope="col">Customer</th>
+                    <th scope="col">Mobile Model</th>
+                    <th scope="col">Price</th>
+                    <th scope="col">Down Payment</th>
+                    <th scope="col">Financier Request</th>
+                    <th scope="col">Monthly EMI</th>
+                    <th scope="col">Due Day</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Date</th>
+                    <th scope="col" class="text-end">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for app in applications %}
+                <tr>
+                    <td>
+                        <a href="{% url 'shop_application_detail' pk=app.pk %}" class="fw-bold text-decoration-none text-primary">
+                            {{ app.application_number }}
+                        </a>
+                    </td>
+                    <td>
+                        <div class="fw-semibold text-dark">{{ app.customer.name }}</div>
+                        <small class="text-muted"><i class="bi bi-telephone me-1"></i>{{ app.customer.primary_mobile }}</small>
+                    </td>
+                    <td>{{ app.mobile_model }}</td>
+                    <td>₹{{ app.mobile_price|floatformat:2 }}</td>
+                    <td>₹{{ app.down_payment|floatformat:2 }}</td>
+                    <td class="fw-bold text-dark">₹{{ app.financier_request_amount|floatformat:2 }}</td>
+                    <td>₹{{ app.monthly_emi|floatformat:2 }} <small class="text-muted">×{{ app.emi_duration }}m</small></td>
+                    <td><span class="badge bg-light text-primary border font-monospace">{{ app.monthly_due_day }}th</span></td>
+                    <td>
+                        {% if app.status == 'APPROVED' %}
+                            <span class="badge bg-success-subtle text-success px-2 py-1"><i class="bi bi-check-circle me-1"></i>Approved</span>
+                        {% elif app.status == 'SUBMITTED' %}
+                            <span class="badge bg-primary-subtle text-primary px-2 py-1"><i class="bi bi-send-check me-1"></i>Submitted</span>
+                        {% elif app.status == 'REJECTED' %}
+                            <span class="badge bg-danger-subtle text-danger px-2 py-1"><i class="bi bi-x-circle me-1"></i>Rejected</span>
+                        {% elif app.status == 'PAID' %}
+                            <span class="badge bg-info-subtle text-info-emphasis px-2 py-1"><i class="bi bi-cash me-1"></i>Paid</span>
+                        {% else %}
+                            <span class="badge bg-warning-subtle text-warning-emphasis px-2 py-1"><i class="bi bi-clock me-1"></i>{{ app.get_status_display }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-muted small">{{ app.application_date|date:"M d, Y" }}</td>
+                    <td class="text-end">
+                        <a href="{% url 'shop_application_detail' pk=app.pk %}" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-eye"></i> View
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="p-5 text-center text-muted">
+            <i class="bi bi-inbox fs-1 d-block mb-3 text-secondary"></i>
+            <h6 class="fw-semibold">No Applications Found</h6>
+            <p class="small mb-3">No financing applications match the selected status filter.</p>
+            <a href="{% url 'shop_customer_add' %}" class="btn btn-primary btn-sm">+ Create Application</a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Pagination -->
+    {% if applications.has_other_pages %}
+    <div class="card-footer bg-white border-top py-3 d-flex justify-content-between align-items-center">
+        <small class="text-muted">Showing page {{ applications.number }} of {{ applications.paginator.num_pages }}</small>
+        <nav aria-label="Page navigation">
+            <ul class="pagination pagination-sm mb-0">
+                {% if applications.has_previous %}
+                <li class="page-item"><a class="page-link" href="?page={{ applications.previous_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}">Previous</a></li>
+                {% endif %}
+                <li class="page-item active"><span class="page-link">{{ applications.number }}</span></li>
+                {% if applications.has_next %}
+                <li class="page-item"><a class="page-link" href="?page={{ applications.next_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}">Next</a></li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

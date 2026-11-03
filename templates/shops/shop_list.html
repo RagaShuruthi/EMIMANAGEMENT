@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+
+{% block title %}Partner Shops — Mobile EMI Management System{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb & Header -->
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-1 small">
+                <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Partner Shops</li>
+            </ol>
+        </nav>
+        <h2 class="fw-bold text-dark mb-0">Registered Partner Shops</h2>
+        <p class="text-muted small mb-0">Directory of retail partners, contact details, email addresses, and GPay numbers.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a href="{% url 'admin_shop_payments' %}" class="btn btn-outline-primary d-flex align-items-center gap-2 shadow-sm" title="View shop payouts and disbursement records">
+            <i class="bi bi-wallet2"></i>
+            <span>Shop Payouts</span>
+        </a>
+        <a href="{% url 'add_shop' %}" class="btn btn-primary d-flex align-items-center gap-2 shadow-sm">
+            <i class="bi bi-plus-circle"></i>
+            <span>Register New Shop</span>
+        </a>
+    </div>
+</div>
+
+<!-- Search & Status Filter Form (Purely Shop Management) -->
+<div class="card rounded-3 mb-4 shadow-sm border-0">
+    <div class="card-body p-3 bg-light rounded-3">
+        <form method="get" action="{% url 'shop_list' %}" class="row g-2 align-items-center">
+            <!-- Search Query Input -->
+            <div class="col-12 col-md-8 col-lg-9">
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-search"></i></span>
+                    <input type="text" name="q" class="form-control border-start-0" placeholder="Search by shop name, contact person, phone, email, or GPay..." value="{{ search_query }}">
+                </div>
+            </div>
+
+            <!-- Shop Status Filter -->
+            <div class="col-8 col-md-3 col-lg-2">
+                <div class="input-group">
+                    <label class="input-group-text bg-white text-muted small" for="statusFilter">Status</label>
+                    <select name="status" class="form-select" id="statusFilter" onchange="this.form.submit()">
+                        <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Shops</option>
+                        <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active Only</option>
+                        <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Inactive Only</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="col-4 col-md-1 col-lg-1 d-flex gap-1">
+                <button type="submit" class="btn btn-primary w-100" title="Apply Filter">
+                    <i class="bi bi-funnel"></i>
+                </button>
+                {% if search_query or status_filter != 'all' %}
+                <a href="{% url 'shop_list' %}" class="btn btn-outline-secondary" title="Reset Filters">
+                    <i class="bi bi-x-circle"></i>
+                </a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Shops Data Table -->
+<div class="card rounded-3 overflow-hidden shadow-sm border-0">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom">
+        <h5 class="fw-bold mb-0 text-dark">
+            <i class="bi bi-shop me-2 text-primary"></i>All Partner Shops ({{ total_count }})
+        </h5>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            {% if status_filter == 'active' %}
+                <span class="badge bg-success-subtle text-success border border-success-subtle">Filtered: Active Shops</span>
+            {% elif status_filter == 'inactive' %}
+                <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Filtered: Inactive Shops</span>
+            {% endif %}
+            {% if search_query %}
+                <span class="badge bg-light text-dark border">Search: "{{ search_query }}"</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        {% if shops %}
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light text-uppercase small text-muted" style="letter-spacing: 0.03em;">
+                <tr>
+                    <th scope="col">Shop & Address</th>
+                    <th scope="col">Contact Person</th>
+                    <th scope="col">Contact Number</th>
+                    <th scope="col">Email Address</th>
+                    <th scope="col">GPay Number</th>
+                    <th scope="col" class="text-center">Status</th>
+                    <th scope="col" class="text-center">Customers</th>
+                    <th scope="col">Registered</th>
+                    <th scope="col" class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for shop in shops %}
+                <tr>
+                    <!-- Shop Name & Address -->
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge bg-secondary-subtle text-secondary fw-semibold font-monospace">#{{ shop.id }}</span>
+                            <a href="{% url 'shop_detail' pk=shop.pk %}" class="fw-bold text-decoration-none text-dark hover-primary">
+                                {{ shop.name }}
+                            </a>
+                        </div>
+                        <div class="text-truncate text-muted small mt-1" style="max-width: 220px;" title="{{ shop.address }}">
+                            <i class="bi bi-geo-alt me-1"></i>{{ shop.address|default:"No address specified" }}
+                        </div>
+                        {% if shop.owner_account %}
+                        <div class="small text-muted mt-1">
+                            <span class="badge bg-light text-secondary border">
+                                <i class="bi bi-person-badge text-primary me-1"></i>{{ shop.owner_account.username }}
+                            </span>
+                        </div>
+                        {% endif %}
+                    </td>
+
+                    <!-- Contact Person (Owner Name) -->
+                    <td>
+                        <div class="fw-semibold text-dark">{{ shop.owner_name }}</div>
+                    </td>
+
+                    <!-- Contact Number (Stored separately, exactly 10 digits) -->
+                    <td>
+                        <div class="small">
+                            <a href="tel:{{ shop.phone }}" class="text-decoration-none text-dark fw-semibold font-monospace">
+                                <i class="bi bi-telephone text-primary me-1"></i>{{ shop.phone }}
+                            </a>
+                        </div>
+                    </td>
+
+                    <!-- Email Address (Stored & displayed correctly) -->
+                    <td>
+                        {% if shop.email %}
+                        <div class="small">
+                            <a href="mailto:{{ shop.email }}" class="text-decoration-none text-primary">
+                                <i class="bi bi-envelope me-1"></i>{{ shop.email }}
+                            </a>
+                        </div>
+                        {% else %}
+                        <span class="text-muted small fst-italic">—</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- GPay Number (Stored separately from Contact Number, exactly 10 digits) -->
+                    <td>
+                        {% if shop.gpay %}
+                        <span class="badge bg-light text-dark border font-monospace px-2 py-1">
+                            <i class="bi bi-phone text-success me-1"></i>{{ shop.gpay }}
+                        </span>
+                        {% else %}
+                        <span class="text-muted small fst-italic">—</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Status Badge -->
+                    <td class="text-center">
+                        {% if shop.is_active %}
+                            <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                                <i class="bi bi-check-circle me-1"></i>Active
+                            </span>
+                        {% else %}
+                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
+                                <i class="bi bi-x-circle me-1"></i>Inactive
+                            </span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Customers Volume -->
+                    <td class="text-center">
+                        <a href="{% url 'admin_shopwise_detail' shop_id=shop.id %}" class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1 text-decoration-none" title="View shop-wise customer list">
+                            <i class="bi bi-people me-1"></i>{{ shop.customer_count|default:0 }}
+                        </a>
+                    </td>
+
+                    <!-- Registration Date -->
+                    <td class="text-muted small">
+                        {{ shop.created_at|date:"M d, Y" }}
+                    </td>
+
+                    <!-- Actions (Shop Management only) -->
+                    <td class="text-end">
+                        <div class="btn-group" role="group">
+                            <a href="{% url 'shop_detail' pk=shop.pk %}" class="btn btn-sm btn-outline-secondary" title="View Shop Dossier">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            <a href="{% url 'admin_shopwise_detail' shop_id=shop.id %}" class="btn btn-sm btn-outline-info" title="View Shop Customers">
+                                <i class="bi bi-people"></i>
+                            </a>
+                            <a href="{% url 'edit_shop' pk=shop.pk %}" class="btn btn-sm btn-outline-primary" title="Edit Shop Details">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-shop text-muted display-4 mb-3 d-block"></i>
+            <h5 class="fw-bold text-dark">No Shops Found</h5>
+            <p class="text-muted small">No registered partner shops match your filter criteria.</p>
+            {% if search_query or status_filter != 'all' %}
+                <a href="{% url 'shop_list' %}" class="btn btn-sm btn-secondary">Clear Filters</a>
+            {% else %}
+                <a href="{% url 'add_shop' %}" class="btn btn-sm btn-primary">Register Your First Shop</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Pagination -->
+    {% if shops.has_other_pages %}
+    <div class="card-footer bg-white border-top py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span class="text-muted small">
+            Showing Page {{ shops.number }} of {{ shops.paginator.num_pages }}
+        </span>
+        <nav aria-label="Page navigation">
+            <ul class="pagination pagination-sm mb-0">
+                {% if shops.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ shops.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}">Previous</a>
+                </li>
+                {% else %}
+                <li class="page-item disabled"><span class="page-link">Previous</span></li>
+                {% endif %}
+
+                {% for i in shops.paginator.page_range %}
+                    {% if shops.number == i %}
+                    <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+                    {% elif i > shops.number|add:'-3' and i < shops.number|add:'3' %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ i }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}">{{ i }}</a>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if shops.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ shops.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}">Next</a>
+                </li>
+                {% else %}
+                <li class="page-item disabled"><span class="page-link">Next</span></li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

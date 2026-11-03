@@ -1,0 +1,503 @@
+{% extends "shops/portal/shop_base.html" %}
+
+{% block title %}Register New Customer & Finance Application — {{ shop.name }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-xl-10">
+        <!-- Header & Breadcrumbs -->
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-2 small">
+                <li class="breadcrumb-item"><a href="{% url 'shop_dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Add New Customer</li>
+            </ol>
+        </nav>
+        <h3 class="fw-bold text-dark mb-4">Register Customer & Finance Application</h3>
+
+        <form method="post" enctype="multipart/form-data" id="customerRegistrationForm" novalidate>
+            {% csrf_token %}
+
+            <!-- SECTION A: Shop and Customer Information -->
+            <div class="card border-0 shadow-sm rounded-3 mb-4">
+                <div class="card-header bg-white py-3 border-bottom d-flex align-items-center gap-2">
+                    <span class="badge bg-primary rounded-circle px-2 py-1">A</span>
+                    <h5 class="fw-bold mb-0 text-dark">Shop & Customer Information</h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row g-3">
+                        <!-- Shop Name (Auto-populated from authenticated account) -->
+                        <div class="col-12 col-md-4">
+                            <label class="form-label small fw-semibold text-secondary">
+                                Shop Name <span class="badge bg-light text-muted border">Auto-Populated</span>
+                            </label>
+                            <input type="text" class="form-control bg-light" value="{{ shop.name }}" readonly>
+                            <div class="form-text text-muted small">Originating retail shop authorized on portal.</div>
+                        </div>
+
+                        <!-- Application Date -->
+                        <div class="col-12 col-md-4">
+                            <label for="id_application_date" class="form-label small fw-semibold text-secondary">
+                                Application / Purchase Date <span class="text-danger">*</span>
+                            </label>
+                            <input type="date" class="form-control" id="id_application_date" name="application_date" value="{{ form_data.application_date|default:today_date }}" required>
+                            <div class="form-text text-muted small">Date of phone purchase.</div>
+                        </div>
+
+                        <!-- Monthly Due Day (Editable by Shop Owner) -->
+                        <div class="col-12 col-md-4">
+                            <label for="id_monthly_due_day" class="form-label small fw-semibold text-secondary">
+                                Monthly EMI Due Date <span class="badge bg-primary-subtle text-primary border ms-1">Editable</span>
+                            </label>
+                            <select class="form-select fw-semibold" id="id_monthly_due_day" name="monthly_due_day" required>
+                                <option value="5" {% if form_data.monthly_due_day == '5' %}selected{% endif %}>5th of every month</option>
+                                <option value="10" {% if form_data.monthly_due_day == '10' %}selected{% endif %}>10th of every month</option>
+                                <option value="15" {% if form_data.monthly_due_day == '15' %}selected{% endif %}>15th of every month</option>
+                                <option value="20" {% if form_data.monthly_due_day == '20' %}selected{% endif %}>20th of every month</option>
+                                <option value="25" {% if form_data.monthly_due_day == '25' %}selected{% endif %}>25th of every month</option>
+                                <option value="30" {% if form_data.monthly_due_day == '30' %}selected{% endif %}>30th of every month</option>
+                            </select>
+                            <div class="form-text text-muted small">Auto-calculated from date cycle; editable as needed.</div>
+                        </div>
+
+                        <!-- Customer Full Name -->
+                        <div class="col-12">
+                            <label for="id_customer_name" class="form-label small fw-semibold text-secondary">
+                                Customer Full Name <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control form-control-lg {% if field_errors.customer_name %}is-invalid{% endif %}" id="id_customer_name" name="customer_name" value="{{ form_data.customer_name|default:'' }}" placeholder="Enter customer's full legal name as per Aadhaar ID" required>
+                            <div class="invalid-feedback">Customer full legal name is required.</div>
+                        </div>
+
+                        <!-- Primary Mobile Number (Exactly 10 Digits) -->
+                        <div class="col-12 col-md-6">
+                            <label for="id_primary_mobile" class="form-label small fw-semibold text-secondary">
+                                Primary Mobile Number 1 <span class="text-danger">* (10 Digits)</span>
+                            </label>
+                            <div class="input-group has-validation">
+                                <span class="input-group-text bg-light"><i class="bi bi-telephone"></i></span>
+                                <input type="tel" class="form-control font-monospace {% if field_errors.primary_mobile %}is-invalid{% endif %}" id="id_primary_mobile" name="primary_mobile" value="{{ form_data.primary_mobile|default:'' }}" placeholder="10-digit mobile number" maxlength="10" minlength="10" pattern="\d{10}" inputmode="numeric" oninput="this.value = this.value.replace(/\D/g, '').slice(0, 10);" required>
+                                <div class="invalid-feedback">Primary mobile number is required and must be exactly 10 digits.</div>
+                            </div>
+                            <div class="form-text text-muted small">Must be exactly 10 numeric digits.</div>
+                        </div>
+
+                        <!-- Secondary Mobile Number (MANDATORY & Exactly 10 Digits) -->
+                        <div class="col-12 col-md-6">
+                            <label for="id_secondary_mobile" class="form-label small fw-semibold text-secondary">
+                                Mobile Number 2 <span class="text-danger">* (Mandatory 10 Digits)</span>
+                            </label>
+                            <div class="input-group has-validation">
+                                <span class="input-group-text bg-light"><i class="bi bi-phone"></i></span>
+                                <input type="tel" class="form-control font-monospace {% if field_errors.secondary_mobile %}is-invalid{% endif %}" id="id_secondary_mobile" name="secondary_mobile" value="{{ form_data.secondary_mobile|default:'' }}" placeholder="10-digit secondary number" maxlength="10" minlength="10" pattern="\d{10}" inputmode="numeric" oninput="this.value = this.value.replace(/\D/g, '').slice(0, 10);" required>
+                                <div class="invalid-feedback">Secondary mobile number 2 is mandatory and must be exactly 10 digits.</div>
+                            </div>
+                            <div class="form-text text-muted small">Must be exactly 10 numeric digits.</div>
+                        </div>
+
+                        <!-- Current Home Address -->
+                        <div class="col-12 col-md-6">
+                            <label for="id_home_address" class="form-label small fw-semibold text-secondary">
+                                Current Residential Home Address <span class="text-danger">*</span>
+                            </label>
+                            <textarea class="form-control {% if field_errors.home_address %}is-invalid{% endif %}" id="id_home_address" name="home_address" rows="3" placeholder="Door number, street name, locality, landmark, city, and PIN code" required>{{ form_data.home_address|default:'' }}</textarea>
+                            <div class="invalid-feedback">Current residential home address is mandatory.</div>
+                        </div>
+
+                        <!-- Work Address -->
+                        <div class="col-12 col-md-6">
+                            <label for="id_work_address" class="form-label small fw-semibold text-secondary">
+                                Work / Office Address <span class="text-danger">*</span>
+                            </label>
+                            <textarea class="form-control {% if field_errors.work_address %}is-invalid{% endif %}" id="id_work_address" name="work_address" rows="3" placeholder="Company/Employer name, office address, department, city, and PIN code" required>{{ form_data.work_address|default:'' }}</textarea>
+                            <div class="invalid-feedback">Work / office address is mandatory.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION B: Mobile and EMI Information -->
+            <div class="card border-0 shadow-sm rounded-3 mb-4">
+                <div class="card-header bg-white py-3 border-bottom d-flex align-items-center gap-2">
+                    <span class="badge bg-primary rounded-circle px-2 py-1">B</span>
+                    <h5 class="fw-bold mb-0 text-dark">Mobile and EMI Information</h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row g-3">
+                        <!-- Mobile Model -->
+                        <div class="col-12 col-md-6">
+                            <label for="id_mobile_model" class="form-label small fw-semibold text-secondary">
+                                Mobile Phone Model & Variant <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control {% if field_errors.mobile_model %}is-invalid{% endif %}" id="id_mobile_model" name="mobile_model" value="{{ form_data.mobile_model|default:'' }}" placeholder="e.g. Apple iPhone 15 128GB Blue or OnePlus 12R" required>
+                            <div class="invalid-feedback">Mobile phone model and variant is mandatory.</div>
+                        </div>
+
+                        <!-- EMI Duration (Exclusively 3 and 6 Months scheme) -->
+                        <div class="col-12 col-md-6">
+                            <label for="id_emi_duration" class="form-label small fw-semibold text-secondary">
+                                EMI Duration (Tenure Scheme) <span class="text-danger">*</span>
+                            </label>
+                            <select class="form-select form-select-lg fw-semibold" id="id_emi_duration" name="emi_duration" required>
+                                <option value="6" {% if form_data.emi_duration == '6' or not form_data.emi_duration %}selected{% endif %}>6 Months Scheme</option>
+                                <option value="3" {% if form_data.emi_duration == '3' %}selected{% endif %}>3 Months Scheme</option>
+                            </select>
+                            <div class="form-text text-muted small">Only 3 or 6 months scheme available.</div>
+                        </div>
+
+                        <!-- Total Mobile Selling Price -->
+                        <div class="col-12 col-md-4">
+                            <label for="id_mobile_price" class="form-label small fw-semibold text-secondary">
+                                Total Mobile Selling Price (₹) <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group has-validation">
+                                <span class="input-group-text bg-light fw-bold">₹</span>
+                                <input type="number" step="0.01" min="1" class="form-control form-control-lg font-monospace fw-bold {% if field_errors.mobile_price %}is-invalid{% endif %}" id="id_mobile_price" name="mobile_price" value="{{ form_data.mobile_price|default:'' }}" placeholder="e.g. 60000.00" required>
+                                <div class="invalid-feedback">Mobile price must be a valid amount greater than zero.</div>
+                            </div>
+                            <div class="form-text small text-muted">Total selling payment amount.</div>
+                        </div>
+
+                        <!-- Down Payment (Upfront Profit / Interest) -->
+                        <div class="col-12 col-md-4">
+                            <label for="id_down_payment" class="form-label small fw-semibold text-secondary d-flex justify-content-between align-items-center">
+                                <span>Down Payment (₹) <span class="text-danger">*</span></span>
+                                <span class="badge bg-light text-primary border" id="id_request_amount_preview">Financier Request: ₹0.00</span>
+                            </label>
+                            <div class="input-group has-validation">
+                                <span class="input-group-text bg-light fw-bold">₹</span>
+                                <input type="number" step="0.01" min="0" class="form-control form-control-lg font-monospace fw-bold {% if field_errors.down_payment %}is-invalid{% endif %}" id="id_down_payment" name="down_payment" value="{{ form_data.down_payment|default:'0.00' }}" placeholder="e.g. 5000.00" required>
+                                <div class="invalid-feedback">Down payment cannot be negative.</div>
+                            </div>
+                            <div class="form-text small text-muted">Financier Request Amount = Total Selling Price − Down Payment.</div>
+                        </div>
+
+                        <!-- Monthly EMI Amount (Directly calculated: Price / Due Months, Rounded to 10s & Editable) -->
+                        <div class="col-12 col-md-4">
+                            <label for="id_monthly_emi" class="form-label small fw-semibold text-secondary">
+                                Monthly EMI Amount (₹) <span class="badge bg-primary-subtle text-primary border ms-1">Editable</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light fw-bold">₹</span>
+                                <input type="number" step="0.01" class="form-control form-control-lg font-monospace fw-bold text-primary" id="id_monthly_emi" name="monthly_emi" value="{{ form_data.monthly_emi|default:'' }}" placeholder="e.g. 3330.00">
+                            </div>
+                            <div class="form-text small text-muted">Auto-rounded to nearest 10s (e.g. ₹3,333.33 → ₹3,330). Editable.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION C: Customer Document Uploads (Photo & Aadhaar Mandatory) -->
+            <div class="card border-0 shadow-sm rounded-3 mb-4">
+                <div class="card-header bg-white py-3 border-bottom d-flex align-items-center gap-2">
+                    <span class="badge bg-primary rounded-circle px-2 py-1">C</span>
+                    <h5 class="fw-bold mb-0 text-dark">Customer Document Uploads</h5>
+                </div>
+                <div class="card-body p-4">
+                    <p class="text-muted small mb-4">
+                        Please upload customer identity documents. <strong>Customer Photograph and Aadhaar Card are strictly mandatory.</strong> Supported formats: JPG, PNG, PDF (Max 10MB each).
+                    </p>
+
+                    <div class="row g-4">
+                        <!-- 1. Customer Photograph (MANDATORY) -->
+                        <div class="col-12 col-md-6 col-lg-3">
+                            <div class="p-3 border rounded-3 bg-light text-center h-100 d-flex flex-column justify-content-between position-relative {% if field_errors.doc_photo %}border-danger bg-danger-subtle{% else %}border-secondary-subtle{% endif %}" id="box_doc_photo">
+                                <div>
+                                    <span class="badge bg-danger position-absolute top-0 end-0 m-2">Mandatory</span>
+                                    <i class="bi bi-person-bounding-box fs-1 text-primary mb-2 d-block mt-2"></i>
+                                    <label class="form-label fw-bold small text-dark d-block">Customer Photograph <span class="text-danger">*</span></label>
+                                    <small class="text-muted d-block mb-3">Clear portrait photo</small>
+                                </div>
+                                <div>
+                                    <input type="file" class="form-control form-control-sm {% if field_errors.doc_photo %}is-invalid{% endif %}" id="id_doc_photo" name="doc_photo" accept="image/*" required>
+                                    <div class="invalid-feedback text-start small">Customer photograph is mandatory.</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. Aadhaar Card (MANDATORY) -->
+                        <div class="col-12 col-md-6 col-lg-3">
+                            <div class="p-3 border rounded-3 bg-light text-center h-100 d-flex flex-column justify-content-between position-relative {% if field_errors.doc_aadhaar %}border-danger bg-danger-subtle{% else %}border-secondary-subtle{% endif %}" id="box_doc_aadhaar">
+                                <div>
+                                    <span class="badge bg-danger position-absolute top-0 end-0 m-2">Mandatory</span>
+                                    <i class="bi bi-card-heading fs-1 text-primary mb-2 d-block mt-2"></i>
+                                    <label class="form-label fw-bold small text-dark d-block">Aadhaar Card <span class="text-danger">*</span></label>
+                                    <small class="text-muted d-block mb-3">Front & Back scan / PDF</small>
+                                </div>
+                                <div>
+                                    <input type="file" class="form-control form-control-sm {% if field_errors.doc_aadhaar %}is-invalid{% endif %}" id="id_doc_aadhaar" name="doc_aadhaar" accept=".pdf,image/*" required>
+                                    <div class="invalid-feedback text-start small">Aadhaar Card document is mandatory.</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3. PAN Card (Optional) -->
+                        <div class="col-12 col-md-6 col-lg-3">
+                            <div class="p-3 border rounded-3 bg-light text-center h-100 d-flex flex-column justify-content-between position-relative border-secondary-subtle">
+                                <div>
+                                    <span class="badge bg-secondary-subtle text-secondary position-absolute top-0 end-0 m-2">Optional</span>
+                                    <i class="bi bi-credit-card-2-front fs-1 text-secondary mb-2 d-block mt-2"></i>
+                                    <label class="form-label fw-bold small text-dark d-block">PAN Card</label>
+                                    <small class="text-muted d-block mb-3">Government PAN proof</small>
+                                </div>
+                                <div>
+                                    <input type="file" class="form-control form-control-sm" name="doc_pan" accept=".pdf,image/*">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 4. Voter ID / Other Proof (Optional) -->
+                        <div class="col-12 col-md-6 col-lg-3">
+                            <div class="p-3 border rounded-3 bg-light text-center h-100 d-flex flex-column justify-content-between position-relative border-secondary-subtle">
+                                <div>
+                                    <span class="badge bg-secondary-subtle text-secondary position-absolute top-0 end-0 m-2">Optional</span>
+                                    <i class="bi bi-file-earmark-person fs-1 text-secondary mb-2 d-block mt-2"></i>
+                                    <label class="form-label fw-bold small text-dark d-block">Voter ID / Other ID</label>
+                                    <small class="text-muted d-block mb-3">Alternative ID proof</small>
+                                </div>
+                                <div>
+                                    <input type="file" class="form-control form-control-sm" name="doc_voter" accept=".pdf,image/*">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Submission Actions -->
+            <div class="d-flex justify-content-between align-items-center mb-5 flex-wrap gap-2">
+                <a href="{% url 'shop_dashboard' %}" class="btn btn-outline-secondary px-4 py-2">
+                    <i class="bi bi-arrow-left me-1"></i> Cancel
+                </a>
+                <div class="d-flex gap-2">
+                    <button type="submit" name="action" value="draft" class="btn btn-outline-primary px-4 py-2">
+                        <i class="bi bi-save me-1"></i> Save as Draft
+                    </button>
+                    <button type="submit" name="action" value="submit" class="btn btn-primary px-4 py-2 shadow-sm fw-semibold">
+                        <i class="bi bi-send-check-fill me-1"></i> Submit Application to Financier
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // 1. Due Date Rule:
+    function getDueDayForDate(dateStr) {
+        if (!dateStr) return 5;
+        const parts = dateStr.split('-');
+        const day = parseInt(parts[2], 10);
+        if (day === 31 || (day >= 1 && day <= 5)) {
+            return 5;
+        } else if (day >= 6 && day <= 10) {
+            return 10;
+        } else if (day >= 11 && day <= 15) {
+            return 15;
+        } else if (day >= 16 && day <= 20) {
+            return 20;
+        } else if (day >= 21 && day <= 25) {
+            return 25;
+        } else {
+            return 30;
+        }
+    }
+
+    const appDateInput = document.getElementById('id_application_date');
+    const dueDaySelect = document.getElementById('id_monthly_due_day');
+
+    function updateDueDateSuggestion() {
+        if (!appDateInput || !dueDaySelect) return;
+        // Only update if not already chosen by user
+        if (!dueDaySelect.getAttribute('data-user-selected')) {
+            const suggestedDay = getDueDayForDate(appDateInput.value);
+            dueDaySelect.value = suggestedDay.toString();
+        }
+    }
+
+    if (dueDaySelect) {
+        dueDaySelect.addEventListener('change', function() {
+            this.setAttribute('data-user-selected', 'true');
+        });
+    }
+
+    if (appDateInput) {
+        appDateInput.addEventListener('change', updateDueDateSuggestion);
+        if (!dueDaySelect.value) {
+            updateDueDateSuggestion();
+        }
+    }
+
+    // 2. Financier Request & Monthly EMI Calculations:
+    const priceInput = document.getElementById('id_mobile_price');
+    const downPaymentInput = document.getElementById('id_down_payment');
+    const durationSelect = document.getElementById('id_emi_duration');
+    const emiInput = document.getElementById('id_monthly_emi');
+    const requestPreview = document.getElementById('id_request_amount_preview');
+
+    function roundToTens(val) {
+        if (!val || val <= 0) return 0;
+        return Math.round(val / 10) * 10;
+    }
+
+    function calculateFinancing() {
+        const price = parseFloat(priceInput ? priceInput.value : 0) || 0;
+        const down = parseFloat(downPaymentInput ? downPaymentInput.value : 0) || 0;
+        const duration = parseInt(durationSelect ? durationSelect.value : 6, 10) || 6;
+
+        // Financier Request Amount = Total Selling Price - Down Payment
+        const reqAmount = Math.max(0, price - down);
+        if (requestPreview) {
+            requestPreview.textContent = 'Financier Request: ₹' + reqAmount.toFixed(2);
+        }
+
+        // Monthly EMI (auto-populate if not already customized by user)
+        if (!emiInput.getAttribute('data-user-edited') && duration > 0 && price > 0) {
+            const rawEmi = price / duration;
+            const roundedEmi = roundToTens(rawEmi);
+            emiInput.value = roundedEmi.toFixed(2);
+        }
+    }
+
+    if (emiInput) {
+        emiInput.addEventListener('input', function() {
+            this.setAttribute('data-user-edited', 'true');
+        });
+    }
+
+    if (priceInput) priceInput.addEventListener('input', calculateFinancing);
+    if (downPaymentInput) downPaymentInput.addEventListener('input', calculateFinancing);
+    if (durationSelect) durationSelect.addEventListener('change', calculateFinancing);
+    calculateFinancing();
+
+    // 3. Strict 10-digit numeric filter for mobile numbers
+    ['id_primary_mobile', 'id_secondary_mobile'].forEach(function(fieldId) {
+        const field = document.getElementById(fieldId);
+        if (field) {
+            field.addEventListener('input', function() {
+                this.value = this.value.replace(/\D/g, '').slice(0, 10);
+            });
+        }
+    });
+
+    // 4. Targeted Client-Side Validation:
+    // Only highlights the specific missing/invalid mandatory fields.
+    // Does NOT clear any filled fields or highlight valid fields.
+    const form = document.getElementById('customerRegistrationForm');
+
+    function clearFieldValidation(element, boxId) {
+        if (!element) return;
+        element.classList.remove('is-invalid');
+        if (boxId) {
+            const box = document.getElementById(boxId);
+            if (box) {
+                box.classList.remove('border-danger', 'bg-danger-subtle');
+                box.classList.add('border-secondary-subtle');
+            }
+        }
+    }
+
+    // Attach immediate removal of invalid state when user begins typing or selecting
+    [
+        { id: 'id_customer_name' },
+        { id: 'id_primary_mobile' },
+        { id: 'id_secondary_mobile' },
+        { id: 'id_home_address' },
+        { id: 'id_work_address' },
+        { id: 'id_mobile_model' },
+        { id: 'id_mobile_price' },
+        { id: 'id_down_payment' },
+        { id: 'id_doc_photo', boxId: 'box_doc_photo', isFile: true },
+        { id: 'id_doc_aadhaar', boxId: 'box_doc_aadhaar', isFile: true }
+    ].forEach(function(item) {
+        const el = document.getElementById(item.id);
+        if (el) {
+            const evtName = item.isFile ? 'change' : 'input';
+            el.addEventListener(evtName, function() {
+                clearFieldValidation(el, item.boxId);
+            });
+        }
+    });
+
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            let hasError = false;
+            let firstInvalidField = null;
+
+            function validateField(id, isInvalid, boxId) {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (isInvalid) {
+                    el.classList.add('is-invalid');
+                    if (boxId) {
+                        const box = document.getElementById(boxId);
+                        if (box) {
+                            box.classList.add('border-danger', 'bg-danger-subtle');
+                            box.classList.remove('border-secondary-subtle');
+                        }
+                    }
+                    hasError = true;
+                    if (!firstInvalidField) {
+                        firstInvalidField = el;
+                    }
+                } else {
+                    clearFieldValidation(el, boxId);
+                }
+            }
+
+            // Customer Name
+            const nameEl = document.getElementById('id_customer_name');
+            validateField('id_customer_name', !nameEl || !nameEl.value.trim());
+
+            // Primary Mobile 1 (strictly 10 digits)
+            const p1El = document.getElementById('id_primary_mobile');
+            const p1Digits = p1El ? p1El.value.replace(/\D/g, '') : '';
+            validateField('id_primary_mobile', p1Digits.length !== 10);
+
+            // Secondary Mobile 2 (strictly 10 digits)
+            const p2El = document.getElementById('id_secondary_mobile');
+            const p2Digits = p2El ? p2El.value.replace(/\D/g, '') : '';
+            validateField('id_secondary_mobile', p2Digits.length !== 10);
+
+            // Home Address
+            const homeEl = document.getElementById('id_home_address');
+            validateField('id_home_address', !homeEl || !homeEl.value.trim());
+
+            // Work Address
+            const workEl = document.getElementById('id_work_address');
+            validateField('id_work_address', !workEl || !workEl.value.trim());
+
+            // Mobile Model
+            const modelEl = document.getElementById('id_mobile_model');
+            validateField('id_mobile_model', !modelEl || !modelEl.value.trim());
+
+            // Selling Price (> 0)
+            const priceEl = document.getElementById('id_mobile_price');
+            const priceVal = priceEl ? parseFloat(priceEl.value) : 0;
+            validateField('id_mobile_price', isNaN(priceVal) || priceVal <= 0);
+
+            // Down Payment (>= 0)
+            const downEl = document.getElementById('id_down_payment');
+            const downVal = downEl ? parseFloat(downEl.value) : -1;
+            validateField('id_down_payment', isNaN(downVal) || downVal < 0);
+
+            // Mandatory Documents (Photo & Aadhaar)
+            const photoEl = document.getElementById('id_doc_photo');
+            validateField('id_doc_photo', !photoEl || !photoEl.files || photoEl.files.length === 0, 'box_doc_photo');
+
+            const aadhaarEl = document.getElementById('id_doc_aadhaar');
+            validateField('id_doc_aadhaar', !aadhaarEl || !aadhaarEl.files || aadhaarEl.files.length === 0, 'box_doc_aadhaar');
+
+            if (hasError) {
+                // Prevent submission, keep all filled fields untouched!
+                e.preventDefault();
+                if (firstInvalidField) {
+                    firstInvalidField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    firstInvalidField.focus();
+                }
+            }
+        });
+    }
+</script>
+{% endblock %}

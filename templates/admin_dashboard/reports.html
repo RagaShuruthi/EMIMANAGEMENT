@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+
+{% block title %}System Reports & Analytics — Mobile EMI Management{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb & Header -->
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-1 small">
+                <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Reports</li>
+            </ol>
+        </nav>
+        <h2 class="fw-bold text-dark mb-0">Executive Analytics & Reports</h2>
+        <p class="text-muted small mb-0">High-level financial summaries, portfolio performance, and shop loan disbursement volume rankings.</p>
+    </div>
+    <div>
+        <button type="button" class="btn btn-outline-secondary d-flex align-items-center gap-2" onclick="window.print()">
+            <i class="bi bi-printer"></i>
+            <span>Print Report</span>
+        </button>
+    </div>
+</div>
+
+<!-- Portfolio High Level KPI Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="card rounded-3 shadow-sm border-0 border-start border-primary border-4 h-100">
+            <div class="card-body p-4">
+                <span class="text-muted small text-uppercase fw-semibold d-block mb-1">
+                    <i class="bi bi-shop me-1 text-primary"></i> Partner Network
+                </span>
+                <h3 class="fw-bold text-dark mb-0">{{ total_shops }}</h3>
+                <span class="text-muted small">{{ active_shops }} active partner shops</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="card rounded-3 shadow-sm border-0 border-start border-info border-4 h-100">
+            <div class="card-body p-4">
+                <span class="text-muted small text-uppercase fw-semibold d-block mb-1">
+                    <i class="bi bi-people me-1 text-info"></i> Customer Base
+                </span>
+                <h3 class="fw-bold text-dark mb-0">{{ total_customers }}</h3>
+                <span class="text-muted small">{{ total_applications }} loan applications</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="card rounded-3 shadow-sm border-0 border-start border-success border-4 h-100">
+            <div class="card-body p-4">
+                <span class="text-muted small text-uppercase fw-semibold d-block mb-1">
+                    <i class="bi bi-cash-coin me-1 text-success"></i> Disbursed Payouts
+                </span>
+                <h3 class="fw-bold text-success mb-0">₹{{ total_disbursed|floatformat:2 }}</h3>
+                <span class="text-muted small">Total paid out by admin</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="card rounded-3 shadow-sm border-0 border-start border-danger border-4 h-100">
+            <div class="card-body p-4">
+                <span class="text-muted small text-uppercase fw-semibold d-block mb-1">
+                    <i class="bi bi-hourglass-split me-1 text-danger"></i> Outstanding Liability
+                </span>
+                <h3 class="fw-bold {% if total_liability > 0 %}text-danger{% else %}text-muted{% endif %} mb-0">
+                    ₹{{ total_liability|floatformat:2 }}
+                </h3>
+                <span class="text-muted small">Pending payouts to shops</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Application Status Breakdown & Financing Volume -->
+<div class="row g-4 mb-4">
+    <!-- Application Status Breakdown -->
+    <div class="col-12 col-lg-5">
+        <div class="card rounded-3 shadow-sm border-0 h-100">
+            <div class="card-header bg-white py-3 border-bottom">
+                <h5 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-pie-chart me-2 text-primary"></i>Application Status Distribution
+                </h5>
+            </div>
+            <div class="card-body p-4">
+                {% if status_breakdown %}
+                <div class="list-group list-group-flush">
+                    {% for item in status_breakdown %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
+                        <span class="fw-semibold text-dark">{{ item.status|title }}</span>
+                        <span class="badge bg-primary-subtle text-primary fs-6 px-3 py-1">{{ item.count }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted small mb-0">No application data available yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Financial Volume Summary -->
+    <div class="col-12 col-lg-7">
+        <div class="card rounded-3 shadow-sm border-0 h-100">
+            <div class="card-header bg-white py-3 border-bottom">
+                <h5 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-graph-up-arrow me-2 text-primary"></i>Financing Pipeline Summary
+                </h5>
+            </div>
+            <div class="card-body p-4">
+                <div class="p-3 bg-light rounded-3 border mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-muted fw-semibold">Total Loan Volume Submitted:</span>
+                        <h5 class="fw-bold text-dark mb-0">₹{{ total_requested|floatformat:2 }}</h5>
+                    </div>
+                    <div class="progress" style="height: 10px;">
+                        <div class="progress-bar bg-primary" role="progressbar" style="width: 100%"></div>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-light rounded-3 border mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-muted fw-semibold">Disbursed to Partner Shops:</span>
+                        <h5 class="fw-bold text-success mb-0">₹{{ total_disbursed|floatformat:2 }}</h5>
+                    </div>
+                    <div class="progress" style="height: 10px;">
+                        {% if total_requested > 0 %}
+                        <div class="progress-bar bg-success" role="progressbar" style="width: {% widthratio total_disbursed total_requested 100 %}%"></div>
+                        {% else %}
+                        <div class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="p-3 bg-light rounded-3 border">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-muted fw-semibold">Remaining Payout Obligation:</span>
+                        <h5 class="fw-bold text-danger mb-0">₹{{ total_liability|floatformat:2 }}</h5>
+                    </div>
+                    <div class="progress" style="height: 10px;">
+                        {% if total_requested > 0 %}
+                        <div class="progress-bar bg-danger" role="progressbar" style="width: {% widthratio total_liability total_requested 100 %}%"></div>
+                        {% else %}
+                        <div class="progress-bar bg-danger" role="progressbar" style="width: 0%"></div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Shop Performance & Volume Ranking Table -->
+<div class="card rounded-3 shadow-sm border-0 mb-4">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom">
+        <h5 class="fw-bold mb-0 text-dark">
+            <i class="bi bi-trophy me-2 text-primary"></i>Shop Performance & Volume Rankings
+        </h5>
+        <span class="text-muted small">Ranked by total loan amount generated</span>
+    </div>
+
+    <div class="table-responsive">
+        {% if shop_reports %}
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light text-uppercase small text-muted">
+                <tr>
+                    <th>Rank</th>
+                    <th>Shop Name</th>
+                    <th>Owner / Contact</th>
+                    <th class="text-center">Customers</th>
+                    <th class="text-center">Loans</th>
+                    <th class="text-end">Total Financed</th>
+                    <th class="text-end">Paid by Admin</th>
+                    <th class="text-end">Remaining Due</th>
+                    <th class="text-center">Status</th>
+                    <th class="text-end">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in shop_reports %}
+                <tr>
+                    <td class="fw-bold text-muted">#{{ forloop.counter }}</td>
+                    <td>
+                        <a href="{% url 'shop_detail' pk=r.shop.pk %}" class="fw-bold text-decoration-none text-dark hover-primary">
+                            {{ r.shop.name }}
+                        </a>
+                    </td>
+                    <td>
+                        <div class="small fw-semibold text-dark">{{ r.shop.owner_name }}</div>
+                        <div class="small text-muted">{{ r.shop.phone }}</div>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-light text-dark border">{{ r.customers }}</span>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-light text-dark border">{{ r.applications }}</span>
+                    </td>
+                    <td class="text-end fw-semibold text-dark">
+                        ₹{{ r.financials.total_payable|floatformat:2 }}
+                    </td>
+                    <td class="text-end fw-semibold text-success">
+                        ₹{{ r.financials.total_paid|floatformat:2 }}
+                    </td>
+                    <td class="text-end fw-bold {% if r.financials.remaining_due > 0 %}text-danger{% else %}text-muted{% endif %}">
+                        ₹{{ r.financials.remaining_due|floatformat:2 }}
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-{{ r.financials.badge_class }}-subtle text-{{ r.financials.badge_class }} border border-{{ r.financials.badge_class }}-subtle px-2 py-1">
+                            {{ r.financials.payment_status_display }}
+                        </span>
+                    </td>
+                    <td class="text-end">
+                        <a href="{% url 'admin_shopwise_detail' shop_id=r.shop.id %}" class="btn btn-sm btn-outline-secondary" title="View Shop Customers">
+                            <i class="bi bi-people"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="text-center py-4">
+            <p class="text-muted small mb-0">No shop ranking data available.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+

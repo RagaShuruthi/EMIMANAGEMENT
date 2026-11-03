@@ -1,0 +1,56 @@
+{% extends "shops/portal/shop_base.html" %}
+
+{% block title %}Financing Reports — {{ shop.name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h3 class="fw-bold text-dark mb-1">Reports & Analytics</h3>
+        <p class="text-muted small mb-0">Financial disbursements, application pipeline, and settlement overview</p>
+    </div>
+</div>
+
+<!-- Financial Aggregates -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-md-4">
+        <div class="metric-card border-primary-subtle">
+            <div class="metric-label text-primary">Total Financier Requested</div>
+            <div class="metric-value text-primary fs-3">₹{{ total_requested|floatformat:2 }}</div>
+            <small class="text-muted">Total loan amount submitted to financier</small>
+        </div>
+    </div>
+    <div class="col-12 col-md-4">
+        <div class="metric-card border-success-subtle">
+            <div class="metric-label text-success">Total Amount Received</div>
+            <div class="metric-value text-success fs-3">₹{{ total_received|floatformat:2 }}</div>
+            <small class="text-muted">Total credited into shop account</small>
+        </div>
+    </div>
+    <div class="col-12 col-md-4">
+        <div class="metric-card border-warning-subtle">
+            <div class="metric-label text-warning-emphasis">Outstanding Balance Due</div>
+            <div class="metric-value text-warning-emphasis fs-3">₹{{ outstanding|floatformat:2 }}</div>
+            <small class="text-muted">Pending receipt from financier</small>
+        </div>
+    </div>
+</div>
+
+<!-- Status Pipeline Breakdown -->
+<div class="card border-0 shadow-sm rounded-3">
+    <div class="card-header bg-white py-3 border-bottom">
+        <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-funnel me-1 text-primary"></i>Application Lifecycle Pipeline</h6>
+    </div>
+    <div class="card-body p-4">
+        <div class="row g-3">
+            {% for item in status_breakdown %}
+            <div class="col-12 col-sm-6 col-md-4 col-xl">
+                <div class="p-3 border rounded-3 bg-light text-center">
+                    <div class="small fw-semibold text-secondary text-uppercase mb-1">{{ item.label }}</div>
+                    <div class="fs-2 fw-bold text-{{ item.badge_color }}">{{ item.count }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

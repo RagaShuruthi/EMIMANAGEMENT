@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+
+{% block title %}Follow-up Staff Management — EMI Management System{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb & Header -->
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-1 small">
+                <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Follow-up Staff</li>
+            </ol>
+        </nav>
+        <h2 class="fw-bold text-dark mb-0">Follow-up Persons Management</h2>
+    </div>
+    <div>
+        <a href="{% url 'admin_followup_add' %}" class="btn btn-primary d-flex align-items-center gap-2 shadow-sm">
+            <i class="bi bi-person-plus-fill"></i>
+            <span>Add Follow-up Person</span>
+        </a>
+    </div>
+</div>
+
+<!-- Dynamic Summary Stats Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-sm-4">
+        <div class="stat-card border-info-subtle">
+            <div class="stat-label text-info-emphasis">Total Follow-up Staff</div>
+            <div class="stat-value text-info-emphasis">{{ total_count }}</div>
+            <small class="text-muted">Registered collection & support employees</small>
+        </div>
+    </div>
+    <div class="col-12 col-sm-4">
+        <div class="stat-card border-success-subtle">
+            <div class="stat-label text-success">Active Staff</div>
+            <div class="stat-value text-success">{{ active_count }}</div>
+            <small class="text-muted">Authorized to access customer portal</small>
+        </div>
+    </div>
+    <div class="col-12 col-sm-4">
+        <div class="stat-card border-secondary-subtle">
+            <div class="stat-label text-secondary">Inactive Staff</div>
+            <div class="stat-value text-secondary">{{ inactive_count }}</div>
+            <small class="text-muted">Deactivated / login disabled</small>
+        </div>
+    </div>
+</div>
+
+<!-- Search & Status Filter Form -->
+<div class="card rounded-3 mb-4">
+    <div class="card-body p-3 bg-light">
+        <form method="get" action="{% url 'admin_followup_list' %}" class="row g-2 align-items-center">
+            <!-- Search Query Input -->
+            <div class="col-12 col-md-6 col-lg-5">
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-search"></i></span>
+                    <input type="text" name="q" class="form-control border-start-0" placeholder="Search by name, username, phone, or email..." value="{{ search_query }}">
+                </div>
+            </div>
+
+            <!-- Status Filter Dropdown -->
+            <div class="col-12 col-md-4 col-lg-3">
+                <div class="input-group">
+                    <label class="input-group-text bg-white text-muted small" for="statusFilter">Status</label>
+                    <select name="status" class="form-select" id="statusFilter" onchange="this.form.submit()">
+                        <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Staff</option>
+                        <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active Only</option>
+                        <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Inactive Only</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="col-12 col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-secondary flex-grow-1">Filter</button>
+                {% if search_query or status_filter != 'all' %}
+                <a href="{% url 'admin_followup_list' %}" class="btn btn-outline-secondary" title="Reset Filters">
+                    <i class="bi bi-x-circle"></i>
+                </a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Follow-up Employees Table Card -->
+<div class="card rounded-3 overflow-hidden shadow-sm">
+    <div class="table-responsive">
+        {% if employees %}
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col" style="min-width: 200px;">Employee</th>
+                    <th scope="col">Phone</th>
+                    <th scope="col">Email</th>
+                    <th scope="col">Assigned Shops</th>
+                    <th scope="col">Activities</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Date Joined</th>
+                    <th scope="col" class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for emp in employees %}
+                <tr>
+                    <td>
+                        <a href="{% url 'admin_followup_detail' pk=emp.pk %}" class="fw-bold text-decoration-none text-dark">
+                            {{ emp.get_full_name|default:emp.username }}
+                        </a>
+                        <div class="small text-muted font-monospace">@{{ emp.username }}</div>
+                    </td>
+                    <td>
+                        {% if emp.phone %}
+                            <a href="tel:{{ emp.phone }}" class="text-decoration-none text-secondary">
+                                <i class="bi bi-telephone me-1"></i>{{ emp.phone }}
+                            </a>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if emp.email %}
+                            <a href="mailto:{{ emp.email }}" class="text-decoration-none text-secondary">{{ emp.email }}</a>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% with assignments=emp.followup_assignments.all %}
+                            {% if assignments %}
+                                <div class="d-flex flex-wrap gap-1 align-items-center">
+                                    <span class="badge bg-primary rounded-pill">{{ emp.assigned_count }} shops</span>
+                                    {% for a in assignments|slice:":2" %}
+                                        {% if a.is_active %}
+                                            <span class="badge bg-light text-primary border small">
+                                                <i class="bi bi-shop me-1"></i>{{ a.shop.name }}
+                                            </span>
+                                        {% endif %}
+                                    {% endfor %}
+                                    {% if emp.assigned_count > 2 %}
+                                        <span class="small text-muted">+{{ emp.assigned_count|add:"-2" }} more</span>
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <span class="badge bg-warning-subtle text-warning-emphasis">No shops assigned</span>
+                            {% endif %}
+                        {% endwith %}
+                    </td>
+                    <td>
+                        <span class="badge bg-light text-dark border">
+                            <i class="bi bi-clock-history me-1 text-primary"></i>{{ emp.activity_count }} logs
+                        </span>
+                    </td>
+                    <td>
+                        {% if emp.is_active %}
+                            <span class="badge badge-active px-2 py-1"><i class="bi bi-check-circle me-1"></i>Active</span>
+                        {% else %}
+                            <span class="badge badge-inactive px-2 py-1"><i class="bi bi-x-circle me-1"></i>Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-muted small">{{ emp.date_joined|date:"M d, Y" }}</td>
+                    <td class="text-end text-nowrap">
+                        <div class="btn-group">
+                            <a href="{% url 'admin_followup_detail' pk=emp.pk %}" class="btn btn-sm btn-outline-secondary" title="View Details">
+                                <i class="bi bi-eye"></i> View
+                            </a>
+                            <a href="{% url 'admin_followup_edit' pk=emp.pk %}" class="btn btn-sm btn-outline-primary" title="Edit Profile & Shops">
+                                <i class="bi bi-pencil"></i> Edit
+                            </a>
+                            <form method="post" action="{% url 'admin_followup_status' pk=emp.pk %}" class="d-inline" onsubmit="return confirm('Are you sure you want to {% if emp.is_active %}deactivate{% else %}activate{% endif %} this employee?');">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <button type="submit" class="btn btn-sm {% if emp.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %}" title="{% if emp.is_active %}Deactivate{% else %}Activate{% endif %}">
+                                    <i class="bi {% if emp.is_active %}bi-person-dash{% else %}bi-person-check{% endif %}"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-person-x display-4 text-muted mb-3 d-block"></i>
+            <h5 class="fw-semibold text-secondary">No Follow-up Staff Found</h5>
+            <p class="text-muted small mb-3">
+                {% if search_query or status_filter != 'all' %}
+                    No employees matched your search criteria. Try resetting the filters.
+                {% else %}
+                    Start by registering your first follow-up person to manage customer collections.
+                {% endif %}
+            </p>
+            {% if search_query or status_filter != 'all' %}
+                <a href="{% url 'admin_followup_list' %}" class="btn btn-secondary">Clear Filters</a>
+            {% else %}
+                <a href="{% url 'admin_followup_add' %}" class="btn btn-primary">
+                    <i class="bi bi-person-plus-fill me-1"></i> Add Follow-up Person
+                </a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Pagination -->
+    {% if employees.has_other_pages %}
+    <div class="card-footer bg-white border-top py-3 d-flex justify-content-between align-items-center">
+        <span class="text-muted small">
+            Showing Page {{ employees.number }} of {{ employees.paginator.num_pages }} ({{ employees.paginator.count }} total staff)
+        </span>
+        <ul class="pagination pagination-sm mb-0">
+            {% if employees.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ employees.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">Previous</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">Previous</span></li>
+            {% endif %}
+
+            {% for p in employees.paginator.page_range %}
+                {% if p == employees.number %}
+                <li class="page-item active"><span class="page-link">{{ p }}</span></li>
+                {% elif p > employees.number|add:"-3" and p < employees.number|add:"3" %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ p }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">{{ p }}</a>
+                </li>
+                {% endif %}
+            {% endfor %}
+
+            {% if employees.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ employees.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">Next</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">Next</span></li>
+            {% endif %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+

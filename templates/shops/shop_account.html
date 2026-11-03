@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Login Password — {{ shop.name }} | EMI Management System{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-md-8 col-lg-6">
+        <!-- Breadcrumb -->
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-3 small">
+                <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'shop_list' %}">Shops</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'shop_detail' pk=shop.pk %}">{{ shop.name }}</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Portal Password</li>
+            </ol>
+        </nav>
+
+        <div class="card rounded-3 shadow-sm border-0">
+            <div class="card-header bg-white py-3 border-bottom d-flex align-items-center gap-2">
+                <i class="bi bi-key-fill fs-5 text-primary"></i>
+                <h5 class="fw-bold mb-0 text-dark">
+                    {% if has_account %}
+                        Reset Portal Password — {{ shop.name }}
+                    {% else %}
+                        Create Shop Owner Login Account — {{ shop.name }}
+                    {% endif %}
+                </h5>
+            </div>
+
+            <div class="card-body p-4">
+                {% if has_account and shop.assigned_password %}
+                <div class="alert alert-light border shadow-sm p-3 mb-4 rounded-3 d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="small fw-bold text-secondary text-uppercase mb-1" style="font-size: 0.72rem;">
+                            <i class="bi bi-shield-lock me-1 text-primary"></i> Current Admin-Assigned Password
+                        </div>
+                        <div class="font-monospace fw-bold text-dark fs-6" id="acctMaskPwd">••••••••••••</div>
+                        <div class="font-monospace fw-bold text-primary fs-6 d-none" id="acctPlainPwd">{{ shop.assigned_password }}</div>
+                    </div>
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="acctToggleBtn" onclick="toggleAcctPassword()">
+                            <i class="bi bi-eye" id="acctEyeIcon"></i> <span id="acctToggleText">Show</span>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copyToClipboard('{{ shop.assigned_password|escapejs }}')">
+                            <i class="bi bi-clipboard"></i> Copy
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
+
+                <p class="text-muted small mb-4">
+                    {% if has_account %}
+                        Set a new password for the account <strong>{{ shop.owner_account.username }}</strong> associated with <strong>{{ shop.name }}</strong>.
+                    {% else %}
+                        Create a login username and password for <strong>{{ shop.owner_name }}</strong> to access the shop owner portal for <strong>{{ shop.name }}</strong>.
+                    {% endif %}
+                </p>
+
+                <form method="post" novalidate>
+                    {% csrf_token %}
+
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger mb-3 py-2 small">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                        {{ form.non_field_errors.0 }}
+                    </div>
+                    {% endif %}
+
+                    <!-- Username -->
+                    <div class="mb-3">
+                        <label for="{{ form.username.id_for_label }}" class="form-label small fw-semibold text-secondary">
+                            Shop Owner Username <span class="text-danger">*</span>
+                        </label>
+                        {{ form.username }}
+                        {% if form.username.help_text %}
+                            <div class="form-text text-muted small">{{ form.username.help_text }}</div>
+                        {% endif %}
+                        {% if form.username.errors %}
+                            <div class="text-danger small mt-1">{{ form.username.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Password -->
+                    <div class="mb-3">
+                        <label for="{{ form.password.id_for_label }}" class="form-label small fw-semibold text-secondary">
+                            {% if has_account %}New Password{% else %}Password{% endif %} <span class="text-danger">*</span>
+                        </label>
+                        {{ form.password }}
+                        {% if form.password.errors %}
+                            <div class="text-danger small mt-1">{{ form.password.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Confirm Password -->
+                    <div class="mb-4">
+                        <label for="{{ form.confirm_password.id_for_label }}" class="form-label small fw-semibold text-secondary">
+                            Confirm Password <span class="text-danger">*</span>
+                        </label>
+                        {{ form.confirm_password }}
+                        {% if form.confirm_password.errors %}
+                            <div class="text-danger small mt-1">{{ form.confirm_password.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 border-top pt-3">
+                        <a href="{% url 'shop_detail' pk=shop.pk %}" class="btn btn-outline-secondary">
+                            Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary px-4 shadow-sm">
+                            <i class="bi bi-check-lg me-1"></i>
+                            {% if has_account %}Update Password{% else %}Create Account & Password{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleAcctPassword() {
+    var mask = document.getElementById('acctMaskPwd');
+    var plain = document.getElementById('acctPlainPwd');
+    var eye = document.getElementById('acctEyeIcon');
+    var text = document.getElementById('acctToggleText');
+    if (!mask || !plain) return;
+    if (plain.classList.contains('d-none')) {
+        plain.classList.remove('d-none');
+        mask.classList.add('d-none');
+        eye.className = 'bi bi-eye-slash';
+        text.innerText = 'Hide';
+    } else {
+        plain.classList.add('d-none');
+        mask.classList.remove('d-none');
+        eye.className = 'bi bi-eye';
+        text.innerText = 'Show';
+    }
+}
+function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(function() {
+            alert('Password copied to clipboard!');
+        });
+    } else {
+        var textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            alert('Password copied to clipboard!');
+        } catch (err) {
+            prompt('Copy password:', text);
+        }
+        document.body.removeChild(textArea);
+    }
+}
+</script>
+{% endblock %}
+
