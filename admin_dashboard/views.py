@@ -1514,62 +1514,180 @@ def get_analytics_dataset(year_val, month_val, shop_id_val):
 @admin_required
 def admin_reports_view(request):
     """
-    Executive Reports & Comparative Performance Analytics Page.
+    Business Analytics & Shop Performance Dashboard.
     URL: /admin-dashboard/reports/
-    Matches the modern EMI SAFE analytics specification with:
-    - Side-by-side period comparisons (Year, Month, Shop)
-    - Monthly customer activations chart (01 to 30 daily breakdown)
-    - Admin payouts to shops filtered by month & shop (01 to 30 daily breakdown)
-    - Month-wise Net Income / Profit tracking
-    - Month-by-month financial ledger matrix
+    Matches the modern Atlas Finance / EMI SAFE Business Analytics specification:
+    - 4 Overall KPI Stat Cards (Customers Added, Payout to Shops, Collections, Total Profit) with % vs last month
+    - Single consolidated graph incorporating both Shops and Sales for shopwise & monthly comparison
+    - Comparative matrix: Last Month vs This Month
+    - Shop Performance Ranking Table with Best Performing Shop highlight
+    - Key Insights panel with automated intelligence
     """
     now = timezone.now()
     current_year = now.year
     current_month = now.month
+
+    # Support 'period' parameter (e.g. '2026-10' or '2026-11') or standard year/month params
+    period_str = request.GET.get("period", "").strip()
+    if period_str and "-" in period_str:
+        try:
+            parts = period_str.split("-")
+            sel_year = int(parts[0])
+            sel_month = int(parts[1])
+        except Exception:
+            sel_year = current_year
+            sel_month = current_month
+    else:
+        try:
+            sel_year = int(request.GET.get("year_a", current_year))
+        except (ValueError, TypeError):
+            sel_year = current_year
+
+        month_param = request.GET.get("month_a", current_month)
+        if str(month_param).lower() == "all":
+            sel_month = current_month
+        else:
+            try:
+                sel_month = int(month_param)
+            except (ValueError, TypeError):
+                sel_month = current_month
+
+    # Selected shop filter (optional)
+    shop_a = request.GET.get("shop_a", "all")
+
+    # Determine previous month for comparison
+    if sel_month > 1:
+        prev_month = sel_month - 1
+        prev_year = sel_year
+    else:
+        prev_month = 12
+        prev_year = sel_year - 1
+
+    # Override with manual year_b/month_b if provided
+    year_b = request.GET.get("year_b", prev_year)
+    month_b = request.GET.get("month_b", prev_month)
+    shop_b = request.GET.get("shop_b", "all")
+
+    # Datasets for Selected Month (A) and Prior Month (B)
+    dataset_a = get_analytics_dataset(sel_year, sel_month, shop_a)
+    dataset_b = get_analytics_dataset(year_b, month_b, shop_b)
+
+    # Calculate percentage changes (A vs B)
+    def calc_pct(curr, prev):
+        c = float(curr or 0)
+        p = float(prev or 0)
+        if p == 0:
+            return 100.0 if c > 0 else 0.0
+        return round(((c - p) / p) * 100.0, 1)
+
+    pct_customers = calc_pct(dataset_a["total_customers"], dataset_b["total_customers"])
+    pct_payouts = calc_pct(dataset_a["total_payouts"], dataset_b["total_payouts"])
+    pct_collections = calc_pct(dataset_a["total_collections"], dataset_b["total_collections"])
+    pct_profit = calc_pct(dataset_a["net_profit"], dataset_b["net_profit"])
+
+    # Comparison Deltas
+    diff_customers = dataset_a["total_customers"] - dataset_b["total_customers"]
+    diff_payouts = dataset_a["total_payouts"] - dataset_b["total_payouts"]
+    diff_collections = dataset_a["total_collections"] - dataset_b["total_collections"]
+    diff_profit = dataset_a["net_profit"] - dataset_b["net_profit"]
 
     # Available filter choices
     available_years = [current_year - 2, current_year - 1, current_year, current_year + 1]
     available_months = [(i, calendar.month_name[i]) for i in range(1, 13)]
     all_shops = list(Shop.objects.all().order_by("name"))
 
-    # Period A parameters (default: current year, current month, all shops)
-    year_a = request.GET.get("year_a", current_year)
-    month_a = request.GET.get("month_a", current_month)
-    shop_a = request.GET.get("shop_a", "all")
+    # Available monthly dropdown periods (e.g. past 12 months)
+    available_periods = []
+    for offset in range(12):
+        m_calc = current_month - offset
+        y_calc = current_year
+        while m_calc <= 0:
+            m_calc += 12
+            y_calc -= 1
+        available_periods.append({
+            "val": f"{y_calc}-{m_calc:02d}",
+            "label": f"{calendar.month_name[m_calc]} {y_calc}",
+            "year": y_calc,
+            "month": m_calc,
+            "is_selected": (y_calc == sel_year and m_calc == sel_month),
+        })
 
-    # Period B parameters (default: current year, previous month or current month, all shops)
-    prev_month = current_month - 1 if current_month > 1 else 12
-    prev_year = current_year if current_month > 1 else current_year - 1
-    year_b = request.GET.get("year_b", prev_year)
-    month_b = request.GET.get("month_b", prev_month)
-    shop_b = request.GET.get("shop_b", "all")
+    # Shop Performance Ranking for Selected Month
+    all_shops_qs = Shop.objects.all()
+    shop_rankings = []
+    for s in all_shops_qs:
+        s_cust = Customer.objects.filter(shop=s, created_at__year=sel_year, created_at__month=sel_month).count()
+        s_sales = FinanceApplication.objects.filter(shop=s, created_at__year=sel_year, created_at__month=sel_month).aggregate(
+            tot=Sum("financier_request_amount")
+        )["tot"] or Decimal("0.00")
+        s_payout = FinancierPayment.objects.filter(
+            Q(shop=s) | Q(application__shop=s),
+            payment_date__year=sel_year,
+            payment_date__month=sel_month
+        ).aggregate(tot=Sum("amount_received"))["tot"] or Decimal("0.00")
+        s_coll = CustomerEMIPayment.objects.filter(
+            customer__shop=s,
+            payment_date__year=sel_year,
+            payment_date__month=sel_month
+        ).aggregate(tot=Sum("amount"))["tot"] or Decimal("0.00")
+        s_profit = s_coll - s_payout
 
-    # Compute datasets for Period A and Period B
-    dataset_a = get_analytics_dataset(year_a, month_a, shop_a)
-    dataset_b = get_analytics_dataset(year_b, month_b, shop_b)
+        shop_rankings.append({
+            "shop": s,
+            "customers": s_cust,
+            "sales": s_sales,
+            "payout": s_payout,
+            "collections": s_coll,
+            "profit": s_profit,
+        })
 
-    # Comparison Deltas (A vs B)
-    diff_customers = dataset_a["total_customers"] - dataset_b["total_customers"]
-    diff_payouts = dataset_a["total_payouts"] - dataset_b["total_payouts"]
-    diff_collections = dataset_a["total_collections"] - dataset_b["total_collections"]
-    diff_profit = dataset_a["net_profit"] - dataset_b["net_profit"]
+    shop_rankings.sort(key=lambda x: (x["profit"], x["sales"], x["customers"]), reverse=True)
+    best_shop = shop_rankings[0] if shop_rankings else None
 
-    # Month-by-month Financial & Profit matrix for Year A (and Shop A filter)
+    # Chart 1: Shop-wise Performance & Sales Data (comparing all shops side-by-side)
+    top_shops = shop_rankings[:10]  # Show top 10 shops in chart
+    shop_chart_labels = [item["shop"].name for item in top_shops]
+    shop_chart_sales = [float(item["sales"]) for item in top_shops]
+    shop_chart_payouts = [float(item["payout"]) for item in top_shops]
+    shop_chart_collections = [float(item["collections"]) for item in top_shops]
+    shop_chart_profit = [float(item["profit"]) for item in top_shops]
+    shop_chart_customers = [item["customers"] for item in top_shops]
+
+    # Chart 2: Monthly Trend Data (past 6 months)
+    trend_labels = []
+    trend_customers = []
+    trend_payouts = []
+    trend_collections = []
+    trend_profit = []
+
+    for offset in range(5, -1, -1):
+        m_calc = sel_month - offset
+        y_calc = sel_year
+        while m_calc <= 0:
+            m_calc += 12
+            y_calc -= 1
+
+        t_cust = Customer.objects.filter(created_at__year=y_calc, created_at__month=m_calc).count()
+        t_payout = FinancierPayment.objects.filter(payment_date__year=y_calc, payment_date__month=m_calc).aggregate(
+            tot=Sum("amount_received")
+        )["tot"] or Decimal("0.00")
+        t_coll = CustomerEMIPayment.objects.filter(payment_date__year=y_calc, payment_date__month=m_calc).aggregate(
+            tot=Sum("amount")
+        )["tot"] or Decimal("0.00")
+        t_profit = t_coll - t_payout
+
+        trend_labels.append(f"{calendar.month_abbr[m_calc]} {y_calc}")
+        trend_customers.append(t_cust)
+        trend_payouts.append(float(t_payout))
+        trend_collections.append(float(t_coll))
+        trend_profit.append(float(t_profit))
+
+    # Month-by-month Financial & Profit matrix for Year A
     monthly_matrix = []
-    base_cust = Customer.objects.filter(created_at__year=dataset_a["year"])
-    base_payout = FinancierPayment.objects.filter(payment_date__year=dataset_a["year"])
-    base_coll = CustomerEMIPayment.objects.filter(payment_date__year=dataset_a["year"])
-    base_app = FinanceApplication.objects.filter(created_at__year=dataset_a["year"])
-
-    if dataset_a["shop_id"] != "all":
-        try:
-            target_shop = Shop.objects.get(pk=dataset_a["shop_id"])
-            base_cust = base_cust.filter(shop=target_shop)
-            base_payout = base_payout.filter(Q(shop=target_shop) | Q(application__shop=target_shop))
-            base_coll = base_coll.filter(customer__shop=target_shop)
-            base_app = base_app.filter(shop=target_shop)
-        except Shop.DoesNotExist:
-            pass
+    base_cust = Customer.objects.filter(created_at__year=sel_year)
+    base_payout = FinancierPayment.objects.filter(payment_date__year=sel_year)
+    base_coll = CustomerEMIPayment.objects.filter(payment_date__year=sel_year)
+    base_app = FinanceApplication.objects.filter(created_at__year=sel_year)
 
     for m in range(1, 13):
         m_cust = base_cust.filter(created_at__month=m).count()
@@ -1603,19 +1721,96 @@ def admin_reports_view(request):
 
     total_liability = max(Decimal("0.00"), total_requested - total_disbursed)
 
+    # Key Insights List
+    insights = []
+    if best_shop and best_shop["profit"] > 0:
+        insights.append({
+            "icon": "bi-star-fill",
+            "bg": "#dcfce7",
+            "color": "#16a34a",
+            "title": "Top Performing Partner Shop",
+            "text": f"<strong>{best_shop['shop'].name}</strong> generated the highest profit with <strong>₹{best_shop['profit']:,.2f}</strong> in {dataset_a['month_name']}."
+        })
+    elif best_shop:
+        insights.append({
+            "icon": "bi-star-fill",
+            "bg": "#dcfce7",
+            "color": "#16a34a",
+            "title": "Top Volume Partner Shop",
+            "text": f"<strong>{best_shop['shop'].name}</strong> led sales volume with <strong>₹{best_shop['sales']:,.2f}</strong> in financed customer loans."
+        })
+
+    if pct_collections >= 0:
+        insights.append({
+            "icon": "bi-arrow-up-right-circle-fill",
+            "bg": "#dbeafe",
+            "color": "#2563eb",
+            "title": "Collection Performance",
+            "text": f"Total collections increased by <strong>{pct_collections}%</strong> compared to last month."
+        })
+    else:
+        insights.append({
+            "icon": "bi-arrow-down-right-circle-fill",
+            "bg": "#fee2e2",
+            "color": "#dc2626",
+            "title": "Collection Performance",
+            "text": f"Total collections changed by <strong>{pct_collections}%</strong> compared to last month."
+        })
+
+    if pct_profit >= 0:
+        insights.append({
+            "icon": "bi-info-circle-fill",
+            "bg": "#fef3c7",
+            "color": "#d97706",
+            "title": "Finance Margin Growth",
+            "text": f"Overall profit grew by <strong>{pct_profit}%</strong> this month."
+        })
+    else:
+        insights.append({
+            "icon": "bi-info-circle-fill",
+            "bg": "#fee2e2",
+            "color": "#dc2626",
+            "title": "Finance Margin Shift",
+            "text": f"Overall profit variance changed by <strong>{pct_profit}%</strong> vs prior month."
+        })
+
     context = {
         "active_page": "reports",
+        "sel_year": sel_year,
+        "sel_month": sel_month,
+        "sel_month_name": dataset_a["month_name"],
+        "prev_month_name": dataset_b["month_name"],
+        "available_periods": available_periods,
         "available_years": available_years,
         "available_months": available_months,
         "all_shops": all_shops,
         "dataset_a": dataset_a,
         "dataset_b": dataset_b,
+        "pct_customers": pct_customers,
+        "pct_payouts": pct_payouts,
+        "pct_collections": pct_collections,
+        "pct_profit": pct_profit,
         "diff_customers": diff_customers,
         "diff_payouts": diff_payouts,
         "diff_collections": diff_collections,
         "diff_profit": diff_profit,
+        "shop_rankings": shop_rankings,
+        "best_shop": best_shop,
+        "insights": insights,
         "monthly_matrix": monthly_matrix,
-        # JSON-serialized chart payloads for Chart.js
+        # JSON Payloads for consolidated interactive Chart
+        "shop_chart_labels_json": json.dumps(shop_chart_labels),
+        "shop_chart_sales_json": json.dumps(shop_chart_sales),
+        "shop_chart_payouts_json": json.dumps(shop_chart_payouts),
+        "shop_chart_collections_json": json.dumps(shop_chart_collections),
+        "shop_chart_profit_json": json.dumps(shop_chart_profit),
+        "shop_chart_customers_json": json.dumps(shop_chart_customers),
+        "trend_labels_json": json.dumps(trend_labels),
+        "trend_customers_json": json.dumps(trend_customers),
+        "trend_payouts_json": json.dumps(trend_payouts),
+        "trend_collections_json": json.dumps(trend_collections),
+        "trend_profit_json": json.dumps(trend_profit),
+        # Legacy chart payloads for backwards-compatibility with tests
         "chart_labels_a_json": json.dumps(dataset_a["chart_labels"]),
         "chart_customers_a_json": json.dumps(dataset_a["chart_customers"]),
         "chart_payouts_a_json": json.dumps(dataset_a["chart_payouts"]),
@@ -1624,7 +1819,7 @@ def admin_reports_view(request):
         "chart_customers_b_json": json.dumps(dataset_b["chart_customers"]),
         "chart_payouts_b_json": json.dumps(dataset_b["chart_payouts"]),
         "chart_collections_b_json": json.dumps(dataset_b["chart_collections"]),
-        # System-level stats
+        # System totals
         "total_shops": total_shops,
         "active_shops": active_shops,
         "total_customers": total_system_customers,

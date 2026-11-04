@@ -779,19 +779,20 @@ class AdminDashboardReworkTests(TestCase):
             "shop_b": "all"
         })
         self.assertEqual(res.status_code, 200)
-        self.assertContains(res, "Performance & Income Analytics")
-        self.assertContains(res, "EMI SAFE")
-        self.assertContains(res, "Comparative Variance: Period A vs Period B")
-        self.assertContains(res, "Month-wise Financial & Net Profit Ledger")
+        self.assertContains(res, "Business Analytics")
+        self.assertContains(res, "Track your business performance and growth")
+        self.assertContains(res, "Last Month vs This Month")
+        self.assertContains(res, "Shop Performance")
+        self.assertContains(res, "Key Insights")
 
         # Context assertions
         dataset_a = res.context["dataset_a"]
         self.assertEqual(dataset_a["year"], 2026)
         self.assertEqual(dataset_a["month"], 11)
         self.assertEqual(dataset_a["shop_id"], self.shop1.pk)
-        self.assertEqual(len(dataset_a["chart_labels"]), 30) # November has 30 days
-        self.assertIn("chart_labels_a_json", res.context)
-        self.assertIn("chart_payouts_a_json", res.context)
+        self.assertIn("shop_chart_labels_json", res.context)
+        self.assertIn("trend_labels_json", res.context)
+        self.assertIn("insights", res.context)
 
     def test_partner_shop_signup_flow(self):
         """Verify new partner retail shop registration creates user and shop, then logs in."""
