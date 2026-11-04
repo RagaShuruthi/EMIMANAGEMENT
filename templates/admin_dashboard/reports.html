@@ -710,20 +710,41 @@
 {% endblock %}
 
 {% block extra_js %}
+<script id="analyticsData" type="application/json">
+{
+    "shopLabels": {{ shop_chart_labels_json|safe }},
+    "shopSales": {{ shop_chart_sales_json|safe }},
+    "shopPayouts": {{ shop_chart_payouts_json|safe }},
+    "shopCollections": {{ shop_chart_collections_json|safe }},
+    "shopProfit": {{ shop_chart_profit_json|safe }},
+    "trendLabels": {{ trend_labels_json|safe }},
+    "trendPayouts": {{ trend_payouts_json|safe }},
+    "trendCollections": {{ trend_collections_json|safe }},
+    "trendProfit": {{ trend_profit_json|safe }},
+    "trendCustomers": {{ trend_customers_json|safe }},
+    "selMonthName": "{{ sel_month_name|escapejs }}",
+    "selYear": "{{ sel_year }}"
+}
+</script>
 <script>
 document.addEventListener("DOMContentLoaded", function() {
-    // Datasets from Django backend
-    const shopLabels = {{ shop_chart_labels_json|safe }};
-    const shopSales = {{ shop_chart_sales_json|safe }};
-    const shopPayouts = {{ shop_chart_payouts_json|safe }};
-    const shopCollections = {{ shop_chart_collections_json|safe }};
-    const shopProfit = {{ shop_chart_profit_json|safe }};
+    const rawDataEl = document.getElementById("analyticsData");
+    const analyticsData = rawDataEl ? JSON.parse(rawDataEl.textContent) : {};
 
-    const trendLabels = {{ trend_labels_json|safe }};
-    const trendPayouts = {{ trend_payouts_json|safe }};
-    const trendCollections = {{ trend_collections_json|safe }};
-    const trendProfit = {{ trend_profit_json|safe }};
-    const trendCustomers = {{ trend_customers_json|safe }};
+    // Datasets from JSON payload
+    const shopLabels = analyticsData.shopLabels || [];
+    const shopSales = analyticsData.shopSales || [];
+    const shopPayouts = analyticsData.shopPayouts || [];
+    const shopCollections = analyticsData.shopCollections || [];
+    const shopProfit = analyticsData.shopProfit || [];
+
+    const trendLabels = analyticsData.trendLabels || [];
+    const trendPayouts = analyticsData.trendPayouts || [];
+    const trendCollections = analyticsData.trendCollections || [];
+    const trendProfit = analyticsData.trendProfit || [];
+    const trendCustomers = analyticsData.trendCustomers || [];
+    const selMonthName = analyticsData.selMonthName || "";
+    const selYear = analyticsData.selYear || "";
 
     // Color theme matching the screenshot
     const colorSales = '#3b82f6';       // Blue
@@ -736,7 +757,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
     function renderShopwiseChart() {
         if (analyticsChart) analyticsChart.destroy();
-        document.getElementById('mainChartHeading').textContent = 'Shop-wise Performance & Sales ({{ sel_month_name }} {{ sel_year }})';
+        document.getElementById('mainChartHeading').textContent = 'Shop-wise Performance & Sales (' + selMonthName + ' ' + selYear + ')';
 
         analyticsChart = new Chart(ctx, {
             type: 'bar',
