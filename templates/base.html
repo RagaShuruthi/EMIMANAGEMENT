@@ -719,6 +719,122 @@
             });
         })();
     </script>
+
+    <!-- Universal Instant Real-Time Search across all tables and cards -->
+    <script>
+    (function() {
+        function initUniversalInstantSearch() {
+            var searchInputs = document.querySelectorAll('input[name="q"], input[name="search"], input[type="search"], .live-search-input, input[placeholder*="Search" i], input[placeholder*="search" i]');
+
+            searchInputs.forEach(function(input) {
+                if (input.dataset.instantSearchBound) return;
+                input.dataset.instantSearchBound = "true";
+
+                // Locate the target table or card grid on the page
+                var container = input.closest('.card, .container-fluid, main, body') || document;
+                var table = container.querySelector('table:not(.modal table):not(.sub-table)') || document.querySelector('table:not(.modal table):not(.sub-table)');
+                var grid = container.querySelector('.row.g-4, .shops-grid, .grid-container') || document.querySelector('.row.g-4');
+
+                var notFoundRow = null;
+                var notFoundCard = null;
+
+                if (table && table.querySelector('tbody')) {
+                    var tbody = table.querySelector('tbody');
+                    var ths = table.querySelectorAll('thead th');
+                    var colCount = ths.length || 12;
+
+                    notFoundRow = document.createElement('tr');
+                    notFoundRow.className = 'live-search-not-found d-none';
+                    notFoundRow.innerHTML = '<td colspan="' + colCount + '" class="text-center py-5">' +
+                        '<div class="py-3">' +
+                            '<i class="bi bi-search fs-1 text-muted d-block mb-2 opacity-50"></i>' +
+                            '<h5 class="fw-bold text-dark mb-1">No Matching Records Found</h5>' +
+                            '<p class="text-muted small mb-0">No records match your search: <span class="fw-bold text-danger search-query-val"></span></p>' +
+                        '</div>' +
+                    '</td>';
+                    tbody.appendChild(notFoundRow);
+                } else if (grid) {
+                    notFoundCard = document.createElement('div');
+                    notFoundCard.className = 'col-12 live-search-not-found d-none text-center py-5';
+                    notFoundCard.innerHTML = '<div class="card p-5 border-0 shadow-sm rounded-3">' +
+                        '<i class="bi bi-search fs-1 text-muted d-block mb-2 opacity-50"></i>' +
+                        '<h5 class="fw-bold text-dark mb-1">No Matching Records Found</h5>' +
+                        '<p class="text-muted small mb-0">No records match your search: <span class="fw-bold text-danger search-query-val"></span></p>' +
+                    '</div>';
+                    grid.appendChild(notFoundCard);
+                }
+
+                var debounceTimer = null;
+                var form = input.closest('form');
+
+                function performSearch() {
+                    var query = input.value.trim().toLowerCase();
+                    var visibleCount = 0;
+
+                    if (table && table.querySelector('tbody')) {
+                        var rows = table.querySelectorAll('tbody > tr:not(.live-search-not-found)');
+                        rows.forEach(function(row) {
+                            if (row.classList.contains('no-live-filter')) return;
+                            var rowText = (row.innerText || row.textContent).toLowerCase();
+                            if (!query || rowText.includes(query)) {
+                                row.style.display = '';
+                                visibleCount++;
+                            } else {
+                                row.style.display = 'none';
+                            }
+                        });
+
+                        if (notFoundRow) {
+                            if (visibleCount === 0 && query !== '') {
+                                notFoundRow.classList.remove('d-none');
+                                var qVal = notFoundRow.querySelector('.search-query-val');
+                                if (qVal) qVal.textContent = '"' + input.value.trim() + '"';
+                            } else {
+                                notFoundRow.classList.add('d-none');
+                            }
+                        }
+                    } else if (grid) {
+                        var cards = grid.querySelectorAll(':scope > div:not(.live-search-not-found)');
+                        cards.forEach(function(card) {
+                            var cardText = (card.innerText || card.textContent).toLowerCase();
+                            if (!query || cardText.includes(query)) {
+                                card.style.display = '';
+                                visibleCount++;
+                            } else {
+                                card.style.display = 'none';
+                            }
+                        });
+
+                        if (notFoundCard) {
+                            if (visibleCount === 0 && query !== '') {
+                                notFoundCard.classList.remove('d-none');
+                                var qValGrid = notFoundCard.querySelector('.search-query-val');
+                                if (qValGrid) qValGrid.textContent = '"' + input.value.trim() + '"';
+                            } else {
+                                notFoundCard.classList.add('d-none');
+                            }
+                        }
+                    }
+
+                    // Debounced server fetch if inside a GET form with pagination
+                    if (form && form.method.toLowerCase() === 'get') {
+                        clearTimeout(debounceTimer);
+                        var pagination = document.querySelector('.pagination, nav[aria-label="Page navigation"]');
+                        if (pagination) {
+                            debounceTimer = setTimeout(function() {
+                                form.submit();
+                            }, 700);
+                        }
+                    }
+                }
+
+                input.addEventListener('input', performSearch);
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', initUniversalInstantSearch);
+    })();
+    </script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

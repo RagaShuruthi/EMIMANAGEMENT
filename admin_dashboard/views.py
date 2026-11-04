@@ -503,7 +503,11 @@ def admin_customer_detail_view(request, pk):
             "payments": app.financier_payments.all().order_by("-payment_date"),
         })
 
-    update_history = customer.update_history.select_related("user").order_by("-created_at")
+    update_history = customer.update_history.exclude(
+        notes__icontains="recorded via"
+    ).exclude(
+        notes__startswith="Payment of "
+    ).select_related("user").order_by("-created_at")
 
     customer_photo = None
     for item in app_details:
@@ -1152,19 +1156,6 @@ def admin_customer_record_payment_view(request, pk):
         transaction_reference=ref,
         recorded_by=request.user,
         remarks=remarks
-    )
-
-    # Log note
-    note_msg = f"Payment of ₹{amt:,.2f} recorded via {payment_mode}. {remarks}".strip()
-    customer.latest_update_status = note_msg
-    customer.latest_update_at = timezone.now()
-    customer.latest_update_by = request.user
-    customer.save(update_fields=["latest_update_status", "latest_update_at", "latest_update_by", "updated_at"])
-
-    CustomerUpdateHistory.objects.create(
-        customer=customer,
-        user=request.user,
-        notes=note_msg
     )
 
     messages.success(request, f"Payment of ₹{amt:,.2f} recorded for '{customer.name}'.")
