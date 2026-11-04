@@ -18,9 +18,34 @@ class RoleBasedLoginView(auth_views.LoginView):
     Custom Login View with intelligent role-based redirection.
     - Administrators are redirected to the Admin Dashboard.
     - Shop Owners are redirected directly to their Shop Dashboard.
+    - Follow-up staff are redirected to their Follow-up Portal.
     Prevents 403 Forbidden redirects when a non-admin logs in with an admin next URL.
+    Supports optional explicit role verification from the login dropdown.
     """
     template_name = "registration/login.html"
+
+    def form_valid(self, form):
+        selected_role = self.request.POST.get("selected_role", "").strip()
+        user = form.get_user()
+        if selected_role:
+            if selected_role == "ADMIN" and not (user.is_admin_role or user.is_superuser):
+                form.add_error(None, "Access Denied: Your account is not authorized as an Administrator.")
+                return self.form_invalid(form)
+            elif selected_role == "FOLLOWUP" and not user.is_followup_role:
+                form.add_error(None, "Access Denied: Your account is not authorized as Follow-up Staff.")
+                return self.form_invalid(form)
+            elif selected_role == "SHOP_OWNER" and not user.is_shop_owner_role:
+                form.add_error(None, "Access Denied: Your account is not authorized as a Retail Partner Shop.")
+                return self.form_invalid(form)
+
+        # Handle Remember Me checkbox
+        remember_me = self.request.POST.get("remember_me")
+        if remember_me:
+            self.request.session.set_expiry(1209600)  # 2 weeks
+        else:
+            self.request.session.set_expiry(0)  # Browser session only
+
+        return super().form_valid(form)
 
     def get_success_url(self):
         user = self.request.user

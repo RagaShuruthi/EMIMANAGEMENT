@@ -1,73 +1,129 @@
 {% extends "base.html" %}
 
-{% block title %}Sign In — EMI SAFE Enterprise Portal{% endblock %}
+{% block title %}Sign In — EMI Manager{% endblock %}
 
 {% block extra_css %}
 <style>
-    /* Full-screen animated canvas */
-    .auth-page-wrapper {
-        min-height: calc(100vh - 100px);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 2.5rem 1rem;
-        position: relative;
-        overflow: hidden;
-        background: radial-gradient(circle at 50% 10%, rgba(124, 58, 237, 0.08) 0%, rgba(248, 250, 252, 1) 70%);
+    /* ==========================================================================
+       EMI MANAGER — PREMIUM FINTECH MOBILE-FIRST LOGIN EXPERIENCE
+       Palette: Midnight Navy (#070b19, #0b132b), Royal Blue (#1d4ed8, #2563eb, #3b82f6),
+                Frosted White (#ffffff), Subtle Gold (#f59e0b, #fbbf24, #fef08a)
+       ========================================================================== */
+
+    /* Ensure parent wrappers allow full-bleed immersive fintech canvas */
+    body {
+        background-color: #070b19 !important;
+        margin: 0;
+        padding: 0;
+        overflow-x: hidden;
     }
 
-    /* Ambient floating decorative orbs */
-    .ambient-orb {
+    /* Hide standard nav/footer on standalone mobile-first login view */
+    nav.navbar,
+    footer {
+        display: none !important;
+    }
+
+    .main-wrapper {
+        padding: 0 !important;
+        min-height: 100vh !important;
+        background: transparent !important;
+    }
+
+    .messages-container {
+        display: none !important; /* Rendered custom inside card */
+    }
+
+    /* Main Auth Viewport Canvas */
+    .fintech-auth-canvas {
+        min-height: 100vh;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem 1rem 2.5rem;
+        position: relative;
+        overflow-x: hidden;
+        background: radial-gradient(circle at 50% 12%, rgba(37, 99, 235, 0.28) 0%, rgba(11, 19, 43, 0.95) 48%, #060914 100%);
+    }
+
+    /* Subtle ambient geometric grid in background */
+    .fintech-auth-canvas::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image: 
+            radial-gradient(rgba(59, 130, 246, 0.12) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(7, 11, 25, 0) 0%, rgba(7, 11, 25, 0.8) 100%);
+        background-size: 28px 28px, 100% 100%;
+        pointer-events: none;
+        z-index: 0;
+    }
+
+    /* Ambient glowing orbs */
+    .ambient-glow-orb {
         position: absolute;
         border-radius: 50%;
         filter: blur(80px);
         pointer-events: none;
         z-index: 0;
-        opacity: 0.6;
+        opacity: 0.55;
     }
-    .orb-1 {
-        width: 320px;
-        height: 320px;
-        background: radial-gradient(circle, rgba(124, 58, 237, 0.35) 0%, rgba(79, 70, 229, 0.1) 70%);
-        top: -60px;
+    .ambient-orb-top {
+        width: 380px;
+        height: 380px;
+        background: radial-gradient(circle, rgba(37, 99, 235, 0.45) 0%, rgba(30, 64, 175, 0.1) 70%);
+        top: -80px;
         left: 50%;
-        margin-left: -280px;
-        animation: floatOrb 12s ease-in-out infinite alternate;
+        transform: translateX(-50%);
+        animation: ambientDrift 14s ease-in-out infinite alternate;
     }
-    .orb-2 {
-        width: 260px;
-        height: 260px;
-        background: radial-gradient(circle, rgba(236, 72, 153, 0.25) 0%, rgba(147, 51, 234, 0.05) 70%);
-        bottom: 5%;
-        right: 15%;
-        animation: floatOrb 10s ease-in-out infinite alternate-reverse;
-    }
-
-    @keyframes floatOrb {
-        0% { transform: translateY(0) scale(1); }
-        50% { transform: translateY(-30px) scale(1.08) translateX(15px); }
-        100% { transform: translateY(20px) scale(0.95) translateX(-15px); }
+    .ambient-orb-gold {
+        width: 220px;
+        height: 220px;
+        background: radial-gradient(circle, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.03) 70%);
+        bottom: 8%;
+        right: 10%;
+        animation: ambientDrift 11s ease-in-out infinite alternate-reverse;
     }
 
-    /* Single unified card container */
-    .auth-single-card {
-        max-width: 470px;
+    @keyframes ambientDrift {
+        0% { transform: translateY(0) scale(1) translateX(0); }
+        50% { transform: translateY(-20px) scale(1.08) translateX(15px); }
+        100% { transform: translateY(15px) scale(0.95) translateX(-15px); }
+    }
+
+    /* Auth Content Container */
+    .fintech-auth-container {
         width: 100%;
-        background: #ffffff;
-        border-radius: 24px;
-        border: 1px solid rgba(226, 232, 240, 0.9);
-        box-shadow: 0 25px 60px -15px rgba(30, 19, 56, 0.16), 0 0 0 1px rgba(124, 58, 237, 0.05);
-        padding: 2.75rem 2.25rem;
+        max-width: 440px;
         position: relative;
         z-index: 1;
-        animation: cardEntrance 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        backdrop-filter: blur(10px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
     }
 
-    @keyframes cardEntrance {
+    /* ==========================================================================
+       SECTION 2: 3D WALLET ANIMATION (MAIN ATTRACTION)
+       ========================================================================== */
+    .wallet-showcase-stage {
+        width: 100%;
+        height: 195px;
+        position: relative;
+        perspective: 1100px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 0.25rem;
+        animation: sceneEntrance 0.85s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes sceneEntrance {
         0% {
             opacity: 0;
-            transform: translateY(30px) scale(0.97);
+            transform: translateY(-28px) scale(0.92);
         }
         100% {
             opacity: 1;
@@ -75,143 +131,615 @@
         }
     }
 
-    /* Logo Badge with Glowing Pulse Animation */
-    .auth-brand-logo-wrap {
+    /* Soft Blue Glowing Light Beneath the Wallet */
+    .wallet-glow-pedestal {
+        position: absolute;
+        bottom: 12px;
+        width: 230px;
+        height: 42px;
+        border-radius: 50%;
+        background: radial-gradient(ellipse at center, rgba(59, 130, 246, 0.75) 0%, rgba(29, 78, 216, 0.4) 45%, rgba(6, 10, 25, 0) 72%);
+        filter: blur(14px);
+        pointer-events: none;
+        animation: glowPulse 3.8s ease-in-out infinite;
+        z-index: 1;
+    }
+
+    @keyframes glowPulse {
+        0%, 100% {
+            transform: scale(1);
+            opacity: 0.75;
+        }
+        50% {
+            transform: scale(1.18);
+            opacity: 0.98;
+            filter: blur(16px);
+        }
+    }
+
+    /* Glowing Golden Orbit Rotating Around the Wallet */
+    .wallet-orbit-ring {
+        position: absolute;
+        width: 270px;
+        height: 115px;
+        border-radius: 50%;
+        border: 1.5px solid rgba(251, 191, 36, 0.4);
+        box-shadow: 0 0 16px rgba(245, 158, 11, 0.3), inset 0 0 12px rgba(245, 158, 11, 0.18);
+        transform-style: preserve-3d;
+        transform: rotateX(68deg) rotateY(-14deg);
+        pointer-events: none;
+        z-index: 2;
+    }
+
+    .wallet-orbit-ring::after {
+        content: "";
+        position: absolute;
+        top: -4px;
+        left: 50%;
+        margin-left: -4px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #fef08a;
+        box-shadow: 0 0 10px #fbbf24, 0 0 4px #ffffff;
+        animation: orbitParticle 6s linear infinite;
+    }
+
+    @keyframes orbitParticle {
+        0% {
+            transform: rotate(0deg) translateX(135px) rotate(0deg);
+        }
+        100% {
+            transform: rotate(360deg) translateX(135px) rotate(-360deg);
+        }
+    }
+
+    /* Floating 3D Wallet Assembly */
+    .wallet-3d-assembly {
+        position: relative;
+        width: 170px;
+        height: 125px;
+        transform-style: preserve-3d;
+        animation: walletFloat 4s ease-in-out infinite;
+        z-index: 3;
+    }
+
+    @keyframes walletFloat {
+        0%, 100% {
+            transform: translateY(0px) rotateY(-8deg) rotateX(6deg);
+        }
+        50% {
+            transform: translateY(-13px) rotateY(-2deg) rotateX(10deg);
+        }
+    }
+
+    /* Small Payment Cards Moving Subtly in Background */
+    .wallet-cards-slot {
+        position: absolute;
+        top: -24px;
+        left: 12px;
+        width: 140px;
+        height: 80px;
+        transform-style: preserve-3d;
+        z-index: 1;
+    }
+
+    /* Back Card: Midnight Platinum EMI Card */
+    .fintech-card-back {
+        position: absolute;
+        width: 110px;
+        height: 66px;
+        border-radius: 9px;
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #334155 100%);
+        border: 1px solid rgba(251, 191, 36, 0.45);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        top: -6px;
+        left: 18px;
+        transform-origin: bottom center;
+        animation: cardDriftBack 4.5s ease-in-out infinite alternate;
+        padding: 6px;
+        overflow: hidden;
+    }
+
+    .fintech-card-back::before {
+        content: "";
+        position: absolute;
+        top: 10px;
+        left: 0;
+        right: 0;
+        height: 12px;
+        background: rgba(251, 191, 36, 0.35);
+    }
+
+    @keyframes cardDriftBack {
+        0% { transform: rotate(14deg) translateY(0); }
+        100% { transform: rotate(18deg) translateY(-6px); }
+    }
+
+    /* Front Card: Royal Sapphire Titanium EMI Card */
+    .fintech-card-front {
+        position: absolute;
+        width: 120px;
+        height: 72px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 50%, #60a5fa 100%);
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        box-shadow: 0 8px 18px rgba(29, 78, 216, 0.4);
+        top: 2px;
+        left: 4px;
+        transform-origin: bottom center;
+        animation: cardDriftFront 4s ease-in-out infinite alternate;
+        padding: 7px 8px;
         display: flex;
         flex-direction: column;
-        align-items: center;
-        text-align: center;
-        margin-bottom: 2rem;
+        justify-content: space-between;
+        overflow: hidden;
     }
-    .auth-brand-badge {
-        width: 62px;
-        height: 62px;
-        border-radius: 18px;
-        background: linear-gradient(135deg, #7c3aed 0%, #4c1d95 100%);
+
+    .fintech-card-front::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(120deg, transparent 20%, rgba(255, 255, 255, 0.28) 45%, transparent 65%);
+        pointer-events: none;
+    }
+
+    .card-chip {
+        width: 16px;
+        height: 12px;
+        border-radius: 3px;
+        background: linear-gradient(135deg, #fef08a 0%, #f59e0b 80%, #b45309 100%);
+        border: 0.5px solid #d97706;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+    .card-meta-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+    }
+    .card-dots {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 8px;
+        letter-spacing: 1px;
+        color: rgba(255, 255, 255, 0.85);
+        font-weight: 700;
+        line-height: 1;
+    }
+    .card-brand-tag {
+        font-size: 7px;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        color: #ffffff;
+        text-transform: uppercase;
+        background: rgba(0, 0, 0, 0.2);
+        padding: 1px 4px;
+        border-radius: 3px;
+    }
+
+    @keyframes cardDriftFront {
+        0% { transform: rotate(-8deg) translateY(0); }
+        100% { transform: rotate(-12deg) translateY(-8px); }
+    }
+
+    /* Main 3D Leather Wallet Body */
+    .wallet-leather-body {
+        position: absolute;
+        inset: 0;
+        border-radius: 16px;
+        background: linear-gradient(145deg, #1e3a8a 0%, #1e40af 45%, #172554 100%);
+        border: 2px solid rgba(96, 165, 250, 0.4);
+        box-shadow: 
+            0 14px 28px rgba(0, 0, 0, 0.55),
+            0 0 20px rgba(37, 99, 235, 0.35),
+            inset 0 2px 4px rgba(255, 255, 255, 0.25),
+            inset 0 -2px 5px rgba(0, 0, 0, 0.4);
+        z-index: 2;
+        overflow: hidden;
+    }
+
+    /* Stitched Leather Perimeter */
+    .wallet-leather-body::before {
+        content: "";
+        position: absolute;
+        inset: 4px;
+        border-radius: 12px;
+        border: 1.5px dashed rgba(191, 219, 254, 0.38);
+        pointer-events: none;
+    }
+
+    /* Front Pocket Curved Layer with 3D Depth */
+    .wallet-front-pocket {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 74px;
+        background: linear-gradient(180deg, #1d4ed8 0%, #1e3a8a 100%);
+        border-top: 1.5px solid rgba(147, 197, 253, 0.5);
+        border-bottom-left-radius: 14px;
+        border-bottom-right-radius: 14px;
+        box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.35);
+    }
+    .wallet-front-pocket::after {
+        content: "";
+        position: absolute;
+        inset: 3px;
+        border-radius: 10px;
+        border: 1.5px dashed rgba(191, 219, 254, 0.3);
+        pointer-events: none;
+    }
+
+    /* Metallic Golden Clasp with Security Shield */
+    .wallet-clasp {
+        position: absolute;
+        top: 40px;
+        right: -8px;
+        width: 38px;
+        height: 26px;
+        border-radius: 6px;
+        background: linear-gradient(135deg, #fef08a 0%, #f59e0b 55%, #b45309 100%);
+        border: 1px solid #fbbf24;
+        box-shadow: 0 4px 10px rgba(245, 158, 11, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.6);
         display: flex;
         align-items: center;
         justify-content: center;
-        color: #ffffff;
-        font-size: 2rem;
-        box-shadow: 0 10px 25px rgba(124, 58, 237, 0.45);
-        margin-bottom: 1rem;
-        animation: logoPulse 4s ease-in-out infinite;
-        transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        z-index: 4;
+        color: #78350f;
+        font-size: 11px;
     }
-    .auth-brand-badge:hover {
-        transform: rotate(5deg) scale(1.08);
+    .wallet-clasp-rivet {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: radial-gradient(circle, #ffffff 0%, #d97706 80%);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.4);
     }
 
-    @keyframes logoPulse {
+    /* EMI Calendar Icon with Gentle Bounce Animation */
+    .emi-calendar-badge {
+        position: absolute;
+        top: -12px;
+        left: -18px;
+        width: 48px;
+        height: 52px;
+        border-radius: 12px;
+        background: #ffffff;
+        border: 1.5px solid rgba(251, 191, 36, 0.6);
+        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35), 0 0 12px rgba(245, 158, 11, 0.25);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        animation: calBounce 3.2s ease-in-out infinite;
+        z-index: 5;
+    }
+
+    .emi-calendar-header {
+        background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+        color: #ffffff;
+        font-size: 8px;
+        font-weight: 800;
+        text-align: center;
+        padding: 2px 0;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+    }
+    .emi-calendar-body {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+    }
+    .emi-calendar-body .cal-day {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 14px;
+        font-weight: 800;
+        color: #0f172a;
+        line-height: 1;
+    }
+    .emi-calendar-body .cal-status {
+        font-size: 6.5px;
+        font-weight: 700;
+        color: #16a34a;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        margin-top: 1px;
+    }
+
+    @keyframes calBounce {
         0%, 100% {
-            box-shadow: 0 10px 25px rgba(124, 58, 237, 0.4);
+            transform: translateY(0) rotate(-7deg) scale(1);
         }
         50% {
-            box-shadow: 0 14px 35px rgba(124, 58, 237, 0.65), 0 0 0 8px rgba(124, 58, 237, 0.12);
+            transform: translateY(-9px) rotate(-3deg) scale(1.04);
         }
     }
 
-    .auth-brand-title {
+    /* Golden ₹ Coins Floating Around with Slow 3D Rotation */
+    .coin-3d {
+        position: absolute;
+        border-radius: 50%;
+        background: radial-gradient(circle at 35% 35%, #fef08a 0%, #fbbf24 45%, #d97706 80%, #78350f 100%);
+        border: 2px solid #fef08a;
+        box-shadow: 
+            0 4px 14px rgba(245, 158, 11, 0.5),
+            inset 0 2px 3px rgba(255, 255, 255, 0.7),
+            inset 0 -2px 3px rgba(120, 53, 15, 0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: 'JetBrains Mono', sans-serif;
         font-weight: 800;
-        font-size: 1.65rem;
-        color: #1e1b4b;
-        letter-spacing: -0.02em;
-        line-height: 1.1;
-        margin-bottom: 0.25rem;
-    }
-    .auth-brand-subtitle {
-        color: #64748b;
-        font-size: 0.88rem;
+        color: #78350f;
+        text-shadow: 0 1px 1px rgba(255, 255, 255, 0.5);
+        transform-style: preserve-3d;
+        z-index: 4;
+        user-select: none;
     }
 
-    /* Interactive Inputs */
-    .form-group-animated {
-        margin-bottom: 1.25rem;
-        position: relative;
+    /* Coin 1: Top Right Major Coin */
+    .coin-1 {
+        width: 36px;
+        height: 36px;
+        top: -6px;
+        right: -24px;
+        font-size: 17px;
+        animation: coinFloat1 4.6s ease-in-out infinite, coinSpin 6.5s linear infinite;
     }
-    .form-group-animated label {
+
+    /* Coin 2: Bottom Left Minor Coin */
+    .coin-2 {
+        width: 27px;
+        height: 27px;
+        bottom: 6px;
+        left: -28px;
+        font-size: 13px;
+        animation: coinFloat2 3.8s ease-in-out infinite, coinSpin 5s linear infinite;
+    }
+
+    /* Coin 3: Mini Sparkle Coin */
+    .coin-3 {
+        width: 20px;
+        height: 20px;
+        top: 28px;
+        left: -14px;
+        font-size: 10px;
+        border-width: 1.5px;
+        animation: coinFloat3 4.2s ease-in-out infinite, coinSpin 4.5s linear infinite;
+    }
+
+    @keyframes coinSpin {
+        0% {
+            transform: rotateY(0deg);
+        }
+        50% {
+            transform: rotateY(180deg) scaleX(0.18);
+        }
+        100% {
+            transform: rotateY(360deg);
+        }
+    }
+
+    @keyframes coinFloat1 {
+        0%, 100% { transform: translate(0, 0); }
+        50% { transform: translate(4px, -12px); }
+    }
+    @keyframes coinFloat2 {
+        0%, 100% { transform: translate(0, 0); }
+        50% { transform: translate(-3px, -10px); }
+    }
+    @keyframes coinFloat3 {
+        0%, 100% { transform: translate(0, 0); }
+        50% { transform: translate(3px, -7px); }
+    }
+
+    /* ==========================================================================
+       SECTION 3: BRANDING (EMI MANAGER + TAGLINE)
+       ========================================================================== */
+    .fintech-branding-wrap {
+        text-align: center;
+        margin-bottom: 1.25rem;
+        z-index: 2;
+    }
+
+    .fintech-brand-title {
+        font-weight: 800;
+        font-size: 2rem;
+        letter-spacing: -0.03em;
+        line-height: 1.1;
+        margin-bottom: 0.35rem;
+        background: linear-gradient(135deg, #ffffff 30%, #bfdbfe 70%, #fde047 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-shadow: 0 4px 20px rgba(37, 99, 235, 0.4);
+    }
+
+    .fintech-brand-tagline {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
         font-size: 0.82rem;
         font-weight: 600;
-        color: #475569;
+        color: #94a3b8;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+    .fintech-brand-tagline .gold-bullet {
+        color: #fbbf24;
+        font-size: 0.75rem;
+        text-shadow: 0 0 6px rgba(251, 191, 36, 0.7);
+    }
+
+    /* ==========================================================================
+       SECTION 4: LOGIN CARD (FROSTED GLASS / SLIDE-UP)
+       ========================================================================== */
+    .fintech-login-card {
+        width: 100%;
+        background: rgba(255, 255, 255, 0.97);
+        border-radius: 24px;
+        border: 1px solid rgba(255, 255, 255, 0.9);
+        box-shadow: 
+            0 24px 60px -10px rgba(0, 0, 0, 0.55),
+            0 0 0 1px rgba(59, 130, 246, 0.2),
+            0 10px 25px rgba(29, 78, 216, 0.15);
+        padding: 2rem 1.85rem;
+        position: relative;
+        z-index: 2;
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        animation: cardSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes cardSlideUp {
+        0% {
+            opacity: 0;
+            transform: translateY(35px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Form Fields Styling */
+    .form-group-fintech {
+        margin-bottom: 1.15rem;
+        position: relative;
+    }
+
+    .fintech-label {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #1e293b;
         margin-bottom: 0.4rem;
         display: flex;
         align-items: center;
         gap: 0.4rem;
     }
-    .input-wrapper {
+
+    .fintech-input-wrap {
         position: relative;
+        display: flex;
+        align-items: center;
     }
-    .input-icon-prefix {
+
+    .fintech-input-icon {
         position: absolute;
         left: 1rem;
-        top: 50%;
-        transform: translateY(-50%);
         color: #94a3b8;
-        font-size: 1rem;
+        font-size: 1.05rem;
         transition: color 0.25s ease;
         pointer-events: none;
+        z-index: 2;
     }
-    .form-control-animated {
+
+    .form-control-fintech,
+    .form-select-fintech {
         width: 100%;
+        min-height: 48px; /* Touch friendly on mobile */
         border-radius: 12px;
         border: 1.5px solid #e2e8f0;
         background-color: #f8fafc;
-        padding: 0.75rem 1rem 0.75rem 2.6rem;
-        font-size: 0.92rem;
-        color: #1e293b;
+        padding: 0.75rem 1rem 0.75rem 2.75rem;
+        font-size: 0.95rem; /* >= 16px equivalent prevents iOS auto-zoom */
+        color: #0f172a;
+        font-weight: 500;
         transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    .form-control-animated:focus {
-        background-color: #ffffff;
-        border-color: #7c3aed;
-        box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.14);
         outline: none;
-        transform: translateY(-1px);
-    }
-    .form-control-animated:focus + .input-icon-prefix,
-    .input-wrapper:focus-within .input-icon-prefix {
-        color: #7c3aed;
     }
 
-    /* Password input specific */
-    .form-control-animated.with-toggle {
-        padding-right: 2.8rem;
+    .form-control-fintech:focus,
+    .form-select-fintech:focus {
+        background-color: #ffffff;
+        border-color: #2563eb;
+        box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.16);
+        transform: translateY(-1px);
     }
-    .password-toggle-btn {
+
+    .form-control-fintech:focus + .fintech-input-icon,
+    .fintech-input-wrap:focus-within .fintech-input-icon {
+        color: #2563eb;
+    }
+
+    /* Custom Select Arrow */
+    .form-select-fintech {
+        appearance: none;
+        -webkit-appearance: none;
+        cursor: pointer;
+        padding-right: 2.5rem;
+    }
+    .fintech-select-arrow {
         position: absolute;
-        right: 0.75rem;
+        right: 1rem;
+        color: #94a3b8;
+        font-size: 0.85rem;
+        pointer-events: none;
+        transition: transform 0.2s ease;
+    }
+    .fintech-input-wrap:focus-within .fintech-select-arrow {
+        color: #2563eb;
+        transform: rotate(180deg);
+    }
+
+    /* Password Input & Show/Hide Toggle */
+    .form-control-fintech.with-toggle {
+        padding-right: 2.85rem;
+    }
+
+    .fintech-password-toggle {
+        position: absolute;
+        right: 0.65rem;
         top: 50%;
         transform: translateY(-50%);
         background: transparent;
         border: none;
         color: #94a3b8;
-        font-size: 1.1rem;
-        padding: 0.35rem;
+        font-size: 1.15rem;
+        width: 36px;
+        height: 36px;
         border-radius: 8px;
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
         transition: all 0.2s ease;
+        z-index: 2;
     }
-    .password-toggle-btn:hover {
-        color: #6d28d9;
-        background-color: #f1f5f9;
+    .fintech-password-toggle:hover {
+        color: #1d4ed8;
+        background-color: #eff6ff;
     }
 
-    /* Animated Submit Button with Shimmer */
-    .btn-animated-submit {
+    /* Checkbox */
+    .fintech-check {
+        width: 17px;
+        height: 17px;
+        border-radius: 5px;
+        border: 1.5px solid #cbd5e1;
+        cursor: pointer;
+    }
+    .fintech-check:checked {
+        background-color: #2563eb;
+        border-color: #2563eb;
+    }
+
+    /* ==========================================================================
+       SECTION 5: LARGE GRADIENT BLUE LOGIN BUTTON WITH ANIMATIONS
+       ========================================================================== */
+    .btn-fintech-login {
         width: 100%;
-        background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+        min-height: 50px;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 50%, #1e40af 100%);
         border: none;
         color: #ffffff;
         font-weight: 700;
         border-radius: 12px;
-        padding: 0.82rem 1.5rem;
-        font-size: 0.95rem;
-        letter-spacing: 0.01em;
+        padding: 0.85rem 1.5rem;
+        font-size: 0.98rem;
+        letter-spacing: 0.02em;
         cursor: pointer;
-        box-shadow: 0 8px 20px -3px rgba(124, 58, 237, 0.45);
+        box-shadow: 0 10px 24px -4px rgba(37, 99, 235, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.3);
         position: relative;
         overflow: hidden;
         transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -220,7 +748,9 @@
         justify-content: center;
         gap: 0.5rem;
     }
-    .btn-animated-submit::before {
+
+    /* Shimmer sweep effect */
+    .btn-fintech-login::before {
         content: "";
         position: absolute;
         top: 0;
@@ -230,29 +760,31 @@
         background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent);
         transition: 0.6s;
     }
-    .btn-animated-submit:hover {
-        background: linear-gradient(135deg, #6d28d9 0%, #5b21b6 100%);
+
+    .btn-fintech-login:hover {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%);
         transform: translateY(-2px);
-        box-shadow: 0 12px 25px -4px rgba(124, 58, 237, 0.55);
+        box-shadow: 0 14px 28px -4px rgba(37, 99, 235, 0.65);
         color: #ffffff;
     }
-    .btn-animated-submit:hover::before {
+    .btn-fintech-login:hover::before {
         left: 100%;
     }
-    .btn-animated-submit:active {
-        transform: translateY(0) scale(0.99);
+    .btn-fintech-login:active {
+        transform: translateY(0) scale(0.98);
+        box-shadow: 0 6px 14px -2px rgba(37, 99, 235, 0.5);
     }
 
-    /* Role Pills */
+    /* Supported Roles Bar */
     .role-pills-bar {
         background: #f8fafc;
         border: 1px solid #e2e8f0;
         border-radius: 12px;
-        padding: 0.75rem 1rem;
-        margin-top: 1.5rem;
-        margin-bottom: 1.25rem;
+        padding: 0.7rem 0.9rem;
+        margin-top: 1.25rem;
+        margin-bottom: 1.15rem;
     }
-    .role-pill {
+    .role-pill-tag {
         display: inline-flex;
         align-items: center;
         gap: 0.35rem;
@@ -260,164 +792,309 @@
         border-radius: 6px;
         background: #ffffff;
         border: 1px solid #e2e8f0;
-        font-size: 0.73rem;
+        font-size: 0.72rem;
         font-weight: 600;
         color: #475569;
         transition: all 0.2s ease;
     }
-    .role-pill:hover {
+    .role-pill-tag:hover {
         border-color: #cbd5e1;
         transform: translateY(-1px);
     }
 
-    /* Responsive adjustments for mobile */
+    /* Register Link */
+    .fintech-register-link {
+        color: #2563eb;
+        font-weight: 700;
+        text-decoration: none;
+        transition: color 0.2s ease;
+    }
+    .fintech-register-link:hover {
+        color: #1d4ed8;
+        text-decoration: underline;
+    }
+
+    /* Mobile specific responsiveness */
     @media (max-width: 576px) {
-        .auth-single-card {
-            padding: 2rem 1.5rem;
+        .fintech-auth-canvas {
+            padding: 1rem 0.75rem 2rem;
+        }
+        .wallet-showcase-stage {
+            height: 175px;
+        }
+        .wallet-3d-assembly {
+            width: 155px;
+            height: 115px;
+        }
+        .fintech-login-card {
+            padding: 1.65rem 1.25rem;
             border-radius: 20px;
         }
-        .auth-brand-badge {
-            width: 54px;
-            height: 54px;
-            font-size: 1.7rem;
+        .fintech-brand-title {
+            font-size: 1.75rem;
         }
-        .auth-brand-title {
-            font-size: 1.45rem;
+        .coin-1 {
+            width: 30px;
+            height: 30px;
+            font-size: 15px;
+            right: -14px;
+        }
+        .coin-2 {
+            width: 24px;
+            height: 24px;
+            font-size: 12px;
+            left: -18px;
+        }
+        .emi-calendar-badge {
+            left: -10px;
+            width: 44px;
+            height: 48px;
+        }
+    }
+
+    /* Accessibility: Respect prefers-reduced-motion */
+    @media (prefers-reduced-motion: reduce) {
+        .wallet-3d-assembly,
+        .wallet-glow-pedestal,
+        .wallet-orbit-ring::after,
+        .fintech-card-back,
+        .fintech-card-front,
+        .emi-calendar-badge,
+        .coin-3d,
+        .ambient-glow-orb,
+        .fintech-login-card,
+        .wallet-showcase-stage {
+            animation: none !important;
+            transition: none !important;
         }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="auth-page-wrapper">
-    <!-- Ambient glowing orbs -->
-    <div class="ambient-orb orb-1"></div>
-    <div class="ambient-orb orb-2"></div>
+<div class="fintech-auth-canvas">
+    <!-- Ambient glowing lights -->
+    <div class="ambient-glow-orb ambient-orb-top"></div>
+    <div class="ambient-glow-orb ambient-orb-gold"></div>
 
-    <!-- Single Unified Card (No Split Screen) -->
-    <div class="auth-single-card">
-        <!-- Logo & Header -->
-        <div class="auth-brand-logo-wrap">
-            <div class="auth-brand-badge">
-                <i class="bi bi-shield-check"></i>
+    <div class="fintech-auth-container">
+        <!-- ================================================================ -->
+        <!-- 3D WALLET ANIMATION SHOWCASE (MAIN ATTRACTION)                    -->
+        <!-- ================================================================ -->
+        <div class="wallet-showcase-stage" aria-hidden="true">
+            <!-- Soft Blue Glowing Light Beneath -->
+            <div class="wallet-glow-pedestal"></div>
+
+            <!-- Glowing Golden Orbit Rotating Around the Wallet -->
+            <div class="wallet-orbit-ring"></div>
+
+            <!-- Floating 3D Wallet Assembly -->
+            <div class="wallet-3d-assembly">
+                <!-- Small Payment Cards Moving Subtly in Background -->
+                <div class="wallet-cards-slot">
+                    <!-- Card 2: Midnight Platinum EMI Card -->
+                    <div class="fintech-card-back"></div>
+
+                    <!-- Card 1: Royal Sapphire Titanium Card -->
+                    <div class="fintech-card-front">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="card-chip"></div>
+                            <span class="card-brand-tag">EMI Titanium</span>
+                        </div>
+                        <div class="card-meta-row">
+                            <span class="card-dots">&bull;&bull;&bull;&bull; 8824</span>
+                            <span style="font-size: 7px; color: #ffffff; font-weight: 800;">₹ RUPAY</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3D Leather Wallet Body -->
+                <div class="wallet-leather-body">
+                    <div class="wallet-front-pocket"></div>
+                </div>
+
+                <!-- Metallic Golden Clasp with Rivet -->
+                <div class="wallet-clasp">
+                    <div class="wallet-clasp-rivet"></div>
+                </div>
+
+                <!-- EMI Calendar Icon with Gentle Bounce Animation -->
+                <div class="emi-calendar-badge">
+                    <div class="emi-calendar-header">EMI</div>
+                    <div class="emi-calendar-body">
+                        <span class="cal-day">05</span>
+                        <span class="cal-status"><i class="bi bi-check-circle-fill"></i> DUE</span>
+                    </div>
+                </div>
+
+                <!-- Golden ₹ Coins Floating Around with 3D Slow Rotation -->
+                <div class="coin-3d coin-1">&#8377;</div>
+                <div class="coin-3d coin-2">&#8377;</div>
+                <div class="coin-3d coin-3">&#8377;</div>
             </div>
-            <h1 class="auth-brand-title">EMI SAFE</h1>
-            <p class="auth-brand-subtitle mb-0">Sign in to access your operations portal</p>
         </div>
 
-        {% if form.non_field_errors %}
-        <div class="alert alert-danger py-2.5 px-3 small rounded-3 mb-3 border-danger d-flex align-items-center gap-2">
-            <i class="bi bi-exclamation-triangle-fill fs-6 text-danger"></i>
-            <div>{{ form.non_field_errors.0 }}</div>
-        </div>
-        {% endif %}
-
-        {% if messages %}
-        {% for message in messages %}
-        <div class="alert alert-{{ message.tags }} py-2.5 px-3 small rounded-3 mb-3 d-flex align-items-center gap-2">
-            <i class="bi bi-info-circle-fill fs-6"></i>
-            <div>{{ message }}</div>
-        </div>
-        {% endfor %}
-        {% endif %}
-
-        <form method="post" action="{% url 'login' %}">
-            {% csrf_token %}
-
-            <!-- Username Field -->
-            <div class="form-group-animated">
-                <label for="id_username">
-                    <i class="bi bi-person text-primary"></i> Username
-                </label>
-                <div class="input-wrapper">
-                    <i class="bi bi-person-fill input-icon-prefix"></i>
-                    <input type="text" name="username" class="form-control-animated" id="id_username" required autofocus placeholder="Enter your username">
-                </div>
-                {% if form.username.errors %}
-                <div class="text-danger small mt-1 ps-1">{{ form.username.errors.0 }}</div>
-                {% endif %}
+        <!-- ================================================================ -->
+        <!-- BRANDING (EMI MANAGER + TAGLINE)                                 -->
+        <!-- ================================================================ -->
+        <div class="fintech-branding-wrap">
+            <h1 class="fintech-brand-title">EMI Manager</h1>
+            <div class="fintech-brand-tagline">
+                <span>Track</span>
+                <span class="gold-bullet">&bull;</span>
+                <span>Follow Up</span>
+                <span class="gold-bullet">&bull;</span>
+                <span>Collect</span>
             </div>
+        </div>
 
-            <!-- Password Field -->
-            <div class="form-group-animated">
-                <div class="d-flex justify-content-between align-items-center mb-1">
-                    <label for="id_password" class="mb-0">
-                        <i class="bi bi-key text-primary"></i> Password
-                    </label>
-                </div>
-                <div class="input-wrapper">
-                    <i class="bi bi-lock-fill input-icon-prefix"></i>
-                    <input type="password" name="password" class="form-control-animated with-toggle" id="id_password" required placeholder="Enter your password">
-                    <button type="button" class="password-toggle-btn" id="togglePasswordBtn" title="Show or hide password" aria-label="Toggle password visibility">
-                        <i class="bi bi-eye" id="passwordEyeIcon"></i>
-                    </button>
-                </div>
-                {% if form.password.errors %}
-                <div class="text-danger small mt-1 ps-1">{{ form.password.errors.0 }}</div>
-                {% endif %}
+        <!-- ================================================================ -->
+        <!-- LOGIN CARD (FROSTED GLASS / SLIDE UP)                             -->
+        <!-- ================================================================ -->
+        <div class="fintech-login-card">
+            <!-- Non-Field / Authentication Errors -->
+            {% if form.non_field_errors %}
+            <div class="alert alert-danger py-2.5 px-3 small rounded-3 mb-3 border-danger d-flex align-items-center gap-2">
+                <i class="bi bi-exclamation-triangle-fill fs-6 text-danger"></i>
+                <div>{{ form.non_field_errors.0 }}</div>
             </div>
-
-            {% if request.GET.next %}
-            <input type="hidden" name="next" value="{{ request.GET.next }}">
             {% endif %}
 
-            <!-- Remember me & Security -->
-            <div class="d-flex align-items-center justify-content-between mb-4 mt-2">
-                <div class="form-check mb-0">
-                    <input class="form-check-input" type="checkbox" id="rememberMe" checked>
-                    <label class="form-check-label small text-muted" for="rememberMe">
-                        Keep me signed in
+            <!-- System Messages -->
+            {% if messages %}
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags|default:'info' }} py-2.5 px-3 small rounded-3 mb-3 d-flex align-items-center gap-2">
+                <i class="bi bi-info-circle-fill fs-6"></i>
+                <div>{{ message }}</div>
+            </div>
+            {% endfor %}
+            {% endif %}
+
+            <form method="post" action="{% url 'login' %}" id="fintechLoginForm">
+                {% csrf_token %}
+
+                {% if request.GET.next %}
+                <input type="hidden" name="next" value="{{ request.GET.next }}">
+                {% elif form.data.next %}
+                <input type="hidden" name="next" value="{{ form.data.next }}">
+                {% endif %}
+
+                <!-- 1. Select Role Dropdown -->
+                <div class="form-group-fintech">
+                    <label for="id_selected_role" class="fintech-label">
+                        <i class="bi bi-person-badge text-primary"></i> Select Portal Role
                     </label>
+                    <div class="fintech-input-wrap">
+                        <i class="bi bi-grid-fill fintech-input-icon"></i>
+                        <select name="selected_role" id="id_selected_role" class="form-select-fintech">
+                            <option value="" selected>Auto Detect (All Roles)</option>
+                            <option value="ADMIN">Administrator Portal</option>
+                            <option value="SHOP_OWNER">Partner Retail Shop</option>
+                            <option value="FOLLOWUP">Follow-up &amp; Collections Staff</option>
+                        </select>
+                        <i class="bi bi-chevron-down fintech-select-arrow"></i>
+                    </div>
                 </div>
-                <span class="small text-muted d-flex align-items-center gap-1">
-                    <i class="bi bi-shield-lock-fill text-success" style="font-size: 0.8rem;"></i>
-                    <span>SSL Secure</span>
-                </span>
-            </div>
 
-            <!-- Animated Sign In Button -->
-            <button type="submit" class="btn-animated-submit mb-3">
-                <i class="bi bi-box-arrow-in-right fs-5"></i>
-                <span>Sign In to Portal</span>
-            </button>
-
-            <!-- Supported Portal Roles Bar -->
-            <div class="role-pills-bar">
-                <div class="text-muted small fw-bold text-uppercase mb-2" style="font-size: 0.68rem; letter-spacing: 0.05em;">
-                    Supported Roles:
+                <!-- 2. Username Input -->
+                <div class="form-group-fintech">
+                    <label for="id_username" class="fintech-label">
+                        <i class="bi bi-person text-primary"></i> Username
+                    </label>
+                    <div class="fintech-input-wrap">
+                        <i class="bi bi-person-fill fintech-input-icon"></i>
+                        <input type="text" name="username" class="form-control-fintech" id="id_username" required autofocus placeholder="Enter your username" autocomplete="username">
+                    </div>
+                    {% if form.username.errors %}
+                    <div class="text-danger small mt-1 ps-1">{{ form.username.errors.0 }}</div>
+                    {% endif %}
                 </div>
-                <div class="d-flex flex-wrap gap-1.5">
-                    <span class="role-pill">
-                        <i class="bi bi-shield-shaded text-primary"></i> Admin
-                    </span>
-                    <span class="role-pill">
-                        <i class="bi bi-shop text-success"></i> Partner Shop
-                    </span>
-                    <span class="role-pill">
-                        <i class="bi bi-person-check text-info"></i> Follow-up
+
+                <!-- 3. Password Input with Show/Hide Toggle -->
+                <div class="form-group-fintech">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label for="id_password" class="fintech-label mb-0">
+                            <i class="bi bi-key text-primary"></i> Password
+                        </label>
+                    </div>
+                    <div class="fintech-input-wrap">
+                        <i class="bi bi-lock-fill fintech-input-icon"></i>
+                        <input type="password" name="password" class="form-control-fintech with-toggle" id="id_password" required placeholder="Enter your password" autocomplete="current-password">
+                        <button type="button" class="fintech-password-toggle" id="togglePasswordBtn" title="Show or hide password" aria-label="Toggle password visibility">
+                            <i class="bi bi-eye" id="passwordEyeIcon"></i>
+                        </button>
+                    </div>
+                    {% if form.password.errors %}
+                    <div class="text-danger small mt-1 ps-1">{{ form.password.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- 4. Remember Me Option & Security Badge -->
+                <div class="d-flex align-items-center justify-content-between mb-4 mt-2">
+                    <div class="form-check mb-0">
+                        <input class="form-check-input fintech-check" type="checkbox" id="rememberMe" name="remember_me" checked>
+                        <label class="form-check-label small text-muted user-select-none" for="rememberMe">
+                            Keep me signed in
+                        </label>
+                    </div>
+                    <span class="small text-muted d-inline-flex align-items-center gap-1">
+                        <i class="bi bi-shield-lock-fill text-success" style="font-size: 0.85rem;"></i>
+                        <span style="font-size: 0.75rem; font-weight: 600;">256-Bit SSL</span>
                     </span>
                 </div>
-            </div>
 
-            <!-- Register New Partner Shop Link -->
-            <div class="text-center pt-2 border-top">
-                <span class="text-muted small">New mobile retail shop?</span>
-                <a href="{% url 'signup' %}" class="small fw-bold text-decoration-none ms-1" style="color: #7c3aed;">
-                    Register partner store <i class="bi bi-arrow-right"></i>
-                </a>
-            </div>
-        </form>
+                <!-- 5. Large Gradient Blue Login Button -->
+                <button type="submit" class="btn-fintech-login mb-3" id="loginSubmitBtn">
+                    <span class="btn-text-content d-inline-flex align-items-center gap-2">
+                        <i class="bi bi-box-arrow-in-right fs-5"></i>
+                        <span>Sign In to Portal</span>
+                    </span>
+                    <span class="btn-loading-content d-none align-items-center gap-2">
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        <span>Signing In...</span>
+                    </span>
+                </button>
+
+                <!-- Supported Roles Info -->
+                <div class="role-pills-bar">
+                    <div class="text-muted small fw-bold text-uppercase mb-2" style="font-size: 0.68rem; letter-spacing: 0.05em;">
+                        Supported Operations Portals:
+                    </div>
+                    <div class="d-flex flex-wrap gap-1">
+                        <span class="role-pill-tag">
+                            <i class="bi bi-shield-shaded text-primary"></i> Administrator
+                        </span>
+                        <span class="role-pill-tag">
+                            <i class="bi bi-shop text-success"></i> Retail Partner
+                        </span>
+                        <span class="role-pill-tag">
+                            <i class="bi bi-person-check text-info"></i> Follow-up Staff
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Register Partner Shop Link -->
+                <div class="text-center pt-2 border-top">
+                    <span class="text-muted small">New mobile retail shop?</span>
+                    <a href="{% url 'signup' %}" class="small fintech-register-link ms-1">
+                        Register partner store <i class="bi bi-arrow-right"></i>
+                    </a>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 
 <script>
 document.addEventListener("DOMContentLoaded", function() {
+    // 1. Password Visibility Toggle
     const toggleBtn = document.getElementById("togglePasswordBtn");
     const passwordInput = document.getElementById("id_password");
     const eyeIcon = document.getElementById("passwordEyeIcon");
 
     if (toggleBtn && passwordInput && eyeIcon) {
-        toggleBtn.addEventListener("click", function() {
+        toggleBtn.addEventListener("click", function(e) {
+            e.preventDefault();
             if (passwordInput.type === "password") {
                 passwordInput.type = "text";
                 eyeIcon.classList.remove("bi-eye");
@@ -427,6 +1104,43 @@ document.addEventListener("DOMContentLoaded", function() {
                 eyeIcon.classList.remove("bi-eye-slash");
                 eyeIcon.classList.add("bi-eye");
             }
+        });
+    }
+
+    // 2. Button Loading State on Form Submit
+    const loginForm = document.getElementById("fintechLoginForm");
+    const submitBtn = document.getElementById("loginSubmitBtn");
+
+    if (loginForm && submitBtn) {
+        loginForm.addEventListener("submit", function() {
+            const textContent = submitBtn.querySelector(".btn-text-content");
+            const loadingContent = submitBtn.querySelector(".btn-loading-content");
+
+            if (textContent && loadingContent) {
+                textContent.classList.add("d-none");
+                loadingContent.classList.remove("d-none");
+                loadingContent.classList.add("d-inline-flex");
+            }
+        });
+    }
+
+    // 3. Dynamic Role Dropdown Sync
+    const roleSelect = document.getElementById("id_selected_role");
+    if (roleSelect) {
+        const rolePills = document.querySelectorAll(".role-pill-tag");
+        rolePills.forEach(function(pill) {
+            pill.style.cursor = "pointer";
+            pill.addEventListener("click", function() {
+                const text = pill.innerText.toLowerCase();
+                if (text.includes("admin")) {
+                    roleSelect.value = "ADMIN";
+                } else if (text.includes("retail") || text.includes("shop")) {
+                    roleSelect.value = "SHOP_OWNER";
+                } else if (text.includes("follow")) {
+                    roleSelect.value = "FOLLOWUP";
+                }
+                roleSelect.focus();
+            });
         });
     }
 });
