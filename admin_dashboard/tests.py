@@ -641,3 +641,50 @@ class AdminDashboardReworkTests(TestCase):
         res_pays = self.client.get(reverse("admin_shop_payments") + "?start_date=2026-10-01&end_date=2026-11-30")
         self.assertEqual(res_pays.status_code, 200)
         self.assertContains(res_pays, "Shop Payout Balances")
+
+    def test_shop_payout_transaction_details_history_modal_and_date_filter(self):
+        """Verify shop payouts does not navigate to shop details, but renders transaction details history modal with date filtering."""
+        from payments.models import FinancierPayment
+        self.client.login(username="admin_rework", password="AdminPassword123!")
+
+        # Create two payments for shop1 on different dates
+        FinancierPayment.objects.create(
+            shop=self.shop1,
+            amount_received=Decimal("5000.00"),
+            payment_date="2026-10-15",
+            payment_reference="OCT-PAY-123",
+            remarks="October payment"
+        )
+        FinancierPayment.objects.create(
+            shop=self.shop1,
+            amount_received=Decimal("7000.00"),
+            payment_date="2026-11-02",
+            payment_reference="NOV-PAY-456",
+            remarks="November payment"
+        )
+
+        # GET Shop Payouts page
+        res = self.client.get(reverse("admin_shop_payments"))
+        self.assertEqual(res.status_code, 200)
+        # Modal exists for shop1
+        self.assertContains(res, f'id="shopHistoryModal{self.shop1.id}"')
+        self.assertContains(res, "Payout Transaction Details History")
+        self.assertContains(res, "OCT-PAY-123")
+        self.assertContains(res, "NOV-PAY-456")
+        # Ensure 'shop_detail' navigation is not used in the Action column or shop link in payout table
+        self.assertNotContains(res, f'href="/admin-dashboard/shops/{self.shop1.pk}/"')
+
+        # GET Shop Payouts page with date filter for November only
+        res_filtered = self.client.get(reverse("admin_shop_payments") + "?start_date=2026-11-01&end_date=2026-11-30")
+        self.assertEqual(res_filtered.status_code, 200)
+        # Only November payment should appear in filtered transaction history
+        content = res_filtered.content.decode("utf-8")
+        # Find modal section for shop1
+        modal_start = content.find(f'id="shopHistoryModal{self.shop1.id}"')
+        modal_end = content.find(f'id="markPaidModal{self.shop1.id}"', modal_start)
+        if modal_end == -1:
+            modal_end = modal_start + 15000
+        modal_content = content[modal_start:modal_end]
+        self.assertIn("NOV-PAY-456", modal_content)
+        self.assertNotIn("OCT-PAY-123", modal_content)
+

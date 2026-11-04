@@ -1108,9 +1108,24 @@ def admin_shop_payments_view(request):
             if status_filter.upper() != fin["payment_status"]:
                 continue
 
+        # Fetch full history of payout transactions for this shop with optional date filter
+        tx_filter = Q(shop=s) | Q(application__shop=s)
+        if start_date:
+            tx_filter &= Q(payment_date__gte=start_date)
+        if end_date:
+            tx_filter &= Q(payment_date__lte=end_date)
+
+        shop_txs = list(FinancierPayment.objects.filter(tx_filter).select_related(
+            "application", "application__customer", "shop"
+        ).order_by("-payment_date", "-created_at"))
+
+        filtered_paid_sum = sum((t.amount_received for t in shop_txs), Decimal("0.00"))
+
         payment_rows.append({
             "shop": s,
             "financials": fin,
+            "transactions": shop_txs,
+            "filtered_paid_sum": filtered_paid_sum,
             "pending_apps_count": s.applications.filter(
                 status__in=[
                     FinanceApplication.Status.SUBMITTED,

@@ -137,9 +137,9 @@
                     <td>
                         <div class="d-flex align-items-center gap-2">
                             <span class="badge bg-secondary-subtle text-secondary font-monospace" style="font-size: 0.72rem;">#{{ row.shop.id }}</span>
-                            <a href="{% url 'shop_detail' pk=row.shop.pk %}" class="fw-bold text-decoration-none text-dark hover-primary">
+                            <button type="button" class="btn btn-link p-0 fw-bold text-decoration-none text-dark hover-primary text-start" data-bs-toggle="modal" data-bs-target="#shopHistoryModal{{ row.shop.id }}" title="Click to view payout transaction details history">
                                 {{ row.shop.name }}
-                            </a>
+                            </button>
                         </div>
                     </td>
 
@@ -172,22 +172,197 @@
                         </span>
                     </td>
 
-                    <td class="text-end">
+                    <td class="text-end text-nowrap">
+                        <button type="button" class="btn btn-sm btn-outline-primary shadow-xs d-inline-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#shopHistoryModal{{ row.shop.id }}" title="View payout transaction history and details">
+                            <i class="bi bi-clock-history"></i>
+                            <span>Details</span>
+                        </button>
                         {% if row.financials.remaining_due > 0 %}
-                        <button type="button" class="btn btn-sm btn-success shadow-xs d-inline-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#markPaidModal{{ row.shop.id }}">
+                        <button type="button" class="btn btn-sm btn-success shadow-xs d-inline-flex align-items-center gap-1 ms-1" data-bs-toggle="modal" data-bs-target="#markPaidModal{{ row.shop.id }}" title="Disburse payment to shop">
                             <i class="bi bi-cash-stack"></i>
                             <span>Mark as Paid</span>
                         </button>
-                        {% else %}
-                        <a href="{% url 'shop_detail' pk=row.shop.pk %}" class="btn btn-sm btn-outline-secondary">
-                            <i class="bi bi-eye me-1"></i> Details
-                        </a>
                         {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
+
+        <!-- Shop Payout Transaction History Modals (placed cleanly outside table) -->
+        {% for row in payment_rows %}
+        <div class="modal fade" id="shopHistoryModal{{ row.shop.id }}" tabindex="-1" aria-labelledby="shopHistoryModalLabel{{ row.shop.id }}" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header bg-light">
+                        <div>
+                            <h5 class="modal-title fw-bold text-dark d-flex align-items-center gap-2" id="shopHistoryModalLabel{{ row.shop.id }}">
+                                <i class="bi bi-clock-history text-primary"></i>
+                                <span>Payout Transaction Details History: {{ row.shop.name }}</span>
+                                <span class="badge bg-secondary-subtle text-secondary font-monospace fs-6">#{{ row.shop.id }}</span>
+                            </h5>
+                            <div class="small text-muted mt-1">
+                                Owner: <strong class="text-dark">{{ row.shop.owner_name }}</strong> | Phone: {{ row.shop.phone }}
+                                {% if row.shop.bank_account_number %} | Bank A/C: <strong>{{ row.shop.bank_name }}</strong> ({{ row.shop.bank_account_number }} / IFSC: {{ row.shop.bank_ifsc }}){% endif %}
+                                {% if row.shop.gpay_number %} | UPI/GPay: <strong>{{ row.shop.gpay_number }}</strong>{% endif %}
+                            </div>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+
+                    <div class="modal-body p-4">
+                        <!-- Shop Balance Summary Cards inside Modal -->
+                        <div class="row g-2 mb-3">
+                            <div class="col-12 col-md-4">
+                                <div class="p-3 bg-light rounded-3 border">
+                                    <div class="text-muted small text-uppercase fw-semibold">Total Payable</div>
+                                    <div class="fs-5 fw-bold text-dark">₹{{ row.financials.total_payable|floatformat:2 }}</div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <div class="p-3 bg-light rounded-3 border border-success-subtle">
+                                    <div class="text-success small text-uppercase fw-semibold">Total Paid by Admin</div>
+                                    <div class="fs-5 fw-bold text-success">₹{{ row.financials.total_paid|floatformat:2 }}</div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <div class="p-3 bg-light rounded-3 border {% if row.financials.remaining_due > 0 %}border-danger-subtle{% endif %}">
+                                    <div class="{% if row.financials.remaining_due > 0 %}text-danger{% else %}text-muted{% endif %} small text-uppercase fw-semibold">Remaining Balance Due</div>
+                                    <div class="fs-5 fw-bold {% if row.financials.remaining_due > 0 %}text-danger{% else %}text-muted{% endif %}">₹{{ row.financials.remaining_due|floatformat:2 }}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Date-Wise Filter Form for Transactions -->
+                        <div class="p-3 bg-light rounded-3 border mb-3">
+                            <form method="get" action="{% url 'admin_shop_payments' %}" class="row g-2 align-items-center">
+                                <input type="hidden" name="q" value="{{ search_query }}">
+                                <input type="hidden" name="status" value="{{ status_filter }}">
+                                <div class="col-12 col-md-3">
+                                    <span class="small fw-semibold text-secondary"><i class="bi bi-funnel me-1"></i>Filter by Payment Date:</span>
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text bg-white">From</span>
+                                        <input type="date" name="start_date" class="form-control" value="{{ start_date }}">
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text bg-white">To</span>
+                                        <input type="date" name="end_date" class="form-control" value="{{ end_date }}">
+                                    </div>
+                                </div>
+                                <div class="col-12 col-md-3 d-flex gap-1">
+                                    <button type="submit" class="btn btn-sm btn-primary flex-fill">
+                                        <i class="bi bi-filter me-1"></i>Apply Filter
+                                    </button>
+                                    {% if start_date or end_date %}
+                                    <a href="{% url 'admin_shop_payments' %}{% if search_query %}?q={{ search_query }}{% endif %}" class="btn btn-sm btn-outline-secondary" title="Clear Date Filter">
+                                        <i class="bi bi-x-circle"></i>
+                                    </a>
+                                    {% endif %}
+                                </div>
+                                {% if start_date or end_date %}
+                                <div class="col-12 mt-2">
+                                    <div class="alert alert-info py-1 px-2 mb-0 small d-flex justify-content-between align-items-center">
+                                        <span>
+                                            <i class="bi bi-calendar-check me-1"></i>
+                                            Showing transactions between <strong>{{ start_date|default:"Beginning" }}</strong> and <strong>{{ end_date|default:"Present" }}</strong>.
+                                        </span>
+                                        <span class="fw-bold">
+                                            Filtered Paid Total: ₹{{ row.filtered_paid_sum|floatformat:2 }} ({{ row.transactions|length }} record{{ row.transactions|length|pluralize }})
+                                        </span>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </form>
+                        </div>
+
+                        <!-- Transactions Table -->
+                        <div class="table-responsive border rounded-3">
+                            {% if row.transactions %}
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light text-uppercase small text-muted">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th class="text-end">Amount Paid</th>
+                                        <th>Bank Reference / UTR</th>
+                                        <th>Proof / Screenshot</th>
+                                        <th>Application / Customer</th>
+                                        <th>Remarks</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for tx in row.transactions %}
+                                    <tr>
+                                        <td class="fw-semibold text-dark text-nowrap">
+                                            <i class="bi bi-calendar3 me-1 text-muted"></i>{{ tx.payment_date|date:"d M Y" }}
+                                        </td>
+                                        <td class="text-end fw-bold text-success fs-6 text-nowrap">
+                                            ₹{{ tx.amount_received|floatformat:2 }}
+                                        </td>
+                                        <td>
+                                            <code class="text-primary fw-bold">{{ tx.payment_reference }}</code>
+                                        </td>
+                                        <td>
+                                            {% if tx.payment_screenshot %}
+                                            <a href="{{ tx.payment_screenshot.url }}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2 shadow-xs" title="Open Screenshot Proof">
+                                                <i class="bi bi-image me-1"></i> View Screenshot
+                                            </a>
+                                            {% else %}
+                                            <span class="text-muted small fst-italic">None</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if tx.application %}
+                                            <div>
+                                                <span class="badge bg-light text-secondary border font-monospace">{{ tx.application.application_number }}</span>
+                                                <span class="fw-semibold text-dark">{{ tx.application.customer.name }}</span>
+                                            </div>
+                                            <small class="text-muted">{{ tx.application.mobile_model }}</small>
+                                            {% else %}
+                                            <span class="badge bg-light text-muted border">Direct Shop Payout</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="small text-muted">{{ tx.remarks|default:"—" }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                            {% else %}
+                            <div class="text-center py-5">
+                                <i class="bi bi-receipt text-muted display-6 mb-2 d-block"></i>
+                                <h6 class="fw-bold text-dark mb-1">No Payout Transactions Found</h6>
+                                <p class="text-muted small mb-0">
+                                    {% if start_date or end_date %}
+                                    No payouts were recorded for <strong>{{ row.shop.name }}</strong> between {{ start_date|default:"beginning" }} and {{ end_date|default:"present" }}.
+                                    {% else %}
+                                    No payout transactions have been recorded for this shop yet.
+                                    {% endif %}
+                                </p>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="modal-footer bg-light d-flex justify-content-between align-items-center">
+                        <div class="text-muted small">
+                            Total Transactions: <strong>{{ row.transactions|length }}</strong>
+                        </div>
+                        <div class="d-flex gap-2">
+                            {% if row.financials.remaining_due > 0 %}
+                            <button type="button" class="btn btn-success btn-sm fw-semibold" data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target="#markPaidModal{{ row.shop.id }}">
+                                <i class="bi bi-cash-stack me-1"></i>Mark as Paid
+                            </button>
+                            {% endif %}
+                            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
 
         <!-- Mark as Paid Modals Container (placed cleanly outside table) -->
         {% for row in payment_rows %}
@@ -320,9 +495,17 @@
                 <tr>
                     <td class="fw-semibold text-dark">{{ p.payment_date|date:"M d, Y" }}</td>
                     <td>
-                        <a href="{% url 'shop_detail' pk=p.shop.pk|default:p.application.shop.pk %}" class="fw-semibold text-decoration-none text-dark hover-primary">
-                            {{ p.shop.name|default:p.application.shop.name }}
-                        </a>
+                        {% if p.shop %}
+                        <button type="button" class="btn btn-link p-0 fw-semibold text-decoration-none text-dark hover-primary text-start" data-bs-toggle="modal" data-bs-target="#shopHistoryModal{{ p.shop.id }}" title="View shop payout transaction details history">
+                            {{ p.shop.name }}
+                        </button>
+                        {% elif p.application and p.application.shop %}
+                        <button type="button" class="btn btn-link p-0 fw-semibold text-decoration-none text-dark hover-primary text-start" data-bs-toggle="modal" data-bs-target="#shopHistoryModal{{ p.application.shop.id }}" title="View shop payout transaction details history">
+                            {{ p.application.shop.name }}
+                        </button>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
                     </td>
                     <td>
                         {% if p.application %}
