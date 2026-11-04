@@ -47,9 +47,6 @@ INSTALLED_APPS = [
     "applications.apps.ApplicationsConfig",
     "payments.apps.PaymentsConfig",
     "followups.apps.FollowupsConfig",
-    "devices.apps.DevicesConfig",
-    "notifications.apps.NotificationsConfig",
-    "reports.apps.ReportsConfig",
 ]
 
 MIDDLEWARE = [
