@@ -383,36 +383,7 @@
                 {% endif %}
             </div>
 
-            <!-- Application History -->
-            {% if item.history %}
-            <div class="mt-4 pt-3 border-top">
-                <h6 class="fw-bold text-dark mb-3">
-                    <i class="bi bi-clock-history text-secondary me-1"></i> Application Audit History
-                </h6>
-                <div class="timeline small">
-                    <ul class="list-unstyled mb-0">
-                        {% for h in item.history %}
-                        <li class="mb-2 d-flex align-items-start gap-2">
-                            <i class="bi bi-check2-circle text-primary mt-1"></i>
-                            <div>
-                                <span class="fw-semibold text-dark">{{ h.get_new_status_display }}</span>
-                                {% if h.previous_status %}
-                                <span class="text-muted">(from {{ h.get_previous_status_display }})</span>
-                                {% endif %}
-                                <span class="text-muted ms-2">— {{ h.timestamp|date:"M d, Y H:i" }}</span>
-                                {% if h.actor %}
-                                <span class="badge bg-light text-secondary border ms-1">{{ h.actor.username }}</span>
-                                {% endif %}
-                                {% if h.notes %}
-                                <div class="text-secondary mt-1">{{ h.notes }}</div>
-                                {% endif %}
-                            </div>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            </div>
-            {% endif %}
+            <!-- Application History removed as requested -->
         </div>
     </div>
     {% endfor %}
