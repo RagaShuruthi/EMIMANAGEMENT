@@ -578,3 +578,66 @@ class AdminDashboardReworkTests(TestCase):
         self.assertContains(res_apps, 'Keep as Pending')
         # View Details button opens modal, does not link away to customer detail
         self.assertNotContains(res_apps, f'href="/admin-dashboard/customers/{self.customer1.pk}/"')
+
+    def test_admin_approve_all_pending_applications(self):
+        """Verify the 'Approve All Pending' button approves every pending application."""
+        from applications.models import FinanceApplication
+        self.client.login(username="admin_rework", password="AdminPassword123!")
+
+        # Ensure app1 and app2 are in pending status
+        self.app1.status = FinanceApplication.Status.SUBMITTED
+        self.app1.save()
+        self.app2.status = FinanceApplication.Status.UNDER_REVIEW
+        self.app2.save()
+
+        # Call approve all pending endpoint
+        res = self.client.post(reverse("admin_approve_all_pending_applications"))
+        self.assertEqual(res.status_code, 302)
+
+        self.app1.refresh_from_db()
+        self.app2.refresh_from_db()
+        self.assertEqual(self.app1.status, FinanceApplication.Status.APPROVED)
+        self.assertEqual(self.app2.status, FinanceApplication.Status.APPROVED)
+        # Verify EMI installment schedules exist
+        self.assertGreater(self.app1.emi_schedules.count(), 0)
+        self.assertGreater(self.app2.emi_schedules.count(), 0)
+
+    def test_admin_mark_as_paid_with_screenshot_and_rupees(self):
+        """Verify 'Mark as Paid' modal handles rupee amount, screenshot file upload, and updates status."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from payments.models import FinancierPayment
+        self.client.login(username="admin_rework", password="AdminPassword123!")
+
+        screenshot_file = SimpleUploadedFile(
+            "transfer_receipt.png",
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDRdummy",
+            content_type="image/png"
+        )
+        pay_data = {
+            "shop_id": self.shop1.id,
+            "amount": "15000.00",
+            "payment_date": "2026-11-04",
+            "payment_reference": "UTR-SCREENSHOT-TEST-01",
+            "payment_screenshot": screenshot_file,
+            "remarks": "Paid via GPay with screenshot attached"
+        }
+        res = self.client.post(reverse("admin_record_shop_payment"), pay_data)
+        self.assertEqual(res.status_code, 302)
+
+        payment = FinancierPayment.objects.get(payment_reference="UTR-SCREENSHOT-TEST-01")
+        self.assertEqual(payment.amount_received, Decimal("15000.00"))
+        self.assertEqual(payment.shop, self.shop1)
+        self.assertTrue(payment.payment_screenshot)
+
+    def test_date_wise_filtering_applications_and_payouts(self):
+        """Verify date-wise filters on both applications page and shop payments ledger."""
+        self.client.login(username="admin_rework", password="AdminPassword123!")
+
+        # 1. Applications page date filter
+        res_apps = self.client.get(reverse("admin_applications_list") + "?start_date=2026-10-01&end_date=2026-11-30")
+        self.assertEqual(res_apps.status_code, 200)
+
+        # 2. Shop payments page date filter
+        res_pays = self.client.get(reverse("admin_shop_payments") + "?start_date=2026-10-01&end_date=2026-11-30")
+        self.assertEqual(res_pays.status_code, 200)
+        self.assertContains(res_pays, "Shop Payout Balances")

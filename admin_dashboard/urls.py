@@ -12,6 +12,7 @@ urlpatterns = [
 
     # Applications Review & Approval (Pending, Approved, Rejected)
     path("applications/", views.admin_applications_list_view, name="admin_applications_list"),
+    path("applications/approve-all-pending/", views.admin_approve_all_pending_applications_view, name="admin_approve_all_pending_applications"),
 
     # All Customers & Customer Management
     path("customers/", views.admin_all_customers_view, name="admin_all_customers"),

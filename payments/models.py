@@ -47,6 +47,12 @@ class FinancierPayment(models.Model):
         default=False,
         help_text="Flagged True if received amount does not match expected requested balance."
     )
+    payment_screenshot = models.FileField(
+        upload_to="payouts/screenshots/%Y/%m/",
+        null=True,
+        blank=True,
+        help_text="Screenshot or proof of shop payout payment."
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -9,6 +9,14 @@
         <h3 class="fw-bold text-dark mb-0">Finance Applications</h3>
         <p class="text-muted small mb-0">Review, verify, and approve or reject mobile phone loan applications from partner shops.</p>
     </div>
+    {% if pending_count > 0 %}
+    <div>
+        <button type="button" class="btn btn-success d-flex align-items-center gap-2 shadow-sm px-3 py-2" data-bs-toggle="modal" data-bs-target="#approveAllPendingModal">
+            <i class="bi bi-check2-all fs-5"></i>
+            <span class="fw-semibold">Approve All Pending ({{ pending_count }})</span>
+        </button>
+    </div>
+    {% endif %}
 </div>
 
 <!-- Three Status Summary Cards -->
@@ -60,37 +68,45 @@
     </div>
 </div>
 
-<!-- Filter Bar with 3 Status Filter Options Alone -->
+<!-- Filter Bar with 3 Status Filter Options & Date-Wise Filters -->
 <div class="card rounded-3 mb-4 shadow-sm border-0">
     <div class="card-body p-3 bg-light rounded-3">
         <form method="get" action="{% url 'admin_applications_list' %}" class="row g-2 align-items-center">
             <!-- Search Input -->
-            <div class="col-12 col-md-6 col-lg-7">
+            <div class="col-12 col-md-4">
                 <div class="input-group">
                     <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-search"></i></span>
-                    <input type="text" name="q" class="form-control border-start-0" placeholder="Search by customer name, phone, app #, model, or shop..." value="{{ search_query }}">
+                    <input type="text" name="q" class="form-control border-start-0" placeholder="Search customer, phone, app #, model, shop..." value="{{ search_query }}">
                 </div>
             </div>
 
             <!-- Status Filter: Exactly 3 Status Options Alone -->
-            <div class="col-12 col-md-4 col-lg-3">
+            <div class="col-12 col-md-3">
                 <div class="input-group">
                     <label class="input-group-text bg-white text-muted small" for="appStatusFilter">Status</label>
                     <select name="status" id="appStatusFilter" class="form-select" onchange="this.form.submit()">
-                        <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Applications ({{ total_count }})</option>
+                        <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All ({{ total_count }})</option>
                         <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending ({{ pending_count }})</option>
                         <option value="approved" {% if status_filter == 'approved' %}selected{% endif %}>Approved ({{ approved_count }})</option>
-                        <option value="rejected" {% if status_filter == 'rejected' %}selected{% endif %}>Declined / Rejected ({{ rejected_count }})</option>
+                        <option value="rejected" {% if status_filter == 'rejected' %}selected{% endif %}>Declined ({{ rejected_count }})</option>
                     </select>
                 </div>
             </div>
 
+            <!-- Date-wise Filter -->
+            <div class="col-6 col-md-2">
+                <input type="date" name="start_date" class="form-control" value="{{ start_date }}" placeholder="From Date" title="From Application Date">
+            </div>
+            <div class="col-6 col-md-2">
+                <input type="date" name="end_date" class="form-control" value="{{ end_date }}" placeholder="To Date" title="To Application Date">
+            </div>
+
             <!-- Action Buttons -->
-            <div class="col-12 col-md-2 col-lg-2 d-flex gap-1">
+            <div class="col-12 col-md-1 d-flex gap-1">
                 <button type="submit" class="btn btn-primary flex-grow-1" title="Apply Filter">
-                    <i class="bi bi-funnel me-1"></i> Filter
+                    <i class="bi bi-funnel"></i>
                 </button>
-                {% if search_query or status_filter != 'all' %}
+                {% if search_query or status_filter != 'all' or start_date or end_date %}
                 <a href="{% url 'admin_applications_list' %}" class="btn btn-outline-secondary" title="Reset Filter">
                     <i class="bi bi-x-circle"></i>
                 </a>
@@ -539,6 +555,41 @@
         </nav>
     </div>
     {% endif %}
+</div>
+
+<!-- Modal: Approve All Pending Applications Confirmation -->
+<div class="modal fade" id="approveAllPendingModal" tabindex="-1" aria-labelledby="approveAllPendingModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="{% url 'admin_approve_all_pending_applications' %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <div class="modal-header bg-success-subtle text-success">
+                    <h5 class="modal-title fw-bold" id="approveAllPendingModalLabel">
+                        <i class="bi bi-check2-all me-2"></i>Approve All Pending Applications
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4 text-center">
+                    <div class="mb-3">
+                        <div class="bg-success-subtle text-success d-inline-flex p-3 rounded-circle">
+                            <i class="bi bi-patch-check-fill fs-1"></i>
+                        </div>
+                    </div>
+                    <h5 class="fw-bold text-dark mb-2">Approve All {{ pending_count }} Pending Loans?</h5>
+                    <p class="text-muted small mb-0">
+                        This action will immediately change all currently pending financing applications to <strong>Approved</strong>, set up their monthly EMI schedules with paise accuracy, and allow partner shops to proceed.
+                    </p>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success btn-sm fw-semibold px-3">
+                        <i class="bi bi-check2-circle me-1"></i> Yes, Approve All ({{ pending_count }})
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 {% endblock %}
 

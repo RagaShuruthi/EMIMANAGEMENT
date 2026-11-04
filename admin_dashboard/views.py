@@ -504,6 +504,8 @@ def admin_applications_list_view(request):
     """
     search_query = request.GET.get("q", "").strip()
     status_filter = request.GET.get("status", "all").strip().lower()
+    start_date = request.GET.get("start_date", "").strip()
+    end_date = request.GET.get("end_date", "").strip()
 
     # Base queryset
     apps_qs = FinanceApplication.objects.select_related(
@@ -562,6 +564,12 @@ def admin_applications_list_view(request):
     else:
         status_filter = "all"
 
+    # Date-wise filter
+    if start_date:
+        apps_qs = apps_qs.filter(created_at__date__gte=start_date)
+    if end_date:
+        apps_qs = apps_qs.filter(created_at__date__lte=end_date)
+
     paginator = Paginator(apps_qs, 15)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
@@ -571,12 +579,54 @@ def admin_applications_list_view(request):
         "applications": page_obj,
         "search_query": search_query,
         "status_filter": status_filter,
+        "start_date": start_date,
+        "end_date": end_date,
         "total_count": total_count,
         "pending_count": pending_count,
         "approved_count": approved_count,
         "rejected_count": rejected_count,
     }
     return render(request, "admin_dashboard/applications_list.html", context)
+
+
+@require_POST
+@login_required
+@admin_required
+def admin_approve_all_pending_applications_view(request):
+    """
+    Approves all finance applications currently in pending/under review status.
+    Generates EMI installment schedules and marks status as APPROVED.
+    URL: /admin-dashboard/applications/approve-all-pending/
+    """
+    pending_statuses = [
+        FinanceApplication.Status.SUBMITTED,
+        FinanceApplication.Status.UNDER_REVIEW,
+        FinanceApplication.Status.READY,
+        FinanceApplication.Status.DRAFT,
+    ]
+    pending_apps = list(FinanceApplication.objects.filter(status__in=pending_statuses))
+    count = 0
+    with transaction.atomic():
+        for app in pending_apps:
+            old_status = app.status
+            app.status = FinanceApplication.Status.APPROVED
+            app.remarks = (app.remarks + " [Bulk Approved]" if app.remarks else "Bulk Approved by Administrator").strip()
+            app.save()
+            app.generate_default_schedule_if_missing()
+            ApplicationHistory.objects.create(
+                application=app,
+                previous_status=old_status,
+                new_status=app.status,
+                actor=request.user,
+                notes=f"Application approved via Bulk Approval by Administrator {request.user.username}."
+            )
+            count += 1
+
+    messages.success(request, f"Successfully approved all {count} pending applications!")
+    next_url = request.POST.get("next")
+    if next_url:
+        return redirect(next_url)
+    return redirect("admin_applications_list")
 
 
 @require_POST
@@ -1017,6 +1067,8 @@ def admin_shop_payments_view(request):
     """
     search_query = request.GET.get("q", "").strip()
     status_filter = request.GET.get("status", "").strip()
+    start_date = request.GET.get("start_date", "").strip()
+    end_date = request.GET.get("end_date", "").strip()
 
     shops_qs = Shop.objects.all().select_related("owner_account").order_by("name")
 
@@ -1055,10 +1107,15 @@ def admin_shop_payments_view(request):
             ).count()
         })
 
-    # Recent Payment Transactions by Admin
+    # Recent Payment Transactions by Admin with date filtering
     recent_payments = FinancierPayment.objects.select_related(
-        "application", "application__shop", "application__customer"
-    ).order_by("-payment_date", "-created_at")[:10]
+        "shop", "application", "application__shop", "application__customer"
+    )
+    if start_date:
+        recent_payments = recent_payments.filter(payment_date__gte=start_date)
+    if end_date:
+        recent_payments = recent_payments.filter(payment_date__lte=end_date)
+    recent_payments = recent_payments.order_by("-payment_date", "-created_at")
 
     context = {
         "active_page": "payments",
@@ -1069,6 +1126,8 @@ def admin_shop_payments_view(request):
         "total_system_remaining": total_system_remaining,
         "search_query": search_query,
         "status_filter": status_filter,
+        "start_date": start_date,
+        "end_date": end_date,
     }
     return render(request, "admin_dashboard/shop_payments.html", context)
 
@@ -1085,7 +1144,7 @@ def admin_record_shop_payment_view(request):
     Records an admin payout to a shop by amount or for a specific application obligation.
     Supports direct shop payout by amount without requiring customer application selection.
     Ensures transaction integrity, validates payment references, prevents duplicates,
-    and updates application & shop payment status immediately.
+    supports payment screenshot upload, and updates application & shop payment status immediately.
     URL: /admin-dashboard/payments/record/
     """
     shop_id = request.POST.get("shop_id")
@@ -1094,6 +1153,7 @@ def admin_record_shop_payment_view(request):
     payment_date = request.POST.get("payment_date") or timezone.localdate().strftime("%Y-%m-%d")
     reference = request.POST.get("payment_reference", "").strip()
     remarks = request.POST.get("remarks", "").strip()
+    screenshot = request.FILES.get("payment_screenshot")
     next_url = request.POST.get("next")
 
     if not shop_id and not app_id:
@@ -1118,8 +1178,7 @@ def admin_record_shop_payment_view(request):
         return redirect(next_url or "admin_shop_payments")
 
     if not reference:
-        messages.error(request, "Bank UTR or Payment Reference number is mandatory.")
-        return redirect(next_url or "admin_shop_payments")
+        reference = f"PAY-{shop.id if shop else 'ADMIN'}-{timezone.now().strftime('%Y%m%d%H%M%S')}"
 
     # Duplicate payment prevention
     dup_filter = Q(payment_reference__iexact=reference, amount_received=amount)
@@ -1140,7 +1199,8 @@ def admin_record_shop_payment_view(request):
             amount_received=amount,
             payment_date=payment_date,
             payment_reference=reference,
-            remarks=remarks or f"Payment recorded by Administrator {request.user.username}"
+            remarks=remarks or f"Payment recorded by Administrator {request.user.username}",
+            payment_screenshot=screenshot
         )
 
         # If payment was made directly to shop by amount, reconcile any pending applications in FIFO order
