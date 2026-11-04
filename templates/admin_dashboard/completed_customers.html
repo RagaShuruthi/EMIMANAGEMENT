@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+
+{% block title %}Completed EMI Customers — EMI Management System{% endblock %}
+
+{% block content %}
+<!-- Breadcrumbs & Header -->
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-1 small">
+                <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'admin_all_customers' %}">Customers</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Completed List</li>
+            </ol>
+        </nav>
+        <h2 class="fw-bold text-dark mb-0">
+            <i class="bi bi-check2-all text-success me-2"></i>Completed EMI Customers
+        </h2>
+        <p class="text-muted small mb-0">Records of customers who have fully settled their device loan obligations and completed all EMI schedules.</p>
+    </div>
+
+    <!-- Export Buttons -->
+    <div class="d-flex align-items-center gap-2">
+        <a href="{% url 'admin_completed_customers_export' export_format='excel' %}?{{ request.GET.urlencode }}" class="btn btn-sm btn-outline-success d-flex align-items-center gap-1 shadow-sm">
+            <i class="bi bi-file-earmark-excel"></i>
+            <span>Export to Excel</span>
+        </a>
+        <a href="{% url 'admin_completed_customers_export' export_format='pdf' %}?{{ request.GET.urlencode }}" class="btn btn-sm btn-outline-danger d-flex align-items-center gap-1 shadow-sm">
+            <i class="bi bi-file-earmark-pdf"></i>
+            <span>Export to PDF</span>
+        </a>
+    </div>
+</div>
+
+<!-- Financial Summary Stat Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card rounded-3 shadow-sm border-0 border-start border-success border-4">
+            <div class="card-body p-3">
+                <span class="text-muted small text-uppercase fw-semibold d-block mb-1">
+                    <i class="bi bi-people-fill text-success me-1"></i> Completed Customers
+                </span>
+                <h3 class="fw-bold text-success mb-1">{{ total_completed_count }}</h3>
+                <span class="text-muted small">Fully repaid loan accounts</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card rounded-3 shadow-sm border-0 border-start border-primary border-4">
+            <div class="card-body p-3">
+                <span class="text-muted small text-uppercase fw-semibold d-block mb-1">
+                    <i class="bi bi-phone-fill text-primary me-1"></i> Financed Volume Cleared
+                </span>
+                <h3 class="fw-bold text-dark mb-1">₹{{ total_cleared_volume|floatformat:2 }}</h3>
+                <span class="text-muted small">Total phone purchase value</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card rounded-3 shadow-sm border-0 border-start border-info border-4">
+            <div class="card-body p-3">
+                <span class="text-muted small text-uppercase fw-semibold d-block mb-1">
+                    <i class="bi bi-cash-stack text-info me-1"></i> EMI Collections Received
+                </span>
+                <h3 class="fw-bold text-dark mb-1">₹{{ total_collected_amount|floatformat:2 }}</h3>
+                <span class="text-muted small">Total installments collected</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card rounded-3 shadow-sm border-0 border-start border-secondary border-4">
+            <div class="card-body p-3">
+                <span class="text-muted small text-uppercase fw-semibold d-block mb-1">
+                    <i class="bi bi-shield-check text-secondary me-1"></i> Outstanding Dues
+                </span>
+                <h3 class="fw-bold text-muted mb-1">₹0.00</h3>
+                <span class="badge bg-success-subtle text-success border border-success-subtle">
+                    100% Cleared / Settled
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters, Search & Sorting Bar -->
+<div class="card rounded-3 mb-4 shadow-sm border-0">
+    <div class="card-body p-3 bg-light rounded-3">
+        <form method="get" action="{% url 'admin_completed_customers' %}" id="completedCustomersFilterForm" class="row g-3 align-items-center">
+            <!-- Search Input -->
+            <div class="col-12 col-md-4">
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-search"></i></span>
+                    <input type="text" name="q" class="form-control border-start-0" placeholder="Search customer name, phone, model, address..." value="{{ search_query }}">
+                </div>
+            </div>
+
+            <!-- Shop Filter -->
+            <div class="col-12 col-md-3">
+                <select name="shop_id" class="form-select" onchange="document.getElementById('completedCustomersFilterForm').submit()">
+                    <option value="">All Partner Shops</option>
+                    {% for s in all_shops %}
+                    <option value="{{ s.id }}" {% if shop_filter == s.id|stringformat:"s" %}selected{% endif %}>
+                        {{ s.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Sorting Dropdown -->
+            <div class="col-12 col-md-3">
+                <select name="sort" class="form-select" onchange="document.getElementById('completedCustomersFilterForm').submit()">
+                    <option value="">Sort by: Default (Recent)</option>
+                    <option value="name_asc" {% if sort_param == 'name_asc' %}selected{% endif %}>Customer Name (A – Z)</option>
+                    <option value="name_desc" {% if sort_param == 'name_desc' %}selected{% endif %}>Customer Name (Z – A)</option>
+                    <option value="paid_desc" {% if sort_param == 'paid_desc' %}selected{% endif %}>Amount Paid (Highest to Lowest)</option>
+                    <option value="paid_asc" {% if sort_param == 'paid_asc' %}selected{% endif %}>Amount Paid (Lowest to Highest)</option>
+                </select>
+            </div>
+
+            <!-- Filter / Reset Buttons -->
+            <div class="col-12 col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-primary flex-fill">Apply</button>
+                {% if search_query or shop_filter or sort_param %}
+                <a href="{% url 'admin_completed_customers' %}" class="btn btn-outline-secondary" title="Reset Filters">
+                    <i class="bi bi-x-circle"></i>
+                </a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Completed Customers Table -->
+<div class="card rounded-3 overflow-hidden shadow-sm border-0 mb-4">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom">
+        <h5 class="fw-bold mb-0 text-dark">
+            <i class="bi bi-check-circle-fill text-success me-2"></i>Fully Settled Customers ({{ total_completed_count }})
+        </h5>
+        <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+            Zero Remaining Balance
+        </span>
+    </div>
+
+    <div class="table-responsive">
+        {% if customers %}
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light text-uppercase small text-muted" style="letter-spacing: 0.03em;">
+                <tr>
+                    <th scope="col">Customer Name</th>
+                    <th scope="col">Phone Number</th>
+                    <th scope="col">Shop Name</th>
+                    <th scope="col">Phone Model</th>
+                    <th scope="col" class="text-end">Purchase Price</th>
+                    <th scope="col" class="text-end">Down Payment</th>
+                    <th scope="col" class="text-end">Monthly EMI</th>
+                    <th scope="col" class="text-end">Amount Paid</th>
+                    <th scope="col" class="text-end">Remaining Balance</th>
+                    <th scope="col" class="text-center">Status</th>
+                    <th scope="col" style="min-width: 200px;">Update Status / Notes</th>
+                    <th scope="col" class="text-end">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in customers %}
+                <tr>
+                    <!-- Customer Name -->
+                    <td>
+                        <div class="fw-bold text-dark">{{ row.customer_name }}</div>
+                        <div class="small text-muted font-monospace">#{{ row.customer_id }}</div>
+                    </td>
+
+                    <!-- Phone Number -->
+                    <td>
+                        <div>
+                            <a href="tel:{{ row.phone }}" class="text-decoration-none text-dark fw-semibold">
+                                <i class="bi bi-telephone-fill me-1 text-success small"></i>{{ row.phone }}
+                            </a>
+                        </div>
+                        {% if row.secondary_mobile %}
+                        <div class="small text-muted">
+                            <i class="bi bi-phone me-1"></i>{{ row.secondary_mobile }}
+                        </div>
+                        {% endif %}
+                    </td>
+
+                    <!-- Shop Name -->
+                    <td>
+                        <span class="badge bg-light text-dark border">
+                            <i class="bi bi-shop me-1 text-primary"></i>{{ row.shop_name }}
+                        </span>
+                    </td>
+
+                    <!-- Phone Model -->
+                    <td>
+                        <span class="fw-semibold text-dark">{{ row.mobile_model }}</span>
+                    </td>
+
+                    <!-- Purchase Price -->
+                    <td class="text-end fw-semibold text-dark">
+                        ₹{{ row.mobile_price|floatformat:2 }}
+                    </td>
+
+                    <!-- Down Payment -->
+                    <td class="text-end text-muted">
+                        ₹{{ row.down_payment|floatformat:2 }}
+                    </td>
+
+                    <!-- Monthly EMI -->
+                    <td class="text-end text-muted">
+                        ₹{{ row.monthly_emi|floatformat:2 }}
+                    </td>
+
+                    <!-- Amount Paid -->
+                    <td class="text-end fw-bold text-success">
+                        ₹{{ row.amount_paid|floatformat:2 }}
+                    </td>
+
+                    <!-- Remaining Balance -->
+                    <td class="text-end fw-bold text-muted">
+                        ₹0.00
+                    </td>
+
+                    <!-- Status -->
+                    <td class="text-center">
+                        <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                            <i class="bi bi-patch-check-fill me-1"></i>Completed
+                        </span>
+                    </td>
+
+                    <!-- Update Status Note -->
+                    <td>
+                        <div class="small text-dark" style="max-width: 260px; white-space: pre-wrap;">
+                            {{ row.update_status }}
+                        </div>
+                        {% if row.latest_update_at %}
+                        <div class="text-muted" style="font-size: 0.72rem;">
+                            {{ row.latest_update_at|date:"M d, Y H:i" }}
+                        </div>
+                        {% endif %}
+                    </td>
+
+                    <!-- Action -->
+                    <td class="text-end">
+                        <a href="{% url 'admin_customer_detail' pk=row.customer_id %}" class="btn btn-sm btn-outline-primary" title="View Customer Dossier & Payment Ledger">
+                            <i class="bi bi-eye me-1"></i> View
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-check2-all text-muted display-4 mb-3 d-block"></i>
+            <h5 class="fw-bold text-dark">No Completed Customers Found</h5>
+            <p class="text-muted small mb-0">Customers who have fully settled all their EMI installments will appear here.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Pagination Controls (50 per page with chevron arrows) -->
+    {% if customers.has_other_pages %}
+    <div class="card-footer bg-white py-3 border-top d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="small text-muted">
+            Showing {{ customers.start_index }}–{{ customers.end_index }} of {{ customers.paginator.count }} completed accounts
+        </div>
+        <nav aria-label="Completed customers pagination">
+            <ul class="pagination pagination-sm mb-0">
+                {% if customers.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ customers.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if shop_filter %}&shop_id={{ shop_filter }}{% endif %}{% if sort_param %}&sort={{ sort_param }}{% endif %}" aria-label="Previous">
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link"><i class="bi bi-chevron-left"></i></span>
+                </li>
+                {% endif %}
+
+                {% for p in customers.paginator.page_range %}
+                    {% if p == customers.number %}
+                    <li class="page-item active" aria-current="page"><span class="page-link">{{ p }}</span></li>
+                    {% elif p > customers.number|add:"-3" and p < customers.number|add:"3" %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ p }}{% if search_query %}&q={{ search_query }}{% endif %}{% if shop_filter %}&shop_id={{ shop_filter }}{% endif %}{% if sort_param %}&sort={{ sort_param }}{% endif %}">{{ p }}</a>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if customers.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ customers.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if shop_filter %}&shop_id={{ shop_filter }}{% endif %}{% if sort_param %}&sort={{ sort_param }}{% endif %}" aria-label="Next">
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link"><i class="bi bi-chevron-right"></i></span>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

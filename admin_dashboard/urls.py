@@ -23,6 +23,10 @@ urlpatterns = [
     path("customers/export/<str:export_format>/", views.admin_customers_export_view, name="admin_customers_export"),
     path("customers/applications/<int:pk>/approval/", views.admin_application_approval_view, name="admin_application_approval"),
 
+    # Completed Customers List
+    path("completed-customers/", views.admin_completed_customers_view, name="admin_completed_customers"),
+    path("completed-customers/export/<str:export_format>/", views.admin_completed_customers_export_view, name="admin_completed_customers_export"),
+
     # Shop-wise Customers
     path("shopwise-customers/", views.admin_shopwise_customers_view, name="admin_shopwise_customers"),
     path("shopwise-customers/<int:shop_id>/", views.admin_shopwise_detail_view, name="admin_shopwise_detail"),

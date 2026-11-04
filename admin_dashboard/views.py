@@ -89,13 +89,20 @@ def get_shop_customer_emi_stats(shop, today=None):
     }
 
 
-def prepare_customer_management_dataset(customers_qs, request, today=None):
+def prepare_customer_management_dataset(customers_qs, request, today=None, exclude_completed=True, completed_only=False):
     """
     Prepares, classifies, filters, and sorts customer rows consistently for both
     HTML templates and Excel / PDF exports.
+    Automatically excludes completed EMI customers from active customer lists,
+    and supports completed_only=True for the Completed List module.
     """
     if today is None:
         today = timezone.localdate()
+
+    if request.GET.get("include_completed") == "1":
+        exclude_completed = False
+    if request.GET.get("completed_only") == "1":
+        completed_only = True
 
     all_rows = []
     for c in customers_qs:
@@ -113,6 +120,7 @@ def prepare_customer_management_dataset(customers_qs, request, today=None):
             mobile_model = app.mobile_model
             app_id = app.id
             next_sched_id = next_sched.id if next_sched else None
+            is_completed = bool(app.emi_schedules.exists() and (rem <= Decimal("0.00") or due_status == "PAID" or not next_sched))
         else:
             app_id = None
             next_sched_id = None
@@ -124,6 +132,15 @@ def prepare_customer_management_dataset(customers_qs, request, today=None):
             down = Decimal("0.00")
             monthly_emi = Decimal("0.00")
             mobile_model = "—"
+            is_completed = False
+
+        # Filter by completion status
+        if completed_only:
+            if not is_completed:
+                continue
+        elif exclude_completed:
+            if is_completed:
+                continue
 
         # Row highlighting & badge styling
         if due_status == "DUE_TODAY":
@@ -138,10 +155,10 @@ def prepare_customer_management_dataset(customers_qs, request, today=None):
             row_class = "table-light border-start border-danger border-4"
             badge_class = "danger"
             due_status_display = "Pending Due"
-        elif due_status == "PAID":
+        elif due_status == "PAID" or is_completed:
             row_class = ""
             badge_class = "success"
-            due_status_display = "Paid"
+            due_status_display = "Completed"
         else:
             row_class = ""
             badge_class = "secondary"
@@ -176,6 +193,7 @@ def prepare_customer_management_dataset(customers_qs, request, today=None):
             "due_status_display": due_status_display,
             "badge_class": badge_class,
             "row_class": row_class,
+            "is_completed": is_completed,
             "update_status": c.latest_update_status or "—",
             "latest_update_at": c.latest_update_at,
             "latest_update_by": c.latest_update_by,
@@ -887,6 +905,106 @@ def admin_customers_export_view(request, export_format):
     if export_format.lower() == "pdf":
         return export_customers_to_pdf(rows, title="Master Customers EMI Report", active_filters_desc=desc_str)
     return export_customers_to_excel(rows, title="Master Customers EMI Report", active_filters_desc=desc_str)
+
+
+# ==========================================
+# Completed Customers Module (Completed List)
+# ==========================================
+
+@login_required
+@admin_required
+def admin_completed_customers_view(request):
+    """
+    Dedicated Completed List view for customers who have completed their EMI repayments.
+    These customers are excluded from active customer lists and tracked with complete statistics here.
+    URL: /admin-dashboard/completed-customers/
+    """
+    search_query = request.GET.get("q", "").strip()
+    shop_filter = request.GET.get("shop_id", "").strip()
+
+    customers_qs = Customer.objects.select_related("shop").prefetch_related(
+        "applications", "applications__emi_schedules", "applications__customer_emi_payments", "update_history"
+    ).order_by("-created_at")
+
+    if search_query:
+        customers_qs = customers_qs.filter(
+            Q(name__icontains=search_query) |
+            Q(primary_mobile__icontains=search_query) |
+            Q(secondary_mobile__icontains=search_query) |
+            Q(home_address__icontains=search_query) |
+            Q(work_address__icontains=search_query) |
+            Q(applications__mobile_model__icontains=search_query) |
+            Q(shop__name__icontains=search_query)
+        ).distinct()
+
+    if shop_filter:
+        customers_qs = customers_qs.filter(shop_id=shop_filter)
+
+    dataset = prepare_customer_management_dataset(customers_qs, request, completed_only=True)
+    all_rows = dataset["all_rows"]
+
+    # Statistics for completed customers
+    total_completed_count = len(all_rows)
+    total_cleared_volume = sum((r["mobile_price"] for r in all_rows), Decimal("0.00"))
+    total_collected_amount = sum((r["amount_paid"] for r in all_rows), Decimal("0.00"))
+
+    # Pagination: exactly 50 per page with chevron arrows
+    paginator = Paginator(all_rows, 50)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
+    all_shops = Shop.objects.all().order_by("name")
+
+    context = {
+        "active_page": "completed_customers",
+        "customers": page_obj,
+        "search_query": search_query,
+        "shop_filter": shop_filter,
+        "sort_param": dataset["sort_param"],
+        "total_completed_count": total_completed_count,
+        "total_cleared_volume": total_cleared_volume,
+        "total_collected_amount": total_collected_amount,
+        "all_shops": all_shops,
+    }
+    return render(request, "admin_dashboard/completed_customers.html", context)
+
+
+@login_required
+@admin_required
+def admin_completed_customers_export_view(request, export_format):
+    """
+    Exports completed customers dataset to Excel (.xlsx) or PDF (.pdf).
+    URL: /admin-dashboard/completed-customers/export/<str:export_format>/
+    """
+    search_query = request.GET.get("q", "").strip()
+    shop_filter = request.GET.get("shop_id", "").strip()
+
+    customers_qs = Customer.objects.select_related("shop").prefetch_related(
+        "applications", "applications__emi_schedules", "applications__customer_emi_payments", "update_history"
+    ).order_by("-created_at")
+
+    if search_query:
+        customers_qs = customers_qs.filter(
+            Q(name__icontains=search_query) |
+            Q(primary_mobile__icontains=search_query) |
+            Q(secondary_mobile__icontains=search_query) |
+            Q(home_address__icontains=search_query) |
+            Q(work_address__icontains=search_query) |
+            Q(applications__mobile_model__icontains=search_query) |
+            Q(shop__name__icontains=search_query)
+        ).distinct()
+
+    if shop_filter:
+        customers_qs = customers_qs.filter(shop_id=shop_filter)
+
+    dataset = prepare_customer_management_dataset(customers_qs, request, completed_only=True)
+    rows = dataset["all_rows"]
+
+    title = "Completed EMI Customers Report"
+    desc_str = f"Completed Customers ({len(rows)} records)"
+    if export_format.lower() == "pdf":
+        return export_customers_to_pdf(rows, title=title, active_filters_desc=desc_str)
+    return export_customers_to_excel(rows, title=title, active_filters_desc=desc_str)
 
 
 # ==========================================

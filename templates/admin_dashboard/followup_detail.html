@@ -144,98 +144,119 @@
         <div class="row g-3 h-100">
             <div class="col-12 col-sm-4">
                 <div class="stat-card h-100 border-primary-subtle">
-                    <div class="stat-label text-primary">Assigned Shops</div>
-                    <div class="stat-value text-primary">{{ assigned_shops|length }}</div>
-                    <small class="text-muted">Authorized retail locations</small>
+                    <div class="stat-label text-primary">Customer Updations</div>
+                    <div class="stat-value text-primary">{{ total_updates_count }}</div>
+                    <small class="text-muted">Total updates logged</small>
                 </div>
             </div>
             <div class="col-12 col-sm-4">
                 <div class="stat-card h-100 border-info-subtle">
-                    <div class="stat-label text-info-emphasis">Monitored Customers</div>
-                    <div class="stat-value text-info-emphasis">{{ total_customers }}</div>
-                    <small class="text-muted">Across assigned shops</small>
+                    <div class="stat-label text-info-emphasis">Customers Updated</div>
+                    <div class="stat-value text-info-emphasis">{{ unique_customers_count }}</div>
+                    <small class="text-muted">Unique customer records</small>
                 </div>
             </div>
             <div class="col-12 col-sm-4">
                 <div class="stat-card h-100 border-success-subtle">
-                    <div class="stat-label text-success">Activities Logged</div>
-                    <div class="stat-value text-success">{{ activities|length }}</div>
-                    <small class="text-muted">Interactions & collection calls</small>
+                    <div class="stat-label text-success">Monitored Customers</div>
+                    <div class="stat-value text-success">{{ total_customers }}</div>
+                    <small class="text-muted">In assigned jurisdiction</small>
                 </div>
             </div>
             <div class="col-12">
-                <!-- Portal Access Info -->
+                <!-- Assigned Jurisdiction Badges (no external shop details) -->
                 <div class="card rounded-3 bg-light border-0 p-3 h-100 d-flex flex-column justify-content-center">
-                    <div class="d-flex align-items-center gap-3">
-                        <div class="fs-1 text-primary"><i class="bi bi-shield-check"></i></div>
-                        <div>
-                            <h6 class="fw-bold text-dark mb-1">Follow-up Portal Scoping & Tenant Security</h6>
-                            <p class="text-muted small mb-0">
-                                This employee logs in with role <code>FOLLOWUP</code> and is restricted to the
-                                <strong>{{ assigned_shops|length }} assigned shop(s)</strong>. They cannot view or modify data
-                                from any unauthorized shops.
-                            </p>
-                        </div>
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <span class="small fw-bold text-dark text-uppercase" style="letter-spacing: 0.05em;">
+                            <i class="bi bi-shield-check text-primary me-1"></i>Assigned Retail Shops ({{ assigned_shops|length }})
+                        </span>
+                        <a href="{% url 'admin_followup_edit' pk=employee.pk %}" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size: 0.75rem;">
+                            <i class="bi bi-pencil me-1"></i>Edit
+                        </a>
                     </div>
+                    {% if assigned_shops %}
+                    <div class="d-flex flex-wrap gap-1">
+                        {% for s in assigned_shops %}
+                        <span class="badge bg-white text-dark border">
+                            <i class="bi bi-shop me-1 text-primary"></i>{{ s.name }}
+                        </span>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <span class="text-muted small">No shops assigned yet.</span>
+                    {% endif %}
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Assigned Retail Shops Table -->
+<!-- Customer Updation Details Table (details of each customer update done by this staff) -->
 <div class="card rounded-3 shadow-sm mb-4">
-    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
         <div>
             <h5 class="fw-bold mb-0 text-dark">
-                <i class="bi bi-shop text-primary me-2"></i>Assigned Retail Shops ({{ assigned_shops|length }})
+                <i class="bi bi-journal-text text-primary me-2"></i>Customer Updation Details Logged by {{ employee.get_full_name|default:employee.username }} ({{ customer_updates|length }})
             </h5>
-            <small class="text-muted">Shops this employee is authorized to monitor</small>
+            <small class="text-muted">Complete historical records of notes, promises, collection statuses, and due date changes</small>
         </div>
-        <a href="{% url 'admin_followup_edit' pk=employee.pk %}" class="btn btn-sm btn-outline-secondary">
-            <i class="bi bi-plus-slash-minus me-1"></i> Modify Assignments
-        </a>
+        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+            {{ unique_customers_count }} Unique Customer{{ unique_customers_count|pluralize }}
+        </span>
     </div>
     <div class="table-responsive">
-        {% if assignments %}
+        {% if customer_updates %}
         <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
+            <thead class="table-light text-uppercase small text-muted">
                 <tr>
-                    <th scope="col">Shop Name</th>
-                    <th scope="col">Owner</th>
-                    <th scope="col">Phone</th>
-                    <th scope="col">Address</th>
-                    <th scope="col">Assignment Status</th>
-                    <th scope="col">Assigned On</th>
+                    <th scope="col">Date & Time</th>
+                    <th scope="col">Customer</th>
+                    <th scope="col">Shop</th>
+                    <th scope="col">Phone Model</th>
+                    <th scope="col" style="min-width: 280px;">Updation Note / Status Message</th>
+                    <th scope="col">Next Due Date</th>
                     <th scope="col" class="text-end">Action</th>
                 </tr>
             </thead>
             <tbody>
-                {% for a in assignments %}
+                {% for up in customer_updates %}
                 <tr>
-                    <td>
-                        <a href="{% url 'shop_detail' pk=a.shop.pk %}" class="fw-bold text-decoration-none text-dark">
-                            <i class="bi bi-shop me-1 text-primary"></i>{{ a.shop.name }}
-                        </a>
+                    <td class="text-muted small text-nowrap">
+                        <i class="bi bi-clock me-1"></i>{{ up.created_at|date:"M d, Y H:i" }}
                     </td>
-                    <td>{{ a.shop.owner_name }}</td>
                     <td>
-                        <a href="tel:{{ a.shop.phone }}" class="text-decoration-none text-secondary">
-                            {{ a.shop.phone }}
+                        <a href="{% url 'admin_customer_detail' pk=up.customer.pk %}" class="fw-bold text-decoration-none text-dark hover-primary">
+                            {{ up.customer.name }}
                         </a>
+                        <div class="small text-muted font-monospace">
+                            <i class="bi bi-telephone me-1 text-success"></i>{{ up.customer.primary_mobile }}
+                        </div>
                     </td>
-                    <td class="text-muted small">{{ a.shop.address|truncatewords:6 }}</td>
                     <td>
-                        {% if a.is_active %}
-                            <span class="badge badge-active px-2 py-1"><i class="bi bi-check-circle me-1"></i>Active</span>
+                        <span class="badge bg-light text-secondary border">
+                            {{ up.customer.shop.name|default:"—" }}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="small fw-semibold text-dark">
+                            {{ up.customer.applications.first.mobile_model|default:"—" }}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="p-2 bg-light rounded border small text-dark" style="white-space: pre-wrap;">{{ up.notes }}</div>
+                    </td>
+                    <td>
+                        {% if up.customer.applications.first.next_unpaid_due_date %}
+                            <span class="badge bg-warning-subtle text-warning-emphasis">
+                                <i class="bi bi-calendar-event me-1"></i>{{ up.customer.applications.first.next_unpaid_due_date|date:"M d, Y" }}
+                            </span>
                         {% else %}
-                            <span class="badge badge-inactive px-2 py-1"><i class="bi bi-x-circle me-1"></i>Inactive</span>
+                            <span class="text-muted small">—</span>
                         {% endif %}
                     </td>
-                    <td class="text-muted small">{{ a.assigned_at|date:"M d, Y" }}</td>
                     <td class="text-end">
-                        <a href="{% url 'shop_detail' pk=a.shop.pk %}" class="btn btn-sm btn-outline-secondary">
-                            <i class="bi bi-eye"></i> View Shop
+                        <a href="{% url 'admin_customer_detail' pk=up.customer.pk %}" class="btn btn-sm btn-outline-primary" title="View Customer Dossier">
+                            <i class="bi bi-eye me-1"></i> View
                         </a>
                     </td>
                 </tr>
@@ -243,14 +264,10 @@
             </tbody>
         </table>
         {% else %}
-        <div class="text-center py-4 text-muted">
-            <i class="bi bi-shop-window display-6 d-block mb-2"></i>
-            No retail shops currently assigned to this employee.
-            <div class="mt-2">
-                <a href="{% url 'admin_followup_edit' pk=employee.pk %}" class="btn btn-sm btn-primary">
-                    <i class="bi bi-plus-circle me-1"></i> Assign Shops
-                </a>
-            </div>
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-chat-left-text display-5 d-block mb-2 text-muted opacity-50"></i>
+            <h6 class="fw-bold text-dark mb-1">No Customer Updations Recorded</h6>
+            <p class="small text-muted mb-0">No update status notes or customer collection notes have been logged by this employee yet.</p>
         </div>
         {% endif %}
     </div>

@@ -91,7 +91,8 @@ def admin_followup_list_view(request):
         role__in=[User.Role.FOLLOWUP, User.Role.EMPLOYEE]
     ).annotate(
         assigned_count=Count("followup_assignments", filter=Q(followup_assignments__is_active=True), distinct=True),
-        activity_count=Count("followup_activities", distinct=True)
+        activity_count=Count("followup_activities", distinct=True),
+        updates_count=Count("logged_customer_updates", distinct=True)
     ).order_by("-date_joined")
 
     if search_query:
@@ -205,7 +206,16 @@ def admin_followup_detail_view(request, pk):
     total_customers = Customer.objects.filter(shop__in=assigned_shops).count()
 
     # Activities logged by this employee
-    activities = employee.followup_activities.select_related("customer", "shop").order_by("-created_at")[:20]
+    activities = employee.followup_activities.select_related("customer", "shop").order_by("-created_at")
+
+    # Complete history of customer updations done by this follow-up employee
+    from customers.models import CustomerUpdateHistory
+    customer_updates = CustomerUpdateHistory.objects.filter(
+        user=employee
+    ).select_related("customer", "customer__shop").prefetch_related("customer__applications").order_by("-created_at")
+
+    total_updates_count = customer_updates.count()
+    unique_customers_count = customer_updates.values("customer_id").distinct().count()
 
     # Generate live password setup / reset URL
     setup_url = request.session.pop(f"setup_url_{employee.pk}", None)
@@ -218,8 +228,12 @@ def admin_followup_detail_view(request, pk):
         "assigned_shops": assigned_shops,
         "total_customers": total_customers,
         "activities": activities,
+        "customer_updates": customer_updates,
+        "total_updates_count": total_updates_count,
+        "unique_customers_count": unique_customers_count,
         "setup_url": setup_url,
         "active_tab": "followups",
+        "active_page": "followups",
     }
     return render(request, "admin_dashboard/followup_detail.html", context)
 

@@ -688,3 +688,64 @@ class AdminDashboardReworkTests(TestCase):
         self.assertIn("NOV-PAY-456", modal_content)
         self.assertNotIn("OCT-PAY-123", modal_content)
 
+    def test_followup_staff_detail_shows_customer_updations_and_no_shop_details(self):
+        """Verify follow-up staff detail displays customer updation details and avoids shop details redirection."""
+        from customers.models import CustomerUpdateHistory
+        self.client.login(username="admin_rework", password="AdminPassword123!")
+
+        employee = User.objects.create_user(
+            username="followup_agent1",
+            password="AgentPass123!",
+            role=User.Role.FOLLOWUP
+        )
+
+        # Log customer updates by the employee
+        CustomerUpdateHistory.objects.create(
+            customer=self.customer1,
+            user=employee,
+            notes="Customer promised to make full payment on Friday."
+        )
+
+        res = self.client.get(reverse("admin_followup_detail", kwargs={"pk": employee.pk}))
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, "Customer Updation Details Logged by")
+        self.assertContains(res, "Customer promised to make full payment on Friday.")
+        self.assertContains(res, self.customer1.name)
+        # Ensure shop_detail is not linked in follow-up staff view
+        self.assertNotContains(res, f'href="/admin-dashboard/shops/{self.shop1.pk}/"')
+
+    def test_completed_customers_excluded_from_active_list_and_present_in_completed_list(self):
+        """Verify customers who completed their EMI are excluded from the active customer list and shown in Completed List."""
+        self.client.login(username="admin_rework", password="AdminPassword123!")
+
+        # Customer 1 pays off their entire loan balance
+        self.app1.generate_default_schedule_if_missing()
+        full_amount = self.app1.customer_remaining_balance
+        self.app1.record_customer_payment(
+            amount=full_amount,
+            payment_date="2026-11-04",
+            payment_mode="UPI",
+            transaction_reference="FULL-CLEAR-001"
+        )
+        self.assertEqual(self.app1.customer_remaining_balance, Decimal("0.00"))
+
+        # In Active Customer List: Customer 1 should NOT be present (excluded because completed)
+        res_active = self.client.get(reverse("admin_all_customers"))
+        self.assertEqual(res_active.status_code, 200)
+        self.assertNotContains(res_active, self.customer1.name)
+
+        # In Completed List: Customer 1 MUST be present with Settled / Completed badge
+        res_completed = self.client.get(reverse("admin_completed_customers"))
+        self.assertEqual(res_completed.status_code, 200)
+        self.assertContains(res_completed, self.customer1.name)
+        self.assertContains(res_completed, "Completed")
+        self.assertContains(res_completed, "Fully Settled Customers")
+        self.assertContains(res_completed, "Completed List")
+
+        # Verify Excel and PDF export for completed list
+        res_excel = self.client.get(reverse("admin_completed_customers_export", kwargs={"export_format": "excel"}))
+        self.assertEqual(res_excel.status_code, 200)
+        res_pdf = self.client.get(reverse("admin_completed_customers_export", kwargs={"export_format": "pdf"}))
+        self.assertEqual(res_pdf.status_code, 200)
+
+

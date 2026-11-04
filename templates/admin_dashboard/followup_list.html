@@ -95,7 +95,7 @@
                     <th scope="col">Phone</th>
                     <th scope="col">Email</th>
                     <th scope="col">Assigned Shops</th>
-                    <th scope="col">Activities</th>
+                    <th scope="col">Customer Updates</th>
                     <th scope="col">Status</th>
                     <th scope="col">Date Joined</th>
                     <th scope="col" class="text-end">Actions</th>
@@ -148,8 +148,8 @@
                         {% endwith %}
                     </td>
                     <td>
-                        <span class="badge bg-light text-dark border">
-                            <i class="bi bi-clock-history me-1 text-primary"></i>{{ emp.activity_count }} logs
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle fw-bold">
+                            <i class="bi bi-journal-text me-1"></i>{{ emp.updates_count }} updates
                         </span>
                     </td>
                     <td>

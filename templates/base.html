@@ -414,6 +414,14 @@
                 </a>
             </div>
 
+            <!-- Completed List -->
+            <div class="admin-nav-item">
+                <a class="admin-nav-link {% if active_page == 'completed_customers' %}active{% endif %}" href="{% url 'admin_completed_customers' %}">
+                    <i class="bi bi-check2-all"></i>
+                    <span>Completed List</span>
+                </a>
+            </div>
+
             <div class="sidebar-section-heading">Finances & Payouts</div>
             <!-- 4. Shop Payments (Money Admin Owes to Shops) -->
             <div class="admin-nav-item">
