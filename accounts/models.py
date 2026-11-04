@@ -26,6 +26,12 @@ class User(AbstractUser):
         default="",
         help_text="Contact phone number."
     )
+    assigned_password = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        help_text="Password assigned by administrator for staff reference."
+    )
 
     @property
     def is_admin_role(self):

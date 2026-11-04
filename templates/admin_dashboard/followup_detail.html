@@ -56,6 +56,23 @@
                         <div id="copyAlert" class="small text-success mt-1 d-none">
                             <i class="bi bi-check-circle me-1"></i>Activation link copied to clipboard!
                         </div>
+                        {% if employee.assigned_password %}
+                        <div class="mt-3 pt-3 border-top d-flex align-items-center justify-content-between flex-wrap gap-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-primary text-white"><i class="bi bi-key-fill me-1"></i> Assigned Password:</span>
+                                <span class="font-monospace fw-bold text-dark fs-6 d-none" id="bannerPlainPwd">{{ employee.assigned_password }}</span>
+                                <span class="font-monospace text-muted fs-6" id="bannerMaskedPwd">••••••••••••</span>
+                            </div>
+                            <div class="btn-group btn-group-sm">
+                                <button type="button" class="btn btn-sm btn-outline-dark" onclick="toggleBannerPassword()">
+                                    <i class="bi bi-eye" id="bannerEyeIcon"></i> <span id="bannerToggleText">Show</span>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="copyPasswordText('{{ employee.assigned_password|escapejs }}', this)">
+                                    <i class="bi bi-clipboard"></i> Copy
+                                </button>
+                            </div>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -119,6 +136,27 @@
                                 <span class="text-muted">Not specified</span>
                             {% endif %}
                         </span>
+                    </div>
+                    <div class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                        <span class="text-muted"><i class="bi bi-key me-2"></i>Password</span>
+                        <div>
+                            {% if employee.assigned_password %}
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="font-monospace fw-bold text-primary fs-6 d-none" id="detailPlainPwd">{{ employee.assigned_password }}</span>
+                                    <span class="font-monospace text-muted" id="detailMaskedPwd">••••••••••••</span>
+                                    <div class="btn-group btn-group-sm">
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" id="detailToggleBtn" onclick="toggleDetailPassword()">
+                                            <i class="bi bi-eye" id="detailEyeIcon"></i> <span id="detailToggleText">Show</span>
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copyPasswordText('{{ employee.assigned_password|escapejs }}', this)">
+                                            <i class="bi bi-clipboard"></i> Copy
+                                        </button>
+                                    </div>
+                                </div>
+                            {% else %}
+                                <span class="text-muted small fst-italic">Not recorded yet</span>
+                            {% endif %}
+                        </div>
                     </div>
                     <div class="list-group-item px-0 d-flex justify-content-between">
                         <span class="text-muted"><i class="bi bi-calendar-event me-2"></i>Date Registered</span>
@@ -366,6 +404,81 @@ function showCopyFeedback() {
             alertBox.classList.add('d-none');
         }, 3000);
     }
+}
+
+function toggleDetailPassword() {
+    var plain = document.getElementById('detailPlainPwd');
+    var masked = document.getElementById('detailMaskedPwd');
+    var icon = document.getElementById('detailEyeIcon');
+    var text = document.getElementById('detailToggleText');
+    if (!plain || !masked) return;
+    if (plain.classList.contains('d-none')) {
+        plain.classList.remove('d-none');
+        masked.classList.add('d-none');
+        if (icon) icon.className = 'bi bi-eye-slash';
+        if (text) text.innerText = 'Hide';
+    } else {
+        plain.classList.add('d-none');
+        masked.classList.remove('d-none');
+        if (icon) icon.className = 'bi bi-eye';
+        if (text) text.innerText = 'Show';
+    }
+}
+
+function toggleBannerPassword() {
+    var plain = document.getElementById('bannerPlainPwd');
+    var masked = document.getElementById('bannerMaskedPwd');
+    var icon = document.getElementById('bannerEyeIcon');
+    var text = document.getElementById('bannerToggleText');
+    if (!plain || !masked) return;
+    if (plain.classList.contains('d-none')) {
+        plain.classList.remove('d-none');
+        masked.classList.add('d-none');
+        if (icon) icon.className = 'bi bi-eye-slash';
+        if (text) text.innerText = 'Hide';
+    } else {
+        plain.classList.add('d-none');
+        masked.classList.remove('d-none');
+        if (icon) icon.className = 'bi bi-eye';
+        if (text) text.innerText = 'Show';
+    }
+}
+
+function copyPasswordText(text, btn) {
+    if (!text) return;
+    function showSuccess() {
+        if (btn) {
+            var icon = btn.querySelector('i');
+            if (icon) {
+                var prevClass = icon.className;
+                icon.className = 'bi bi-check2 text-success';
+                setTimeout(function() { icon.className = prevClass; }, 1500);
+            }
+        }
+    }
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(showSuccess).catch(function() {
+            fallbackCopy(text);
+            showSuccess();
+        });
+    } else {
+        fallbackCopy(text);
+        showSuccess();
+    }
+}
+
+function fallbackCopy(text) {
+    var textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    textArea.style.opacity = "0";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+        document.execCommand('copy');
+    } catch (e) {}
+    document.body.removeChild(textArea);
 }
 </script>
 {% endblock %}

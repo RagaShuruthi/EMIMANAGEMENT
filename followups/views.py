@@ -148,6 +148,7 @@ def admin_followup_add_view(request):
                 password = form.cleaned_data.get("password")
                 if password:
                     employee.set_password(password)
+                    employee.assigned_password = password
                 else:
                     employee.set_unusable_password()
                 employee.save()
@@ -259,6 +260,7 @@ def admin_followup_edit_view(request, pk):
                 new_password = form.cleaned_data.get("password")
                 if new_password:
                     employee.set_password(new_password)
+                    employee.assigned_password = new_password
                 employee.save()
 
                 # Synchronize assigned shops
@@ -370,6 +372,7 @@ def followup_setup_password_view(request, uidb64, token):
         if form.is_valid():
             new_password = form.cleaned_data["new_password"]
             target_user.set_password(new_password)
+            target_user.assigned_password = new_password
             target_user.is_active = True
             target_user.save()
 

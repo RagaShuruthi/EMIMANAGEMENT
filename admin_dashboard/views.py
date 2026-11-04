@@ -1689,21 +1689,67 @@ def admin_reports_view(request):
     base_coll = CustomerEMIPayment.objects.filter(payment_date__year=sel_year)
     base_app = FinanceApplication.objects.filter(created_at__year=sel_year)
 
+    if shop_a != "all":
+        base_cust = base_cust.filter(shop_id=shop_a)
+        base_payout = base_payout.filter(Q(shop_id=shop_a) | Q(application__shop_id=shop_a))
+        base_coll = base_coll.filter(customer__shop_id=shop_a)
+        base_app = base_app.filter(shop_id=shop_a)
+
+    prev_net_profit = None
+    tot_year_customers = 0
+    tot_year_financed = Decimal("0.00")
+    tot_year_payouts = Decimal("0.00")
+    tot_year_collections = Decimal("0.00")
+    tot_year_profit = Decimal("0.00")
+
     for m in range(1, 13):
         m_cust = base_cust.filter(created_at__month=m).count()
         m_fin = base_app.filter(created_at__month=m).aggregate(s=Sum("financier_request_amount"))["s"] or Decimal("0.00")
         m_payout = base_payout.filter(payment_date__month=m).aggregate(s=Sum("amount_received"))["s"] or Decimal("0.00")
         m_coll = base_coll.filter(payment_date__month=m).aggregate(s=Sum("amount"))["s"] or Decimal("0.00")
         m_profit = m_coll - m_payout
+
+        tot_year_customers += m_cust
+        tot_year_financed += m_fin
+        tot_year_payouts += m_payout
+        tot_year_collections += m_coll
+        tot_year_profit += m_profit
+
+        # Month over month delta
+        if prev_net_profit is not None and prev_net_profit != 0:
+            mom_growth_pct = round(((float(m_profit) - float(prev_net_profit)) / abs(float(prev_net_profit))) * 100.0, 1)
+        elif prev_net_profit == 0 and m_profit > 0:
+            mom_growth_pct = 100.0
+        else:
+            mom_growth_pct = 0.0
+
+        prev_net_profit = m_profit
+
+        # Margin %
+        margin_pct = round((float(m_profit) / float(m_coll) * 100.0), 1) if m_coll > 0 else 0.0
+
         monthly_matrix.append({
             "month_num": m,
             "month_name": calendar.month_name[m],
+            "month_abbr": calendar.month_abbr[m],
             "customers": m_cust,
             "financed": m_fin,
             "payouts": m_payout,
             "collections": m_coll,
             "net_profit": m_profit,
+            "margin_pct": margin_pct,
+            "mom_growth_pct": mom_growth_pct,
+            "is_selected": (m == sel_month),
         })
+
+    year_totals = {
+        "customers": tot_year_customers,
+        "financed": tot_year_financed,
+        "payouts": tot_year_payouts,
+        "collections": tot_year_collections,
+        "profit": tot_year_profit,
+        "margin_pct": round((float(tot_year_profit) / float(tot_year_collections) * 100.0), 1) if tot_year_collections > 0 else 0.0,
+    }
 
     # High-level system stats
     total_shops = Shop.objects.count()
@@ -1726,6 +1772,7 @@ def admin_reports_view(request):
     if best_shop and best_shop["profit"] > 0:
         insights.append({
             "icon": "bi-star-fill",
+            "theme": "success",
             "bg": "#dcfce7",
             "color": "#16a34a",
             "title": "Top Performing Partner Shop",
@@ -1734,6 +1781,7 @@ def admin_reports_view(request):
     elif best_shop:
         insights.append({
             "icon": "bi-star-fill",
+            "theme": "success",
             "bg": "#dcfce7",
             "color": "#16a34a",
             "title": "Top Volume Partner Shop",
@@ -1743,6 +1791,7 @@ def admin_reports_view(request):
     if pct_collections >= 0:
         insights.append({
             "icon": "bi-arrow-up-right-circle-fill",
+            "theme": "primary",
             "bg": "#dbeafe",
             "color": "#2563eb",
             "title": "Collection Performance",
@@ -1751,6 +1800,7 @@ def admin_reports_view(request):
     else:
         insights.append({
             "icon": "bi-arrow-down-right-circle-fill",
+            "theme": "danger",
             "bg": "#fee2e2",
             "color": "#dc2626",
             "title": "Collection Performance",
@@ -1760,6 +1810,7 @@ def admin_reports_view(request):
     if pct_profit >= 0:
         insights.append({
             "icon": "bi-info-circle-fill",
+            "theme": "warning",
             "bg": "#fef3c7",
             "color": "#d97706",
             "title": "Finance Margin Growth",
@@ -1768,6 +1819,7 @@ def admin_reports_view(request):
     else:
         insights.append({
             "icon": "bi-info-circle-fill",
+            "theme": "danger",
             "bg": "#fee2e2",
             "color": "#dc2626",
             "title": "Finance Margin Shift",
@@ -1798,6 +1850,7 @@ def admin_reports_view(request):
         "best_shop": best_shop,
         "insights": insights,
         "monthly_matrix": monthly_matrix,
+        "year_totals": year_totals,
         # JSON Payloads for consolidated interactive Chart
         "shop_chart_labels_json": json.dumps(shop_chart_labels),
         "shop_chart_sales_json": json.dumps(shop_chart_sales),

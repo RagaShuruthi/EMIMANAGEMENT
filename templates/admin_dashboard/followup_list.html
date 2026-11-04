@@ -91,7 +91,8 @@
         <table class="table table-hover align-middle mb-0">
             <thead class="table-light">
                 <tr>
-                    <th scope="col" style="min-width: 200px;">Employee</th>
+                    <th scope="col" style="min-width: 180px;">Employee</th>
+                    <th scope="col" style="min-width: 150px;">Password</th>
                     <th scope="col">Phone</th>
                     <th scope="col">Email</th>
                     <th scope="col">Assigned Shops</th>
@@ -109,6 +110,22 @@
                             {{ emp.get_full_name|default:emp.username }}
                         </a>
                         <div class="small text-muted font-monospace">@{{ emp.username }}</div>
+                    </td>
+                    <td>
+                        {% if emp.assigned_password %}
+                            <div class="d-inline-flex align-items-center gap-1 bg-light px-2 py-1 rounded border">
+                                <span class="font-monospace fw-bold text-primary small d-none" id="pwdText-{{ emp.pk }}">{{ emp.assigned_password }}</span>
+                                <span class="font-monospace text-muted small" id="pwdMask-{{ emp.pk }}">••••••••</span>
+                                <button type="button" class="btn btn-sm btn-link text-secondary p-0 ms-1" onclick="togglePasswordVisibility('{{ emp.pk }}')" title="Show / Hide Password">
+                                    <i class="bi bi-eye" id="pwdIcon-{{ emp.pk }}"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-link text-primary p-0 ms-1" onclick="copyPasswordText('{{ emp.assigned_password|escapejs }}', this)" title="Copy Password">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </div>
+                        {% else %}
+                            <span class="text-muted small fst-italic">—</span>
+                        {% endif %}
                     </td>
                     <td>
                         {% if emp.phone %}
@@ -239,5 +256,64 @@
     </div>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function togglePasswordVisibility(pk) {
+    const textEl = document.getElementById('pwdText-' + pk);
+    const maskEl = document.getElementById('pwdMask-' + pk);
+    const iconEl = document.getElementById('pwdIcon-' + pk);
+    if (!textEl || !maskEl || !iconEl) return;
+    if (textEl.classList.contains('d-none')) {
+        textEl.classList.remove('d-none');
+        maskEl.classList.add('d-none');
+        iconEl.classList.remove('bi-eye');
+        iconEl.classList.add('bi-eye-slash');
+    } else {
+        textEl.classList.add('d-none');
+        maskEl.classList.remove('d-none');
+        iconEl.classList.remove('bi-eye-slash');
+        iconEl.classList.add('bi-eye');
+    }
+}
+
+function copyPasswordText(text, btn) {
+    if (!text) return;
+    function showSuccess() {
+        if (btn) {
+            const icon = btn.querySelector('i');
+            if (icon) {
+                const prevClass = icon.className;
+                icon.className = 'bi bi-check2 text-success';
+                setTimeout(() => { icon.className = prevClass; }, 1500);
+            }
+        }
+    }
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(showSuccess).catch(function() {
+            fallbackCopy(text);
+            showSuccess();
+        });
+    } else {
+        fallbackCopy(text);
+        showSuccess();
+    }
+}
+
+function fallbackCopy(text) {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    textArea.style.opacity = "0";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+        document.execCommand('copy');
+    } catch (e) {}
+    document.body.removeChild(textArea);
+}
+</script>
 {% endblock %}
 
