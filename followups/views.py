@@ -484,8 +484,38 @@ def followup_dashboard_view(request):
     # Process due data for all scoped customers
     customer_list = []
     today_due_count = 0
+    upcoming_due_count = 0
     pending_due_count = 0
     all_count = 0
+
+    # Calculate customer count for each assigned shop and rank them
+    assigned_shops_with_counts = []
+    for s in assigned_shops:
+        c_count = Customer.objects.filter(shop=s).count()
+        assigned_shops_with_counts.append({
+            "shop": s,
+            "customer_count": c_count,
+        })
+    assigned_shops_with_counts.sort(key=lambda x: (x["customer_count"], x["shop"].name), reverse=True)
+    top_5_shops = [item["shop"] for item in assigned_shops_with_counts[:5]]
+    all_assigned_shops = [item["shop"] for item in assigned_shops_with_counts]
+
+    # Simultaneous multiple dues filter
+    filter_due_today = (
+        request.GET.get("due_today") == "1" or
+        "today" in request.GET.getlist("due_filter") or
+        due_filter == "today"
+    )
+    filter_upcoming_due = (
+        request.GET.get("upcoming_due") == "1" or
+        "upcoming" in request.GET.getlist("due_filter") or
+        due_filter == "upcoming"
+    )
+    filter_pending_due = (
+        request.GET.get("pending_due") == "1" or
+        "pending" in request.GET.getlist("due_filter") or
+        due_filter == "pending"
+    )
 
     for customer in customers_qs.order_by("-created_at"):
         all_count += 1
@@ -496,9 +526,31 @@ def followup_dashboard_view(request):
         monthly_emi = app.monthly_emi if app else Decimal("0.00")
         monthly_due_day = app.monthly_due_day if app else None
 
-        # Calculate next due date from due day
-        next_due_date = None
-        if monthly_due_day:
+        if app:
+            app.generate_default_schedule_if_missing()
+            next_unpaid_sched = app.next_unpaid_schedule
+            next_due_date = next_unpaid_sched.due_date if next_unpaid_sched else None
+            due_status = app.due_classification(today=today)
+            overdue_months = app.emi_schedules.filter(is_paid=False, due_date__lt=today).count()
+            due_today_scheds = app.emi_schedules.filter(is_paid=False, due_date=today).count()
+
+            if overdue_months > 0:
+                pending_months_count = overdue_months
+                pending_months_text = f"{overdue_months} Month{'s' if overdue_months > 1 else ''} Pending"
+            elif due_today_scheds > 0:
+                pending_months_count = 1
+                pending_months_text = "Due Today (1 Month)"
+            else:
+                pending_months_count = 0
+                pending_months_text = "0 Months Pending (On Track)"
+        else:
+            next_due_date = None
+            due_status = "NO_APP"
+            pending_months_count = 0
+            pending_months_text = "No Application"
+
+        # Calculate next due date from due day if missing
+        if not next_due_date and monthly_due_day:
             try:
                 cur_month_due = today.replace(day=monthly_due_day)
             except ValueError:
@@ -521,28 +573,54 @@ def followup_dashboard_view(request):
 
         # Check if customer has Today's Due
         is_today_due = False
-        if monthly_due_day == today.day and outcome != FollowUpActivity.Outcome.PAID:
-            is_today_due = True
+        if due_status == "DUE_TODAY" or (next_due_date and next_due_date == today):
+            if outcome != FollowUpActivity.Outcome.PAID:
+                is_today_due = True
         elif act_next_date == today and latest_act and latest_act.status == FollowUpActivity.Status.PENDING:
             is_today_due = True
         elif outcome == FollowUpActivity.Outcome.NEED_TWO_DAYS and act_next_date == today:
             is_today_due = True
 
-        # Check if customer has Pending Due
+        # Check if customer has Upcoming Due (next 2 days)
+        is_upcoming_due = False
+        if not is_today_due and (due_status == "UPCOMING_DUE" or (next_due_date and today < next_due_date <= today + timedelta(days=2))):
+            if outcome != FollowUpActivity.Outcome.PAID:
+                is_upcoming_due = True
+        elif not is_today_due and act_next_date and today < act_next_date <= today + timedelta(days=2) and latest_act and latest_act.status == FollowUpActivity.Status.PENDING:
+            is_upcoming_due = True
+
+        # Check if customer has Pending Due (overdue or flagged)
         is_pending_due = False
-        if outcome in [FollowUpActivity.Outcome.NOT_PAID, FollowUpActivity.Outcome.NEED_TWO_DAYS]:
+        if due_status == "OVERDUE" or pending_months_count > 0:
+            if outcome != FollowUpActivity.Outcome.PAID:
+                is_pending_due = True
+        elif outcome in [FollowUpActivity.Outcome.NOT_PAID, FollowUpActivity.Outcome.NEED_TWO_DAYS]:
             is_pending_due = True
         elif is_flagged:
             is_pending_due = True
         elif latest_act and latest_act.status == FollowUpActivity.Status.PENDING:
             is_pending_due = True
-        elif app and outcome != FollowUpActivity.Outcome.PAID:
-            is_pending_due = True
 
         if is_today_due:
             today_due_count += 1
+        if is_upcoming_due:
+            upcoming_due_count += 1
         if is_pending_due:
             pending_due_count += 1
+
+        # Calling Priority:
+        # 1st Priority: Today's Due
+        # 2nd Priority: Upcoming Due
+        # 3rd Priority: Pending Dues
+        # 4th Priority: On Track / Others
+        if is_today_due:
+            calling_priority = 1
+        elif is_upcoming_due:
+            calling_priority = 2
+        elif is_pending_due:
+            calling_priority = 3
+        else:
+            calling_priority = 4
 
         customer.mobile_model = mobile_model
         customer.monthly_emi = monthly_emi
@@ -550,15 +628,29 @@ def followup_dashboard_view(request):
         customer.next_due_date = next_due_date
         customer.latest_activity = latest_act
         customer.is_today_due = is_today_due
+        customer.is_upcoming_due = is_upcoming_due
         customer.is_pending_due = is_pending_due
+        customer.pending_months_count = pending_months_count
+        customer.pending_months_text = pending_months_text
+        customer.calling_priority = calling_priority
+        customer.promised_date_initial = (today + timedelta(days=2))
 
         customer_list.append(customer)
 
-    # Apply the two due filters if selected
-    if due_filter == "today":
-        filtered_customers = [c for c in customer_list if c.is_today_due]
-    elif due_filter == "pending":
-        filtered_customers = [c for c in customer_list if c.is_pending_due]
+    # Sort customers by Calling Priority: Today's Due first, then Upcoming Due, then Pending Dues
+    from datetime import date
+    max_date = date(2099, 12, 31)
+    customer_list.sort(key=lambda c: (c.calling_priority, c.next_due_date or max_date, c.name))
+
+    # Apply multi-selection dues filter if any selected
+    has_dues_filter = (filter_due_today or filter_upcoming_due or filter_pending_due)
+    if has_dues_filter:
+        filtered_customers = [
+            c for c in customer_list
+            if (filter_due_today and c.is_today_due) or
+               (filter_upcoming_due and c.is_upcoming_due) or
+               (filter_pending_due and c.is_pending_due)
+        ]
     else:
         filtered_customers = customer_list
 
@@ -576,6 +668,9 @@ def followup_dashboard_view(request):
 
     context = {
         "assigned_shops": assigned_shops,
+        "top_5_shops": top_5_shops,
+        "top_5_shop_ids": [str(s.pk) for s in top_5_shops],
+        "all_assigned_shops": all_assigned_shops,
         "customers": page_obj,
         "pending_followups": pending_followups[:20],
         "completed_followups": completed_followups[:20],
@@ -591,7 +686,12 @@ def followup_dashboard_view(request):
         "shop_filter": shop_filter,
         "tab_view": tab_view,
         "due_filter": due_filter,
+        "filter_due_today": filter_due_today,
+        "filter_upcoming_due": filter_upcoming_due,
+        "filter_pending_due": filter_pending_due,
+        "has_dues_filter": has_dues_filter,
         "today_due_count": today_due_count,
+        "upcoming_due_count": upcoming_due_count,
         "pending_due_count": pending_due_count,
         "all_count": all_count,
         "today": today,
@@ -627,6 +727,7 @@ def followup_quick_update_view(request, pk):
 
     outcome = request.POST.get("outcome", "").strip()
     notes = request.POST.get("notes", "").strip()
+    promised_date_str = request.POST.get("promised_date", "").strip()
 
     valid_outcomes = [FollowUpActivity.Outcome.PAID, FollowUpActivity.Outcome.NOT_PAID, FollowUpActivity.Outcome.NEED_TWO_DAYS]
     if outcome not in valid_outcomes:
@@ -645,28 +746,41 @@ def followup_quick_update_view(request, pk):
     if outcome == FollowUpActivity.Outcome.NEED_TWO_DAYS:
         activity.is_flagged = True
         activity.status = FollowUpActivity.Status.PENDING
-        activity.next_followup_date = today + timedelta(days=2)
+        target_date = None
+        if promised_date_str:
+            try:
+                from datetime import datetime as dt
+                target_date = dt.strptime(promised_date_str, "%Y-%m-%d").date()
+            except (ValueError, TypeError):
+                target_date = today + timedelta(days=2)
+        else:
+            target_date = today + timedelta(days=2)
+
+        activity.next_followup_date = target_date
+        days_needed = max(1, (target_date - today).days)
+        update_msg = f"Need {days_needed} Days (Call on: {activity.next_followup_date.strftime('%b %d, %Y')})"
+        if notes:
+            update_msg += f" - {notes}"
         messages.warning(
             request,
-            f"Flagged '{customer.name}' — Requested 2 days time. Scheduled callback for {activity.next_followup_date.strftime('%b %d, %Y')}."
+            f"Flagged '{customer.name}' — Requested {days_needed} day{'s' if days_needed != 1 else ''}. Scheduled callback for {activity.next_followup_date.strftime('%b %d, %Y')}."
         )
     elif outcome == FollowUpActivity.Outcome.PAID:
         activity.is_flagged = False
         activity.status = FollowUpActivity.Status.COMPLETED
         activity.completed_at = timezone.now()
+        update_msg = "Paid" + (f": {notes}" if notes else "")
         messages.success(request, f"Updated '{customer.name}' status to Paid.")
     else:  # NOT_PAID
         activity.is_flagged = False
         activity.status = FollowUpActivity.Status.PENDING
+        update_msg = "Not Paid" + (f": {notes}" if notes else "")
         messages.info(request, f"Recorded '{customer.name}' as Not Paid. Remains in pending follow-up.")
 
     activity.save()
 
     # Synchronize Customer latest update status and CustomerUpdateHistory
     from customers.models import CustomerUpdateHistory
-    update_msg = f"{activity.get_outcome_display()}"
-    if notes:
-        update_msg += f": {notes}"
     customer.latest_update_status = update_msg
     customer.latest_update_at = timezone.now()
     customer.latest_update_by = user
