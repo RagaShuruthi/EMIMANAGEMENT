@@ -409,6 +409,9 @@ class CustomerManagementUpgradeTests(TestCase):
         text_dump = " ".join([str(cell.value) for row in ws.rows for cell in row])
         self.assertIn("Export Alpha", text_dump)
         self.assertNotIn("Export Beta", text_dump)
+        self.assertNotIn("Down Payment", text_dump)
+        self.assertIn("Customer Address", text_dump)
+        self.assertIn("Alternate Phone", text_dump)
 
         # 2. Export PDF with search query "Export Beta"
         pdf_res = self.client.get(reverse("admin_customers_export", kwargs={"export_format": "pdf"}) + "?q=Export+Beta")

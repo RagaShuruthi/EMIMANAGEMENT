@@ -458,16 +458,22 @@
         {% endif %}
     </div>
 
-    <!-- Pagination -->
+    <!-- Pagination (50 customers per page) -->
     {% if customers.has_other_pages %}
     <div class="card-footer bg-white d-flex justify-content-between align-items-center py-3 border-top">
         <span class="text-muted small">
-            Page {{ customers.number }} of {{ customers.paginator.num_pages }}
+            Showing {{ customers.start_index }}–{{ customers.end_index }} of {{ customers.paginator.count }} customers
         </span>
         <ul class="pagination pagination-sm mb-0">
             {% if customers.has_previous %}
             <li class="page-item">
-                <a class="page-link" href="?page={{ customers.previous_page_number }}&q={{ search_query }}&sort={{ sort_param }}{% if filter_due_today %}&due_today=1{% endif %}{% if filter_upcoming_due %}&upcoming_due=1{% endif %}{% if filter_pending_due %}&pending_due=1{% endif %}">Previous</a>
+                <a class="page-link" href="?page={{ customers.previous_page_number }}&q={{ search_query }}&sort={{ sort_param }}{% if filter_due_today %}&due_today=1{% endif %}{% if filter_upcoming_due %}&upcoming_due=1{% endif %}{% if filter_pending_due %}&pending_due=1{% endif %}" title="Previous 50">
+                    <i class="bi bi-chevron-left"></i>
+                </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link"><i class="bi bi-chevron-left"></i></span>
             </li>
             {% endif %}
 
@@ -483,7 +489,13 @@
 
             {% if customers.has_next %}
             <li class="page-item">
-                <a class="page-link" href="?page={{ customers.next_page_number }}&q={{ search_query }}&sort={{ sort_param }}{% if filter_due_today %}&due_today=1{% endif %}{% if filter_upcoming_due %}&upcoming_due=1{% endif %}{% if filter_pending_due %}&pending_due=1{% endif %}">Next</a>
+                <a class="page-link" href="?page={{ customers.next_page_number }}&q={{ search_query }}&sort={{ sort_param }}{% if filter_due_today %}&due_today=1{% endif %}{% if filter_upcoming_due %}&upcoming_due=1{% endif %}{% if filter_pending_due %}&pending_due=1{% endif %}" title="Next 50">
+                    <i class="bi bi-chevron-right"></i>
+                </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link"><i class="bi bi-chevron-right"></i></span>
             </li>
             {% endif %}
         </ul>

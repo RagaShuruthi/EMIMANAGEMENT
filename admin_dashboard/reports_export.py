@@ -61,10 +61,12 @@ def export_customers_to_excel(customer_rows, title="Customers EMI Report", shop_
         "S.No",
         "Customer Name",
         "Phone Number",
+        "Alternate Phone",
         "Shop Name",
         "Phone Model",
+        "Customer Address",
+        "Work Address",
         "Purchase Price (₹)",
-        "Down Payment (₹)",
         "Monthly EMI (₹)",
         "Amount Paid (₹)",
         "Remaining Balance (₹)",
@@ -86,7 +88,6 @@ def export_customers_to_excel(customer_rows, title="Customers EMI Report", shop_
     # Data Rows
     current_row = header_row_idx + 1
     total_price = Decimal("0.00")
-    total_down = Decimal("0.00")
     total_emi = Decimal("0.00")
     total_paid = Decimal("0.00")
     total_remaining = Decimal("0.00")
@@ -95,13 +96,11 @@ def export_customers_to_excel(customer_rows, title="Customers EMI Report", shop_
         ws.row_dimensions[current_row].height = 20
 
         price = row.get("mobile_price") or Decimal("0.00")
-        down = row.get("down_payment") or Decimal("0.00")
         emi = row.get("monthly_emi") or Decimal("0.00")
         paid = row.get("amount_paid") or Decimal("0.00")
         rem = row.get("remaining_balance") or Decimal("0.00")
 
         total_price += price
-        total_down += down
         total_emi += emi
         total_paid += paid
         total_remaining += rem
@@ -111,17 +110,19 @@ def export_customers_to_excel(customer_rows, title="Customers EMI Report", shop_
 
         values = [
             idx,
-            row.get("customer_name", "—"),
-            row.get("phone", "—"),
-            row.get("shop_name", "—"),
-            row.get("mobile_model", "—"),
+            row.get("customer_name") or "—",
+            row.get("phone") or "—",
+            row.get("secondary_mobile") or "—",
+            row.get("shop_name") or "—",
+            row.get("mobile_model") or "—",
+            row.get("home_address") or "—",
+            row.get("work_address") or "—",
             float(price),
-            float(down),
             float(emi),
             float(paid),
             float(rem),
             due_date_str,
-            row.get("due_status_display", "—"),
+            row.get("due_status_display") or "—",
             update_status
         ]
 
@@ -130,11 +131,11 @@ def export_customers_to_excel(customer_rows, title="Customers EMI Report", shop_
             cell.font = data_font
             cell.border = thin_border
 
-            # Number formatting
-            if col_idx in (6, 7, 8, 9, 10):
+            # Number formatting: Columns 9, 10, 11, 12 are currency amounts
+            if col_idx in (9, 10, 11, 12):
                 cell.number_format = '#,##0.00'
                 cell.alignment = Alignment(horizontal="right", vertical="center")
-            elif col_idx in (1, 11, 12):
+            elif col_idx in (1, 13, 14):
                 cell.alignment = Alignment(horizontal="center", vertical="center")
             else:
                 cell.alignment = Alignment(horizontal="left", vertical="center")
@@ -149,17 +150,16 @@ def export_customers_to_excel(customer_rows, title="Customers EMI Report", shop_
     totals_label_cell.fill = totals_fill
     totals_label_cell.border = thin_border
 
-    for c in range(2, 6):
+    for c in range(2, 9):
         cell = ws.cell(row=current_row, column=c, value="")
         cell.fill = totals_fill
         cell.border = thin_border
 
     tot_cells = [
-        (6, float(total_price)),
-        (7, float(total_down)),
-        (8, float(total_emi)),
-        (9, float(total_paid)),
-        (10, float(total_remaining)),
+        (9, float(total_price)),
+        (10, float(total_emi)),
+        (11, float(total_paid)),
+        (12, float(total_remaining)),
     ]
     for c_idx, tot_val in tot_cells:
         cell = ws.cell(row=current_row, column=c_idx, value=tot_val)
@@ -169,7 +169,7 @@ def export_customers_to_excel(customer_rows, title="Customers EMI Report", shop_
         cell.fill = totals_fill
         cell.border = thin_border
 
-    for c in range(11, 14):
+    for c in range(13, 16):
         cell = ws.cell(row=current_row, column=c, value="")
         cell.fill = totals_fill
         cell.border = thin_border
@@ -280,48 +280,56 @@ def export_customers_to_pdf(customer_rows, title="Customers EMI Report", shop_na
     filter_info = f"Generated: {gen_time} &bull; Filters: {active_filters_desc or 'All Records'} &bull; Total Count: {len(customer_rows)}"
     elements.append(Paragraph(filter_info, meta_style))
 
-    # Table Header
+    # Table Header (Down payment removed; Alternate phone, Home Address, and Work Address added)
     headers = [
-        "S.No", "Customer Name", "Phone", "Phone Model", "Price (₹)",
-        "Down (₹)", "EMI (₹)", "Paid (₹)", "Balance (₹)", "Next Due", "Status", "Latest Update"
+        "S.No", "Customer Name", "Phone", "Alt. Phone", "Phone Model",
+        "Home Address", "Work Address", "Price (₹)", "EMI (₹)",
+        "Paid (₹)", "Balance (₹)", "Next Due", "Status", "Latest Update"
     ]
     table_data = [[Paragraph(h, th_style) for h in headers]]
 
     total_price = Decimal("0.00")
-    total_down = Decimal("0.00")
     total_emi = Decimal("0.00")
     total_paid = Decimal("0.00")
     total_remaining = Decimal("0.00")
 
     for idx, row in enumerate(customer_rows, 1):
         price = row.get("mobile_price") or Decimal("0.00")
-        down = row.get("down_payment") or Decimal("0.00")
         emi = row.get("monthly_emi") or Decimal("0.00")
         paid = row.get("amount_paid") or Decimal("0.00")
         rem = row.get("remaining_balance") or Decimal("0.00")
 
         total_price += price
-        total_down += down
         total_emi += emi
         total_paid += paid
         total_remaining += rem
 
         update_status = row.get("update_status") or "—"
-        if len(update_status) > 40:
-            update_status = update_status[:37] + "..."
+        if len(update_status) > 35:
+            update_status = update_status[:32] + "..."
+
+        home_addr = str(row.get("home_address") or "—")
+        if len(home_addr) > 35:
+            home_addr = home_addr[:32] + "..."
+
+        work_addr = str(row.get("work_address") or "—")
+        if len(work_addr) > 35:
+            work_addr = work_addr[:32] + "..."
 
         table_data.append([
             Paragraph(str(idx), td_style),
-            Paragraph(str(row.get("customer_name", "—")), td_style),
-            Paragraph(str(row.get("phone", "—")), td_style),
-            Paragraph(str(row.get("mobile_model", "—")), td_style),
+            Paragraph(str(row.get("customer_name") or "—"), td_style),
+            Paragraph(str(row.get("phone") or "—"), td_style),
+            Paragraph(str(row.get("secondary_mobile") or "—"), td_style),
+            Paragraph(str(row.get("mobile_model") or "—"), td_style),
+            Paragraph(home_addr, td_style),
+            Paragraph(work_addr, td_style),
             Paragraph(f"{price:,.2f}", td_right_style),
-            Paragraph(f"{down:,.2f}", td_right_style),
             Paragraph(f"{emi:,.2f}", td_right_style),
             Paragraph(f"{paid:,.2f}", td_right_style),
             Paragraph(f"{rem:,.2f}", td_right_style),
-            Paragraph(str(row.get("next_due_date_display", "—")), td_style),
-            Paragraph(str(row.get("due_status_display", "—")), td_style),
+            Paragraph(str(row.get("next_due_date_display") or "—"), td_style),
+            Paragraph(str(row.get("due_status_display") or "—"), td_style),
             Paragraph(update_status, td_style),
         ])
 
@@ -331,8 +339,10 @@ def export_customers_to_pdf(customer_rows, title="Customers EMI Report", shop_na
         Paragraph("", td_style),
         Paragraph("", td_style),
         Paragraph("", td_style),
+        Paragraph("", td_style),
+        Paragraph("", td_style),
+        Paragraph("", td_style),
         Paragraph(f"<b>{total_price:,.2f}</b>", td_bold_right_style),
-        Paragraph(f"<b>{total_down:,.2f}</b>", td_bold_right_style),
         Paragraph(f"<b>{total_emi:,.2f}</b>", td_bold_right_style),
         Paragraph(f"<b>{total_paid:,.2f}</b>", td_bold_right_style),
         Paragraph(f"<b>{total_remaining:,.2f}</b>", td_bold_right_style),
@@ -341,7 +351,7 @@ def export_customers_to_pdf(customer_rows, title="Customers EMI Report", shop_na
         Paragraph("", td_style),
     ])
 
-    col_widths = [24, 75, 60, 75, 48, 45, 45, 48, 52, 52, 54, 180]
+    col_widths = [22, 65, 52, 52, 58, 75, 75, 46, 45, 45, 48, 48, 44, 125]
     t = Table(table_data, colWidths=col_widths, repeatRows=1)
     t.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1E3A8A")),

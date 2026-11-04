@@ -154,11 +154,14 @@ def prepare_customer_management_dataset(customers_qs, request, today=None):
             "customer_id": c.id,
             "customer_name": c.name,
             "phone": c.primary_mobile,
-            "secondary_mobile": c.secondary_mobile,
+            "secondary_mobile": c.secondary_mobile or "",
+            "home_address": c.home_address or "",
+            "work_address": c.work_address or "",
             "shop": c.shop,
             "shop_name": c.shop.name if c.shop else "—",
             "application": app,
             "application_id": app_id,
+            "application_number": app.application_number if app else "—",
             "mobile_model": mobile_model,
             "mobile_price": price,
             "down_payment": down,
@@ -423,7 +426,7 @@ def admin_all_customers_view(request):
     dataset = prepare_customer_management_dataset(customers_qs, request)
     all_rows = dataset["all_rows"]
 
-    paginator = Paginator(all_rows, 15)
+    paginator = Paginator(all_rows, 50)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
@@ -482,9 +485,19 @@ def admin_customer_detail_view(request, pk):
 
     update_history = customer.update_history.select_related("user").order_by("-created_at")
 
+    customer_photo = None
+    for item in app_details:
+        for doc in item["documents"]:
+            if doc.document_type == "PHOTOGRAPH" and doc.file:
+                customer_photo = doc
+                break
+        if customer_photo:
+            break
+
     context = {
         "active_page": "customers",
         "customer": customer,
+        "customer_photo": customer_photo,
         "shop": customer.shop,
         "app_details": app_details,
         "update_history": update_history,
@@ -756,7 +769,7 @@ def admin_shopwise_detail_view(request, shop_id):
     # Shop-specific live EMI statistics
     shop_stats = get_shop_customer_emi_stats(shop)
 
-    paginator = Paginator(all_rows, 15)
+    paginator = Paginator(all_rows, 50)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
