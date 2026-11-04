@@ -4,14 +4,23 @@
 
 {% block extra_css %}
 <style>
-    .due-today-row {
-        background-color: #fee2e2 !important; /* Soft Red */
+    .badge-due-today {
+        background-color: #ef4444 !important;
+        color: #ffffff !important;
+        border: 1px solid #dc2626 !important;
+        font-weight: 700;
     }
-    .upcoming-due-row {
-        background-color: #fef3c7 !important; /* Soft Orange / Amber */
+    .badge-upcoming-due {
+        background-color: #fef08a !important;
+        color: #854d0e !important;
+        border: 1px solid #facc15 !important;
+        font-weight: 700;
     }
-    .pending-due-row {
-        background-color: #fff1f2 !important; /* Subtle Crimson */
+    .badge-pending-due {
+        background-color: #f3e8ff !important;
+        color: #6b21a8 !important;
+        border: 1px solid #d8b4fe !important;
+        font-weight: 700;
     }
 </style>
 {% endblock %}
@@ -78,7 +87,7 @@
                 </select>
             </div>
 
-            <!-- 3 Checkbox Due Filters -->
+            <!-- 3 Checkbox Due Filters: Red, Yellow, Purple -->
             <div class="col-12 col-md-4 d-flex align-items-center flex-wrap gap-2">
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" name="due_today" value="1" id="allFilterDueToday" {% if filter_due_today %}checked{% endif %} onchange="document.getElementById('allCustomersFilterForm').submit()">
@@ -88,14 +97,14 @@
                 </div>
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" name="upcoming_due" value="1" id="allFilterUpcomingDue" {% if filter_upcoming_due %}checked{% endif %} onchange="document.getElementById('allCustomersFilterForm').submit()">
-                    <label class="form-check-label small fw-semibold text-warning-emphasis" for="allFilterUpcomingDue">
-                        Upcoming Due <span class="badge bg-warning text-dark rounded-pill ms-1">{{ count_upcoming_due }}</span>
+                    <label class="form-check-label small fw-semibold" style="color: #a16207;" for="allFilterUpcomingDue">
+                        Upcoming Due <span class="badge rounded-pill ms-1" style="background-color: #fef08a; color: #854d0e; border: 1px solid #facc15;">{{ count_upcoming_due }}</span>
                     </label>
                 </div>
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" name="pending_due" value="1" id="allFilterPendingDue" {% if filter_pending_due %}checked{% endif %} onchange="document.getElementById('allCustomersFilterForm').submit()">
-                    <label class="form-check-label small fw-semibold text-danger-emphasis" for="allFilterPendingDue">
-                        Pending Due <span class="badge bg-dark text-white rounded-pill ms-1">{{ count_pending_due }}</span>
+                    <label class="form-check-label small fw-semibold" style="color: #6b21a8;" for="allFilterPendingDue">
+                        Pending Due <span class="badge rounded-pill ms-1" style="background-color: #f3e8ff; color: #6b21a8; border: 1px solid #d8b4fe;">{{ count_pending_due }}</span>
                     </label>
                 </div>
 
@@ -120,11 +129,12 @@
                 <i class="bi bi-people me-2 text-primary"></i>Customers List
                 <span class="badge bg-secondary-subtle text-secondary ms-2">{{ filtered_count }} of {{ total_count }}</span>
             </h5>
-            <small class="text-muted">Rows highlighted in red indicate payment is due today.</small>
+            <small class="text-muted">Color-coded badges indicate real-time payment schedule status.</small>
         </div>
         <div class="d-flex align-items-center gap-2">
-            <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-circle-fill me-1" style="font-size: 0.5rem;"></i>Red: Due Today</span>
-            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle"><i class="bi bi-circle-fill me-1" style="font-size: 0.5rem;"></i>Orange: Upcoming (2 Days)</span>
+            <span class="badge bg-danger text-white border border-danger"><i class="bi bi-circle-fill me-1" style="font-size: 0.5rem;"></i>Red: Due Today</span>
+            <span class="badge text-dark" style="background-color: #fef08a; border: 1px solid #facc15;"><i class="bi bi-circle-fill me-1 text-warning" style="font-size: 0.5rem;"></i>Yellow: Upcoming (2 Days)</span>
+            <span class="badge" style="background-color: #f3e8ff; color: #6b21a8; border: 1px solid #d8b4fe;"><i class="bi bi-circle-fill me-1" style="color: #9333ea; font-size: 0.5rem;"></i>Purple: Pending Due</span>
         </div>
     </div>
 
@@ -216,17 +226,35 @@
                         </span>
                     </td>
 
-                    <!-- Next Due Date (Editable via inline modal/picker) -->
+                    <!-- Next Due Date (Clean text & distinctive badge: Red / Yellow / Purple) -->
                     <td>
                         <div class="d-flex align-items-center gap-1">
                             <div>
-                                <span class="fw-bold small {% if row.due_status == 'DUE_TODAY' %}text-danger{% elif row.due_status == 'UPCOMING_DUE' %}text-warning-emphasis{% else %}text-dark{% endif %}">
+                                <span class="fw-bold small {% if row.due_status == 'DUE_TODAY' %}text-danger{% elif row.due_status == 'UPCOMING_DUE' %}text-warning-emphasis{% elif row.due_status == 'OVERDUE' %}text-purple{% else %}text-dark{% endif %}" {% if row.due_status == 'OVERDUE' %}style="color: #6b21a8;"{% endif %}>
                                     {{ row.next_due_date_display }}
                                 </span>
                                 <div>
-                                    <span class="badge bg-{{ row.badge_class }}-subtle text-{{ row.badge_class }} border border-{{ row.badge_class }}-subtle" style="font-size: 0.70rem;">
-                                        {{ row.due_status_display }}
-                                    </span>
+                                    {% if row.due_status == 'DUE_TODAY' %}
+                                        <span class="badge bg-danger text-white border border-danger px-2 py-1 shadow-xs" style="font-size: 0.70rem;">
+                                            <i class="bi bi-bell-fill me-1"></i>Due Today
+                                        </span>
+                                    {% elif row.due_status == 'UPCOMING_DUE' %}
+                                        <span class="badge px-2 py-1 shadow-xs" style="background-color: #fef08a; color: #854d0e; border: 1px solid #facc15; font-size: 0.70rem; font-weight: 700;">
+                                            <i class="bi bi-clock-fill me-1"></i>Upcoming Due
+                                        </span>
+                                    {% elif row.due_status == 'OVERDUE' %}
+                                        <span class="badge px-2 py-1 shadow-xs" style="background-color: #f3e8ff; color: #6b21a8; border: 1px solid #d8b4fe; font-size: 0.70rem; font-weight: 700;">
+                                            <i class="bi bi-exclamation-octagon-fill me-1"></i>Pending Due
+                                        </span>
+                                    {% elif row.is_completed or row.due_status == 'PAID' %}
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1" style="font-size: 0.70rem;">
+                                            <i class="bi bi-check2-circle me-1"></i>Completed
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-light text-secondary border px-2 py-1" style="font-size: 0.70rem;">
+                                            On Track
+                                        </span>
+                                    {% endif %}
                                 </div>
                             </div>
                             {% if row.remaining_balance > 0 and row.application %}

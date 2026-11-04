@@ -748,4 +748,79 @@ class AdminDashboardReworkTests(TestCase):
         res_pdf = self.client.get(reverse("admin_completed_customers_export", kwargs={"export_format": "pdf"}))
         self.assertEqual(res_pdf.status_code, 200)
 
+    def test_admin_reports_analytics_comparison_and_profit(self):
+        """Verify comparative analytics dashboard with period A & B filtering and monthly matrix."""
+        self.client.login(username="admin_rework", password="AdminPassword123!")
+
+        # Record a payout from admin to shop
+        FinancierPayment.objects.create(
+            shop=self.shop1,
+            application=self.app1,
+            amount_received=Decimal("15000.00"),
+            payment_date="2026-11-02",
+            payment_reference="ANALYTICS-UTR-01"
+        )
+
+        # Record a customer EMI payment
+        self.app1.record_customer_payment(
+            amount=Decimal("5000.00"),
+            payment_date="2026-11-03",
+            payment_mode="UPI",
+            transaction_reference="ANALYTICS-CUST-01"
+        )
+
+        url = reverse("admin_reports")
+        res = self.client.get(url, {
+            "year_a": "2026",
+            "month_a": "11",
+            "shop_a": str(self.shop1.pk),
+            "year_b": "2026",
+            "month_b": "10",
+            "shop_b": "all"
+        })
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, "Performance & Income Analytics")
+        self.assertContains(res, "EMI SAFE")
+        self.assertContains(res, "Comparative Variance: Period A vs Period B")
+        self.assertContains(res, "Month-wise Financial & Net Profit Ledger")
+
+        # Context assertions
+        dataset_a = res.context["dataset_a"]
+        self.assertEqual(dataset_a["year"], 2026)
+        self.assertEqual(dataset_a["month"], 11)
+        self.assertEqual(dataset_a["shop_id"], self.shop1.pk)
+        self.assertEqual(len(dataset_a["chart_labels"]), 30) # November has 30 days
+        self.assertIn("chart_labels_a_json", res.context)
+        self.assertIn("chart_payouts_a_json", res.context)
+
+    def test_partner_shop_signup_flow(self):
+        """Verify new partner retail shop registration creates user and shop, then logs in."""
+        signup_url = reverse("signup")
+        res_get = self.client.get(signup_url)
+        self.assertEqual(res_get.status_code, 200)
+        self.assertContains(res_get, "Register Your Retail Shop")
+
+        post_data = {
+            "shop_name": "Royal Cell Point",
+            "owner_name": "Sundar Pichai",
+            "phone": "9876543210",
+            "email": "royal@example.com",
+            "address": "123 Market Street, Chennai",
+            "gpay": "9876543210@upi",
+            "username": "royalcell",
+            "password": "RoyalPassword123!",
+            "password_confirm": "RoyalPassword123!",
+        }
+        res_post = self.client.post(signup_url, post_data)
+        self.assertEqual(res_post.status_code, 302)
+        self.assertRedirects(res_post, reverse("shop_dashboard"))
+
+        # Verify database objects
+        user = User.objects.get(username="royalcell")
+        self.assertEqual(user.role, User.Role.SHOP_OWNER)
+        shop = Shop.objects.get(name="Royal Cell Point")
+        self.assertEqual(shop.owner_account, user)
+        self.assertEqual(shop.phone, "9876543210")
+
+
 

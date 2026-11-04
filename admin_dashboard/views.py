@@ -6,6 +6,8 @@ Finance Applications, and Financier Payments.
 
 from decimal import Decimal
 from datetime import timedelta
+import calendar
+import json
 import re
 from django.contrib import messages
 from django.contrib.auth import get_user_model
@@ -142,18 +144,18 @@ def prepare_customer_management_dataset(customers_qs, request, today=None, exclu
             if is_completed:
                 continue
 
-        # Row highlighting & badge styling
+        # Row highlighting & badge styling: clean white rows, distinctive color badges (Red, Yellow, Purple)
         if due_status == "DUE_TODAY":
-            row_class = "table-danger border-start border-danger border-4"
+            row_class = ""
             badge_class = "danger"
             due_status_display = "Due Today"
         elif due_status == "UPCOMING_DUE":
-            row_class = "table-warning border-start border-warning border-4"
-            badge_class = "warning text-dark"
+            row_class = ""
+            badge_class = "warning"
             due_status_display = "Upcoming Due"
         elif due_status == "OVERDUE":
-            row_class = "table-light border-start border-danger border-4"
-            badge_class = "danger"
+            row_class = ""
+            badge_class = "purple"
             due_status_display = "Pending Due"
         elif due_status == "PAID" or is_completed:
             row_class = ""
@@ -1393,17 +1395,212 @@ def admin_record_shop_payment_view(request):
 # 8. Reports & Performance Analytics
 # ==========================================
 
+def get_analytics_dataset(year_val, month_val, shop_id_val):
+    """
+    Computes analytics dataset for a given Year, Month, and Shop.
+    month_val can be int (1..12) or 'all'.
+    shop_id_val can be int or 'all'.
+    """
+    now = timezone.now()
+    try:
+        year = int(year_val)
+    except (ValueError, TypeError):
+        year = now.year
+
+    if str(month_val).lower() == "all" or not month_val:
+        month = "all"
+        month_name = "All Months"
+    else:
+        try:
+            month = int(month_val)
+            if month < 1 or month > 12:
+                month = now.month
+            month_name = calendar.month_name[month]
+        except (ValueError, TypeError):
+            month = now.month
+            month_name = calendar.month_name[month]
+
+    selected_shop = None
+    if str(shop_id_val).lower() != "all" and shop_id_val:
+        try:
+            selected_shop = Shop.objects.get(pk=int(shop_id_val))
+            shop_name = selected_shop.name
+            shop_id = selected_shop.pk
+        except (Shop.DoesNotExist, ValueError, TypeError):
+            shop_name = "All Partner Shops"
+            shop_id = "all"
+    else:
+        shop_name = "All Partner Shops"
+        shop_id = "all"
+
+    # Base QuerySets
+    cust_qs = Customer.objects.all()
+    payout_qs = FinancierPayment.objects.all()
+    coll_qs = CustomerEMIPayment.objects.all()
+    app_qs = FinanceApplication.objects.all()
+
+    # Shop filtering
+    if selected_shop:
+        cust_qs = cust_qs.filter(shop=selected_shop)
+        payout_qs = payout_qs.filter(Q(shop=selected_shop) | Q(application__shop=selected_shop))
+        coll_qs = coll_qs.filter(customer__shop=selected_shop)
+        app_qs = app_qs.filter(shop=selected_shop)
+
+    # Date filtering
+    cust_qs = cust_qs.filter(created_at__year=year)
+    payout_qs = payout_qs.filter(payment_date__year=year)
+    coll_qs = coll_qs.filter(payment_date__year=year)
+    app_qs = app_qs.filter(created_at__year=year)
+
+    if month != "all":
+        cust_qs = cust_qs.filter(created_at__month=month)
+        payout_qs = payout_qs.filter(payment_date__month=month)
+        coll_qs = coll_qs.filter(payment_date__month=month)
+        app_qs = app_qs.filter(created_at__month=month)
+
+    total_customers = cust_qs.count()
+    total_payouts = payout_qs.aggregate(s=Sum("amount_received"))["s"] or Decimal("0.00")
+    total_collections = coll_qs.aggregate(s=Sum("amount"))["s"] or Decimal("0.00")
+    total_financed = app_qs.aggregate(s=Sum("financier_request_amount"))["s"] or Decimal("0.00")
+    net_profit = total_collections - total_payouts
+
+    # Generate Chart Data (01 to 30/31 if specific month, Jan to Dec if all)
+    if month != "all":
+        num_days = calendar.monthrange(year, month)[1]
+        chart_labels = [f"{d:02d}" for d in range(1, num_days + 1)]
+        chart_customers = [0] * num_days
+        chart_payouts = [0.0] * num_days
+        chart_collections = [0.0] * num_days
+
+        for c_day in cust_qs.values_list("created_at__day", flat=True):
+            if c_day and 1 <= c_day <= num_days:
+                chart_customers[c_day - 1] += 1
+
+        for p_day, p_amt in payout_qs.values_list("payment_date__day", "amount_received"):
+            if p_day and 1 <= p_day <= num_days:
+                chart_payouts[p_day - 1] += float(p_amt or 0)
+
+        for c_day, c_amt in coll_qs.values_list("payment_date__day", "amount"):
+            if c_day and 1 <= c_day <= num_days:
+                chart_collections[c_day - 1] += float(c_amt or 0)
+    else:
+        chart_labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        chart_customers = [0] * 12
+        chart_payouts = [0.0] * 12
+        chart_collections = [0.0] * 12
+
+        for c_m in cust_qs.values_list("created_at__month", flat=True):
+            if c_m and 1 <= c_m <= 12:
+                chart_customers[c_m - 1] += 1
+
+        for p_m, p_amt in payout_qs.values_list("payment_date__month", "amount_received"):
+            if p_m and 1 <= p_m <= 12:
+                chart_payouts[p_m - 1] += float(p_amt or 0)
+
+        for c_m, c_amt in coll_qs.values_list("payment_date__month", "amount"):
+            if c_m and 1 <= c_m <= 12:
+                chart_collections[c_m - 1] += float(c_amt or 0)
+
+    return {
+        "year": year,
+        "month": month,
+        "month_name": month_name,
+        "shop_id": shop_id,
+        "shop_name": shop_name,
+        "total_customers": total_customers,
+        "total_payouts": total_payouts,
+        "total_collections": total_collections,
+        "total_financed": total_financed,
+        "net_profit": net_profit,
+        "chart_labels": chart_labels,
+        "chart_customers": chart_customers,
+        "chart_payouts": chart_payouts,
+        "chart_collections": chart_collections,
+    }
+
+
 @login_required
 @admin_required
 def admin_reports_view(request):
     """
-    Executive Reports & Performance Analytics Page.
+    Executive Reports & Comparative Performance Analytics Page.
     URL: /admin-dashboard/reports/
+    Matches the modern EMI SAFE analytics specification with:
+    - Side-by-side period comparisons (Year, Month, Shop)
+    - Monthly customer activations chart (01 to 30 daily breakdown)
+    - Admin payouts to shops filtered by month & shop (01 to 30 daily breakdown)
+    - Month-wise Net Income / Profit tracking
+    - Month-by-month financial ledger matrix
     """
+    now = timezone.now()
+    current_year = now.year
+    current_month = now.month
+
+    # Available filter choices
+    available_years = [current_year - 2, current_year - 1, current_year, current_year + 1]
+    available_months = [(i, calendar.month_name[i]) for i in range(1, 13)]
+    all_shops = list(Shop.objects.all().order_by("name"))
+
+    # Period A parameters (default: current year, current month, all shops)
+    year_a = request.GET.get("year_a", current_year)
+    month_a = request.GET.get("month_a", current_month)
+    shop_a = request.GET.get("shop_a", "all")
+
+    # Period B parameters (default: current year, previous month or current month, all shops)
+    prev_month = current_month - 1 if current_month > 1 else 12
+    prev_year = current_year if current_month > 1 else current_year - 1
+    year_b = request.GET.get("year_b", prev_year)
+    month_b = request.GET.get("month_b", prev_month)
+    shop_b = request.GET.get("shop_b", "all")
+
+    # Compute datasets for Period A and Period B
+    dataset_a = get_analytics_dataset(year_a, month_a, shop_a)
+    dataset_b = get_analytics_dataset(year_b, month_b, shop_b)
+
+    # Comparison Deltas (A vs B)
+    diff_customers = dataset_a["total_customers"] - dataset_b["total_customers"]
+    diff_payouts = dataset_a["total_payouts"] - dataset_b["total_payouts"]
+    diff_collections = dataset_a["total_collections"] - dataset_b["total_collections"]
+    diff_profit = dataset_a["net_profit"] - dataset_b["net_profit"]
+
+    # Month-by-month Financial & Profit matrix for Year A (and Shop A filter)
+    monthly_matrix = []
+    base_cust = Customer.objects.filter(created_at__year=dataset_a["year"])
+    base_payout = FinancierPayment.objects.filter(payment_date__year=dataset_a["year"])
+    base_coll = CustomerEMIPayment.objects.filter(payment_date__year=dataset_a["year"])
+    base_app = FinanceApplication.objects.filter(created_at__year=dataset_a["year"])
+
+    if dataset_a["shop_id"] != "all":
+        try:
+            target_shop = Shop.objects.get(pk=dataset_a["shop_id"])
+            base_cust = base_cust.filter(shop=target_shop)
+            base_payout = base_payout.filter(Q(shop=target_shop) | Q(application__shop=target_shop))
+            base_coll = base_coll.filter(customer__shop=target_shop)
+            base_app = base_app.filter(shop=target_shop)
+        except Shop.DoesNotExist:
+            pass
+
+    for m in range(1, 13):
+        m_cust = base_cust.filter(created_at__month=m).count()
+        m_fin = base_app.filter(created_at__month=m).aggregate(s=Sum("financier_request_amount"))["s"] or Decimal("0.00")
+        m_payout = base_payout.filter(payment_date__month=m).aggregate(s=Sum("amount_received"))["s"] or Decimal("0.00")
+        m_coll = base_coll.filter(payment_date__month=m).aggregate(s=Sum("amount"))["s"] or Decimal("0.00")
+        m_profit = m_coll - m_payout
+        monthly_matrix.append({
+            "month_num": m,
+            "month_name": calendar.month_name[m],
+            "customers": m_cust,
+            "financed": m_fin,
+            "payouts": m_payout,
+            "collections": m_coll,
+            "net_profit": m_profit,
+        })
+
+    # High-level system stats
     total_shops = Shop.objects.count()
     active_shops = Shop.objects.filter(is_active=True).count()
-    total_customers = Customer.objects.count()
-    total_applications = FinanceApplication.objects.count()
+    total_system_customers = Customer.objects.count()
+    total_system_applications = FinanceApplication.objects.count()
 
     total_requested = FinanceApplication.objects.aggregate(
         total=Sum("financier_request_amount")
@@ -1415,36 +1612,34 @@ def admin_reports_view(request):
 
     total_liability = max(Decimal("0.00"), total_requested - total_disbursed)
 
-    # Application Status Breakdown
-    status_breakdown = (
-        FinanceApplication.objects.values("status")
-        .annotate(count=Count("id"))
-        .order_by("-count")
-    )
-
-    # Shop Performance Ranking
-    shops = list(Shop.objects.all().select_related("owner_account"))
-    shop_reports = []
-    for s in shops:
-        fin = get_shop_financials(s)
-        shop_reports.append({
-            "shop": s,
-            "customers": s.customers.count(),
-            "applications": s.applications.count(),
-            "financials": fin,
-        })
-    shop_reports.sort(key=lambda x: x["financials"]["total_payable"], reverse=True)
-
     context = {
         "active_page": "reports",
+        "available_years": available_years,
+        "available_months": available_months,
+        "all_shops": all_shops,
+        "dataset_a": dataset_a,
+        "dataset_b": dataset_b,
+        "diff_customers": diff_customers,
+        "diff_payouts": diff_payouts,
+        "diff_collections": diff_collections,
+        "diff_profit": diff_profit,
+        "monthly_matrix": monthly_matrix,
+        # JSON-serialized chart payloads for Chart.js
+        "chart_labels_a_json": json.dumps(dataset_a["chart_labels"]),
+        "chart_customers_a_json": json.dumps(dataset_a["chart_customers"]),
+        "chart_payouts_a_json": json.dumps(dataset_a["chart_payouts"]),
+        "chart_collections_a_json": json.dumps(dataset_a["chart_collections"]),
+        "chart_labels_b_json": json.dumps(dataset_b["chart_labels"]),
+        "chart_customers_b_json": json.dumps(dataset_b["chart_customers"]),
+        "chart_payouts_b_json": json.dumps(dataset_b["chart_payouts"]),
+        "chart_collections_b_json": json.dumps(dataset_b["chart_collections"]),
+        # System-level stats
         "total_shops": total_shops,
         "active_shops": active_shops,
-        "total_customers": total_customers,
-        "total_applications": total_applications,
+        "total_customers": total_system_customers,
+        "total_applications": total_system_applications,
         "total_requested": total_requested,
         "total_disbursed": total_disbursed,
         "total_liability": total_liability,
-        "status_breakdown": status_breakdown,
-        "shop_reports": shop_reports,
     }
     return render(request, "admin_dashboard/reports.html", context)

@@ -23,12 +23,12 @@
             --fin-text-primary: #0f172a;
             --fin-text-secondary: #334155;
             --fin-text-muted: #64748b;
-            --fin-primary: #2563eb;
-            --fin-primary-dark: #1d4ed8;
-            --fin-primary-soft: #eff6ff;
-            --fin-sidebar-bg: #0f172a;
-            --fin-sidebar-card: #1e293b;
-            --fin-sidebar-border: #1e293b;
+            --fin-primary: #7c3aed;
+            --fin-primary-dark: #6d28d9;
+            --fin-primary-soft: #f5f3ff;
+            --fin-sidebar-bg: #1e1338;
+            --fin-sidebar-card: #2c1a52;
+            --fin-sidebar-border: rgba(255, 255, 255, 0.08);
             --fin-radius: 8px;
             --fin-radius-sm: 6px;
         }
@@ -239,10 +239,10 @@
             font-size: 0.82rem;
         }
 
-        /* Administrator Fixed Sidebar Styles */
+        /* Administrator Fixed Sidebar Styles - EMI SAFE Purple Theme */
         .admin-sidebar {
             width: 245px;
-            background-color: var(--fin-sidebar-bg);
+            background: linear-gradient(180deg, #241442 0%, #150a2b 100%);
             color: #cbd5e1;
             position: fixed;
             top: 0;
@@ -252,37 +252,37 @@
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            border-right: 1px solid var(--fin-sidebar-border);
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
         }
         .admin-sidebar .sidebar-brand {
             padding: 1.15rem 1.15rem;
-            font-size: 1.02rem;
-            font-weight: 700;
+            font-size: 1.05rem;
+            font-weight: 800;
             color: #ffffff;
             display: flex;
             align-items: center;
             gap: 0.75rem;
-            border-bottom: 1px solid var(--fin-sidebar-border);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
             text-decoration: none;
             letter-spacing: -0.01em;
         }
         .sidebar-brand-badge {
-            width: 32px;
-            height: 32px;
-            background: linear-gradient(135deg, #2563eb, #1d4ed8);
-            border-radius: 6px;
+            width: 34px;
+            height: 34px;
+            background: linear-gradient(135deg, #7c3aed, #4c1d95);
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
             color: #ffffff;
-            box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35);
+            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);
         }
         .sidebar-section-heading {
             font-size: 0.64rem;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.08em;
-            color: #64748b;
+            color: #94a3b8;
             padding: 1.1rem 1.15rem 0.35rem;
         }
         .admin-nav {
@@ -290,11 +290,11 @@
             flex: 1;
         }
         .admin-nav-item {
-            margin: 0.12rem 0.65rem;
+            margin: 0.15rem 0.65rem;
         }
         .admin-nav-link {
-            color: #94a3b8;
-            padding: 0.52rem 0.8rem;
+            color: #cbd5e1;
+            padding: 0.55rem 0.85rem;
             display: flex;
             align-items: center;
             gap: 0.7rem;
@@ -306,13 +306,13 @@
         }
         .admin-nav-link:hover {
             color: #ffffff;
-            background-color: rgba(255, 255, 255, 0.06);
+            background-color: rgba(255, 255, 255, 0.1);
         }
         .admin-nav-link.active {
             color: #ffffff;
-            background-color: var(--fin-primary);
+            background-color: #7c3aed;
             font-weight: 600;
-            box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35);
+            box-shadow: 0 4px 14px rgba(124, 58, 237, 0.45);
         }
         .admin-nav-link i {
             font-size: 1rem;
@@ -362,11 +362,11 @@
         <!-- Sidebar Brand -->
         <a class="sidebar-brand" href="{% url 'admin_dashboard' %}">
             <div class="sidebar-brand-badge">
-                <i class="bi bi-wallet2 fs-5"></i>
+                <i class="bi bi-shield-check fs-5"></i>
             </div>
             <div>
-                <span class="d-block fw-bold text-white lh-1">EMI Finance</span>
-                <span class="text-muted fw-normal" style="font-size: 0.65rem; letter-spacing: 0.05em;">ENTERPRISE SUITE</span>
+                <span class="d-block fw-bold text-white lh-1">EMI SAFE</span>
+                <span class="text-white-50 fw-normal" style="font-size: 0.65rem; letter-spacing: 0.08em;">ENTERPRISE SUITE</span>
             </div>
         </a>
 
@@ -519,10 +519,10 @@
     <nav class="navbar navbar-expand-lg bg-white border-bottom sticky-top py-2.5 shadow-sm">
         <div class="container-fluid px-4">
             <a class="navbar-brand d-flex align-items-center gap-2" href="{% if user.is_followup_role %}{% url 'followup_dashboard' %}{% elif user.is_shop_owner_role %}{% url 'shop_dashboard' %}{% else %}{% url 'login' %}{% endif %}">
-                <div class="sidebar-brand-badge" style="width: 28px; height: 28px; font-size: 0.9rem;">
-                    <i class="bi bi-wallet2"></i>
+                <div class="sidebar-brand-badge" style="width: 30px; height: 30px; font-size: 0.95rem; background: linear-gradient(135deg, #7c3aed, #4c1d95);">
+                    <i class="bi bi-shield-check"></i>
                 </div>
-                <span class="fw-bold text-dark fs-6">EMI Finance</span>
+                <span class="fw-bold text-dark fs-6">EMI SAFE</span>
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>

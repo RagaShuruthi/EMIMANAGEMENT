@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+
+{% block title %}Register Partner Shop — EMI SAFE Enterprise{% endblock %}
+
+{% block extra_css %}
+<style>
+    .signup-page-wrapper {
+        min-height: calc(100vh - 120px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2.5rem 1rem;
+    }
+    .signup-container {
+        max-width: 1040px;
+        width: 100%;
+        background: #ffffff;
+        border-radius: 16px;
+        overflow: hidden;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 20px 45px -10px rgba(30, 19, 56, 0.15);
+    }
+    .signup-hero-pane {
+        background: linear-gradient(135deg, #241442 0%, #170d2c 100%);
+        color: #ffffff;
+        padding: 3rem 2.5rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        position: relative;
+    }
+    .signup-hero-pane::after {
+        content: "";
+        position: absolute;
+        top: -20%;
+        right: -20%;
+        width: 320px;
+        height: 320px;
+        background: radial-gradient(circle, rgba(124, 58, 237, 0.25) 0%, transparent 70%);
+        border-radius: 50%;
+        pointer-events: none;
+    }
+    .signup-brand-badge {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #7c3aed, #4c1d95);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #ffffff;
+        font-size: 1.6rem;
+        box-shadow: 0 8px 20px rgba(124, 58, 237, 0.4);
+    }
+    .signup-perk-card {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 10px;
+        padding: 0.85rem 1rem;
+        margin-bottom: 0.85rem;
+    }
+    .signup-perk-title {
+        color: #ffffff;
+        font-weight: 700;
+        font-size: 0.84rem;
+        margin-bottom: 0.2rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .signup-perk-title i {
+        color: #a78bfa;
+    }
+    .signup-perk-desc {
+        color: #cbd5e1;
+        font-size: 0.74rem;
+        line-height: 1.4;
+        margin-bottom: 0;
+    }
+    .form-control-fintech {
+        border-radius: 8px;
+        border: 1px solid #cbd5e1;
+        padding: 0.55rem 0.85rem;
+        font-size: 0.84rem;
+        transition: all 0.15s ease-in-out;
+    }
+    .form-control-fintech:focus {
+        border-color: #7c3aed;
+        box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+        outline: none;
+    }
+    .btn-signup-submit {
+        background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+        border: none;
+        color: #ffffff;
+        font-weight: 700;
+        border-radius: 8px;
+        padding: 0.75rem 1.5rem;
+        font-size: 0.92rem;
+        transition: all 0.15s ease-in-out;
+        box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
+    }
+    .btn-signup-submit:hover {
+        background: linear-gradient(135deg, #6d28d9 0%, #5b21b6 100%);
+        color: #ffffff;
+        box-shadow: 0 6px 18px rgba(124, 58, 237, 0.45);
+        transform: translateY(-1px);
+    }
+    .section-pill-divider {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #7c3aed;
+        background: #f5f3ff;
+        border-radius: 6px;
+        padding: 0.35rem 0.75rem;
+        display: inline-block;
+        margin-bottom: 1rem;
+        border: 1px solid #ede9fe;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="signup-page-wrapper">
+    <div class="signup-container">
+        <div class="row g-0">
+            <!-- Left Perks & Branding Hero Pane -->
+            <div class="col-12 col-lg-4 signup-hero-pane">
+                <div>
+                    <div class="d-flex align-items-center gap-3 mb-4">
+                        <div class="signup-brand-badge">
+                            <i class="bi bi-shield-check"></i>
+                        </div>
+                        <div>
+                            <h3 class="fw-bold text-white mb-0 lh-1">EMI SAFE</h3>
+                            <span class="text-white-50 small text-uppercase" style="letter-spacing: 0.1em; font-size: 0.68rem;">Retail Partner Network</span>
+                        </div>
+                    </div>
+
+                    <h4 class="fw-bold text-white mb-2" style="font-size: 1.25rem;">
+                        Scale Your Mobile Store with Smart EMI Financing
+                    </h4>
+                    <p class="text-white-50 small mb-4">
+                        Join hundreds of mobile phone retailers offering instant 3-month and 6-month customer EMI plans with guaranteed administrator payouts.
+                    </p>
+
+                    <div class="signup-perk-card">
+                        <div class="signup-perk-title">
+                            <i class="bi bi-phone-fill"></i> Instant Customer Approvals
+                        </div>
+                        <p class="signup-perk-desc">
+                            Register walk-in customers in under 2 minutes with automated down payment & tenure calculation.
+                        </p>
+                    </div>
+
+                    <div class="signup-perk-card">
+                        <div class="signup-perk-title">
+                            <i class="bi bi-cash-coin"></i> Direct Payout Reconciliation
+                        </div>
+                        <p class="signup-perk-desc">
+                            Receive your store disbursements via GPay, UPI, or NEFT directly from administration with zero discrepancy.
+                        </p>
+                    </div>
+
+                    <div class="signup-perk-card">
+                        <div class="signup-perk-title">
+                            <i class="bi bi-bell-fill"></i> Automated Collection Follow-ups
+                        </div>
+                        <p class="signup-perk-desc">
+                            Dedicated follow-up team tracks overdue installments so your store never bears customer default risk.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-3 border-top border-white border-opacity-10 small text-white-50">
+                    <i class="bi bi-shield-lock-fill me-1"></i> Authorized Partner Registration
+                </div>
+            </div>
+
+            <!-- Right Registration Form Pane -->
+            <div class="col-12 col-lg-8 p-4 p-md-5 bg-white">
+                <div class="mb-4">
+                    <span class="badge" style="background-color: #ede9fe; color: #6d28d9; border: 1px solid #ddd6fe; font-size: 0.72rem; padding: 0.35rem 0.7rem;">
+                        <i class="bi bi-shop me-1"></i> STORE ONBOARDING
+                    </span>
+                    <h3 class="fw-bold text-dark mt-2 mb-1">Register Your Retail Shop</h3>
+                    <p class="text-muted small mb-0">Complete your partner shop profile to activate customer EMI registration.</p>
+                </div>
+
+                {% if errors %}
+                <div class="alert alert-danger py-2 small mb-4 border-danger">
+                    <ul class="mb-0 ps-3">
+                        {% for err in errors %}
+                        <li>{{ err }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                <form method="post" action="{% url 'signup' %}">
+                    {% csrf_token %}
+
+                    <!-- Section 1: Store & Owner Information -->
+                    <div class="section-pill-divider">
+                        <i class="bi bi-building me-1"></i> 1. Retail Store & Contact Details
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small fw-bold text-secondary mb-1">Shop / Store Name *</label>
+                            <input type="text" name="shop_name" class="form-control form-control-fintech" value="{{ form_data.shop_name|default:'' }}" required placeholder="e.g. Sri Krishna Mobiles">
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small fw-bold text-secondary mb-1">Owner / Authorized Name *</label>
+                            <input type="text" name="owner_name" class="form-control form-control-fintech" value="{{ form_data.owner_name|default:'' }}" required placeholder="e.g. Ramesh Kumar">
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small fw-bold text-secondary mb-1">Primary Phone Number *</label>
+                            <input type="text" name="phone" class="form-control form-control-fintech" value="{{ form_data.phone|default:'' }}" required placeholder="10-digit mobile number">
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small fw-bold text-secondary mb-1">Email Address (Optional)</label>
+                            <input type="email" name="email" class="form-control form-control-fintech" value="{{ form_data.email|default:'' }}" placeholder="store@example.com">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-bold text-secondary mb-1">Retail Address *</label>
+                            <textarea name="address" class="form-control form-control-fintech" rows="2" required placeholder="Shop No, Street, Landmark, City & Pincode">{{ form_data.address|default:'' }}</textarea>
+                        </div>
+                    </div>
+
+                    <!-- Section 2: Payout & Digital Settlement -->
+                    <div class="section-pill-divider">
+                        <i class="bi bi-wallet2 me-1"></i> 2. Payout Settlement Details
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small fw-bold text-secondary mb-1">Google Pay (GPay) / UPI ID</label>
+                            <input type="text" name="gpay" class="form-control form-control-fintech" value="{{ form_data.gpay|default:'' }}" placeholder="Mobile number or username@upi">
+                            <span class="text-muted small" style="font-size: 0.7rem;">Admin payouts can be disbursed directly to this UPI.</span>
+                        </div>
+                    </div>
+
+                    <!-- Section 3: Portal Login Credentials -->
+                    <div class="section-pill-divider">
+                        <i class="bi bi-key-fill me-1"></i> 3. Shop Portal Login Credentials
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-12 col-md-4">
+                            <label class="form-label small fw-bold text-secondary mb-1">Portal Username *</label>
+                            <input type="text" name="username" class="form-control form-control-fintech" value="{{ form_data.username|default:'' }}" required placeholder="Choose a username">
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label small fw-bold text-secondary mb-1">Password *</label>
+                            <input type="password" name="password" class="form-control form-control-fintech" required placeholder="Min 6 characters">
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label small fw-bold text-secondary mb-1">Confirm Password *</label>
+                            <input type="password" name="password_confirm" class="form-control form-control-fintech" required placeholder="Re-enter password">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-signup-submit w-100 py-2.5 mb-3">
+                        <i class="bi bi-check-circle-fill me-1.5"></i> Register Partner Store & Enter Portal
+                    </button>
+
+                    <div class="text-center pt-2 border-top">
+                        <span class="text-muted small">Already a registered retail partner?</span>
+                        <a href="{% url 'login' %}" class="small fw-bold text-decoration-none ms-1" style="color: #7c3aed;">
+                            Sign In to Portal <i class="bi bi-arrow-right"></i>
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
