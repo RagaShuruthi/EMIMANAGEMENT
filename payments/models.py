@@ -160,6 +160,12 @@ class CustomerEMISchedule(models.Model):
         default="",
         help_text="Notes or comments regarding this installment."
     )
+    update_note = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Custom admin update notes or information for this installment."
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

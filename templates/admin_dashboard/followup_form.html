@@ -221,7 +221,7 @@
             </div>
 
             <!-- Submit Buttons Card -->
-            <div class="card rounded-3 shadow-sm">
+            <div class="card rounded-3 shadow-sm mb-3">
                 <div class="card-body p-3 d-flex gap-2">
                     <button type="submit" class="btn btn-primary flex-grow-1 shadow-sm">
                         <i class="bi bi-check2-circle me-1"></i>
@@ -232,9 +232,60 @@
                     </a>
                 </div>
             </div>
+            {% if not is_create %}
+            <div class="card rounded-3 border-danger-subtle bg-danger-subtle shadow-sm">
+                <div class="card-body p-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <strong class="text-danger d-block">Delete Follow-up Person</strong>
+                        <small class="text-secondary">Permanently removes account and assignments.</small>
+                    </div>
+                    <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteFollowupFormModal">
+                        <i class="bi bi-trash-fill me-1"></i> Delete Person
+                    </button>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 </form>
+
+{% if not is_create %}
+<!-- Permanent Delete Follow-up Person Modal -->
+<div class="modal fade" id="deleteFollowupFormModal" tabindex="-1" aria-labelledby="deleteFollowupFormModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-danger text-white py-3">
+                <h5 class="modal-title fw-bold" id="deleteFollowupFormModalLabel">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>Permanently Delete Follow-up Person
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4 text-start">
+                <div class="text-center mb-3">
+                    <div class="d-inline-flex p-3 rounded-circle bg-danger-subtle text-danger mb-2">
+                        <i class="bi bi-person-x-fill fs-2"></i>
+                    </div>
+                    <h5 class="fw-bold text-dark mb-1">Delete "{{ employee.get_full_name|default:employee.username }}"?</h5>
+                    <span class="badge bg-secondary-subtle text-secondary font-monospace">Username: @{{ employee.username }}</span>
+                </div>
+                <div class="alert alert-danger border-danger-subtle small mb-0">
+                    <div class="fw-bold mb-1"><i class="bi bi-shield-exclamation me-1"></i> Irreversible Action:</div>
+                    This will <strong>permanently delete</strong> this follow-up person's account from the database, revoking their portal access and removing all shop assignments. This cannot be undone.
+                </div>
+            </div>
+            <div class="modal-footer bg-light py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <form method="post" action="{% url 'admin_followup_delete' pk=employee.pk %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger btn-sm">
+                        <i class="bi bi-trash-fill me-1"></i> Permanently Delete
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 {% endblock %}
 

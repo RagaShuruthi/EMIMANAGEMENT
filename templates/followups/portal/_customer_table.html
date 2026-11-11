@@ -1,0 +1,183 @@
+<!-- Redesigned Minimal Fintech Customer Table (No 'Due Today' column) -->
+<div class="table-responsive">
+    <table class="table table-hover align-middle mb-0" style="background-color: #ffffff;">
+        <thead class="bg-light text-uppercase small text-muted" style="border-bottom: 1px solid #e2e8f0; font-size: 0.75rem; letter-spacing: 0.04em;">
+            <tr>
+                <th scope="col" style="min-width: 170px;">Customer Name</th>
+                <th scope="col" style="min-width: 160px;">Contact Numbers</th>
+                <th scope="col">Shop</th>
+                <th scope="col">Device</th>
+                <th scope="col" class="text-end">Monthly EMI</th>
+                <th scope="col" class="text-center" style="min-width: 130px;">Months Unpaid</th>
+                <th scope="col" style="min-width: 125px;">Next Due Date</th>
+                <th scope="col">Follow-up Outcome</th>
+                <th scope="col" class="text-end" style="min-width: 130px;">Action</th>
+            </tr>
+        </thead>
+        <tbody style="border-top: none;">
+            {% for customer in customers %}
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+                <!-- 1. Customer Name -->
+                <td>
+                    <div class="d-flex align-items-center gap-1">
+                        <a href="{% url 'followup_customer_detail' pk=customer.pk %}" class="fw-semibold text-dark text-decoration-none" title="View Customer Dossier">
+                            {{ customer.name }}
+                        </a>
+                        {% if customer.calling_priority == 1 %}
+                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle" style="font-size: 0.65rem;">Today's Due</span>
+                        {% elif customer.calling_priority == 2 %}
+                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" style="font-size: 0.65rem;">Upcoming</span>
+                        {% elif customer.calling_priority == 3 %}
+                            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle" style="font-size: 0.65rem;">Overdue</span>
+                        {% endif %}
+                    </div>
+                    <div class="text-muted small" style="font-size: 0.72rem;">Customer #{{ customer.pk }}</div>
+                </td>
+
+                <!-- 2. Contact Numbers (Primary + Secondary or -) -->
+                <td>
+                    {% if customer.primary_mobile %}
+                    <div class="d-flex align-items-center gap-1">
+                        <a href="tel:{{ customer.primary_mobile }}" class="text-dark fw-semibold text-decoration-none small text-nowrap d-inline-flex align-items-center" title="Call Primary Mobile">
+                            <i class="bi bi-telephone-fill text-primary me-1" style="font-size: 0.75rem;"></i>
+                            <span class="font-monospace">{{ customer.primary_mobile }}</span>
+                        </a>
+                    </div>
+                    {% endif %}
+
+                    {% if customer.secondary_mobile %}
+                    <div class="d-flex align-items-center gap-1 {% if customer.primary_mobile %}mt-0.5{% endif %}">
+                        <a href="tel:{{ customer.secondary_mobile }}" class="text-muted text-decoration-none small text-nowrap d-inline-flex align-items-center" title="Call Secondary Mobile">
+                            <i class="bi bi-telephone text-secondary me-1" style="font-size: 0.75rem;"></i>
+                            <span class="font-monospace">{{ customer.secondary_mobile }}</span>
+                        </a>
+                    </div>
+                    {% elif not customer.primary_mobile %}
+                    <span class="text-muted small">—</span>
+                    {% else %}
+                    <div class="text-muted small" style="font-size: 0.72rem;">Alt: —</div>
+                    {% endif %}
+                </td>
+
+                <!-- 3. Shop -->
+                <td>
+                    <span class="small text-secondary">
+                        <i class="bi bi-shop me-1 text-muted"></i>{{ customer.shop.name }}
+                    </span>
+                </td>
+
+                <!-- 4. Device -->
+                <td>
+                    <span class="small text-dark">{{ customer.mobile_model|default:"—" }}</span>
+                </td>
+
+                <!-- 5. Monthly EMI -->
+                <td class="text-end">
+                    <span class="fw-semibold text-dark small">₹{{ customer.monthly_emi|floatformat:2 }}</span>
+                </td>
+
+                <!-- 6. Months Unpaid -->
+                <td class="text-center">
+                    {% if customer.months_unpaid > 1 %}
+                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle fw-semibold py-1 px-2" style="font-size: 0.75rem;">
+                            {{ customer.months_unpaid }} Months Pending
+                        </span>
+                    {% elif customer.months_unpaid == 1 %}
+                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle fw-semibold py-1 px-2" style="font-size: 0.75rem;">
+                            1 Month Pending
+                        </span>
+                    {% elif customer.is_today_due %}
+                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle fw-semibold py-1 px-2" style="font-size: 0.75rem;">
+                            Due Today
+                        </span>
+                    {% else %}
+                        <span class="badge bg-light text-muted border py-1 px-2" style="font-size: 0.75rem;">
+                            0 Mo (On Track)
+                        </span>
+                    {% endif %}
+                </td>
+
+                <!-- 7. Next Due Date (with edit modal button) -->
+                <td>
+                    {% if customer.next_due_date %}
+                        <div class="d-flex align-items-center gap-1">
+                            <span class="small text-dark {% if customer.is_today_due %}fw-bold text-danger{% endif %}">
+                                {{ customer.next_due_date|date:"M d, Y" }}
+                            </span>
+                            <button type="button" class="btn btn-sm btn-link text-muted p-0 ms-1" data-bs-toggle="modal" data-bs-target="#editDueModal{{ customer.pk }}" title="Reschedule Next Due Date">
+                                <i class="bi bi-pencil" style="font-size: 0.75rem;"></i>
+                            </button>
+                        </div>
+                    {% else %}
+                        <span class="text-muted small">—</span>
+                    {% endif %}
+                </td>
+
+                <!-- 8. Follow-up Outcome -->
+                <td>
+                    {% if customer.latest_activity.outcome == 'NEED_TWO_DAYS' %}
+                        <div class="small fw-semibold text-dark">
+                            <i class="bi bi-calendar2-event text-primary me-1"></i>Need Time
+                        </div>
+                        {% if customer.latest_activity.next_followup_date %}
+                        <div class="text-muted small" style="font-size: 0.72rem;">
+                            Call on: {{ customer.latest_activity.next_followup_date|date:"M d, Y" }}
+                        </div>
+                        {% endif %}
+                    {% elif customer.latest_activity.outcome == 'PAID' %}
+                        <span class="badge bg-success-subtle text-success border border-success-subtle py-1 px-2" style="font-size: 0.72rem;">
+                            <i class="bi bi-check-circle me-1"></i>Paid
+                        </span>
+                    {% elif customer.latest_activity.outcome == 'NOT_PAID' %}
+                        <span class="badge bg-light text-muted border py-1 px-2" style="font-size: 0.72rem;">
+                            Not Paid
+                        </span>
+                    {% else %}
+                        <span class="text-muted small" style="font-size: 0.75rem;">Pending Call</span>
+                    {% endif %}
+                </td>
+
+                <!-- 9. Action -->
+                <td class="text-end text-nowrap">
+                    <button type="button" class="btn btn-sm btn-outline-primary py-1 px-2" data-bs-toggle="modal" data-bs-target="#quickUpdateModal{{ customer.pk }}">
+                        Update
+                    </button>
+                    <a href="{% url 'followup_customer_detail' pk=customer.pk %}" class="btn btn-sm btn-light border py-1 px-2 ms-1" title="View Customer Dossier">
+                        <i class="bi bi-eye"></i>
+                    </a>
+                </td>
+            </tr>
+
+            <!-- Reschedule Due Date Modal for Follow-up Staff -->
+            <div class="modal fade text-start" id="editDueModal{{ customer.pk }}" tabindex="-1" aria-labelledby="editDueModalLabel{{ customer.pk }}" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered modal-sm">
+                    <div class="modal-content border-0 shadow-sm" style="border-radius: 12px;">
+                        <form method="post" action="{% url 'followup_edit_due_date' pk=customer.pk %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <div class="modal-header py-2.5 px-3 bg-white border-bottom">
+                                <h6 class="modal-title fw-bold text-dark small mb-0" id="editDueModalLabel{{ customer.pk }}">
+                                    Reschedule Due Date
+                                </h6>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body p-3">
+                                <p class="small text-muted mb-2">New due date for <strong>{{ customer.name }}</strong>:</p>
+                                <input type="date" name="due_date" class="form-control form-control-sm" value="{{ customer.next_due_date|date:'Y-m-d' }}" required>
+                            </div>
+                            <div class="modal-footer py-2 px-3 bg-light border-top">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="submit" class="btn btn-sm btn-primary">Save Date</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Include Reusable Status Update Modal -->
+            {% include "followups/portal/_status_modal.html" %}
+
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

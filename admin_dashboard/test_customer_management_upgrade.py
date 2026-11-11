@@ -105,12 +105,13 @@ class CustomerManagementUpgradeTests(TestCase):
         )
 
         self.assertEqual(app.financier_request_amount, Decimal("24000.00"))
-        self.assertEqual(app.monthly_emi, Decimal("4000.00"))
+        # Per business model: EMI = Total Phone Price / duration (30,000 / 6 = 5,000)
+        self.assertEqual(app.monthly_emi, Decimal("5000.00"))
 
         # Verify schedule generation
         self.assertEqual(app.emi_schedules.count(), 6)
         total_schedule_amount = sum(s.amount for s in app.emi_schedules.all())
-        self.assertEqual(total_schedule_amount, Decimal("24000.00"))
+        self.assertEqual(total_schedule_amount, Decimal("30000.00"))
 
     def test_03_04_05_customer_payment_updates_statistics_dynamically(self):
         """
@@ -143,7 +144,7 @@ class CustomerManagementUpgradeTests(TestCase):
         initial_stats = get_shop_customer_emi_stats(self.shop_a, today=self.today)
         self.assertEqual(initial_stats["total_customers"], 1)
         self.assertEqual(initial_stats["total_amount_paid"], Decimal("0.00"))
-        self.assertEqual(initial_stats["total_pending_all_emis"], Decimal("24000.00"))
+        self.assertEqual(initial_stats["total_pending_all_emis"], Decimal("30000.00"))
         self.assertGreater(initial_stats["total_pending_this_month"], Decimal("0.00"))
 
         # Customer pays ₹4,000
@@ -158,10 +159,10 @@ class CustomerManagementUpgradeTests(TestCase):
         new_stats = get_shop_customer_emi_stats(self.shop_a, today=self.today)
         # Total Amount Paid increased
         self.assertEqual(new_stats["total_amount_paid"], Decimal("4000.00"))
-        # Total Pending All EMIs decreased
-        self.assertEqual(new_stats["total_pending_all_emis"], Decimal("20000.00"))
-        # Total Pending This Month decreased
-        self.assertEqual(new_stats["total_pending_this_month"], Decimal("0.00"))
+        # Total Pending All EMIs decreased (30,000 - 4,000 = 26,000)
+        self.assertEqual(new_stats["total_pending_all_emis"], Decimal("26000.00"))
+        # Total Pending This Month decreased (5,000 - 4,000 = 1,000)
+        self.assertEqual(new_stats["total_pending_this_month"], Decimal("1000.00"))
 
     def test_06_admin_to_shop_payout_independence(self):
         """
@@ -201,7 +202,7 @@ class CustomerManagementUpgradeTests(TestCase):
         self.assertEqual(admin_financials["total_paid"], Decimal("16000.00"))
         # Customer amount paid MUST remain 0.00 (Customer has not made EMI payments yet)
         self.assertEqual(customer_stats["total_amount_paid"], Decimal("0.00"))
-        self.assertEqual(customer_stats["total_pending_all_emis"], Decimal("16000.00"))
+        self.assertEqual(customer_stats["total_pending_all_emis"], Decimal("19980.00"))
 
     def test_07_08_09_due_date_classifications(self):
         """
@@ -243,17 +244,17 @@ class CustomerManagementUpgradeTests(TestCase):
         Requirement 10:
         Test multiple checkbox filters (Due Today, Upcoming Due, Pending Due) together.
         """
-        # Create 1 Due Today, 1 Upcoming, 1 Overdue
+        # Create 1 Due Today, 1 Upcoming, 1 Overdue (all with approved finance applications)
         cust_t = Customer.objects.create(shop=self.shop_a, name="Customer T", primary_mobile="9876500021")
-        app_t = FinanceApplication.objects.create(shop=self.shop_a, customer=cust_t, mobile_price=Decimal("10000.00"), emi_duration=3)
+        app_t = FinanceApplication.objects.create(shop=self.shop_a, customer=cust_t, mobile_price=Decimal("10000.00"), emi_duration=3, status=FinanceApplication.Status.APPROVED)
         app_t.emi_schedules.filter(installment_number=1).update(due_date=self.today)
 
         cust_u = Customer.objects.create(shop=self.shop_a, name="Customer U", primary_mobile="9876500022")
-        app_u = FinanceApplication.objects.create(shop=self.shop_a, customer=cust_u, mobile_price=Decimal("10000.00"), emi_duration=3)
+        app_u = FinanceApplication.objects.create(shop=self.shop_a, customer=cust_u, mobile_price=Decimal("10000.00"), emi_duration=3, status=FinanceApplication.Status.APPROVED)
         app_u.emi_schedules.filter(installment_number=1).update(due_date=self.today + timedelta(days=1))
 
         cust_o = Customer.objects.create(shop=self.shop_a, name="Customer O", primary_mobile="9876500023")
-        app_o = FinanceApplication.objects.create(shop=self.shop_a, customer=cust_o, mobile_price=Decimal("10000.00"), emi_duration=3)
+        app_o = FinanceApplication.objects.create(shop=self.shop_a, customer=cust_o, mobile_price=Decimal("10000.00"), emi_duration=3, status=FinanceApplication.Status.APPROVED)
         app_o.emi_schedules.filter(installment_number=1).update(due_date=self.today - timedelta(days=3))
 
         self.client.login(username="admin_user", password="AdminPassword123!")
@@ -285,11 +286,11 @@ class CustomerManagementUpgradeTests(TestCase):
         Test A-Z, Z-A sorting and payment-based Highest-to-Lowest and Lowest-to-Highest.
         """
         c_alice = Customer.objects.create(shop=self.shop_a, name="Alice Adams", primary_mobile="9876500031")
-        app_a = FinanceApplication.objects.create(shop=self.shop_a, customer=c_alice, mobile_price=Decimal("20000.00"), emi_duration=3)
+        app_a = FinanceApplication.objects.create(shop=self.shop_a, customer=c_alice, mobile_price=Decimal("20000.00"), emi_duration=3, status=FinanceApplication.Status.APPROVED)
         app_a.record_customer_payment(amount=Decimal("15000.00"))
 
         c_zack = Customer.objects.create(shop=self.shop_a, name="Zack Zimmerman", primary_mobile="9876500032")
-        app_z = FinanceApplication.objects.create(shop=self.shop_a, customer=c_zack, mobile_price=Decimal("20000.00"), emi_duration=3)
+        app_z = FinanceApplication.objects.create(shop=self.shop_a, customer=c_zack, mobile_price=Decimal("20000.00"), emi_duration=3, status=FinanceApplication.Status.APPROVED)
         app_z.record_customer_payment(amount=Decimal("5000.00"))
 
         self.client.login(username="admin_user", password="AdminPassword123!")
@@ -322,7 +323,7 @@ class CustomerManagementUpgradeTests(TestCase):
         Preserves history without overwriting past notes.
         """
         cust = Customer.objects.create(shop=self.shop_a, name="Sync Customer", primary_mobile="9876500041")
-        FinanceApplication.objects.create(shop=self.shop_a, customer=cust, mobile_price=Decimal("10000.00"), emi_duration=3)
+        FinanceApplication.objects.create(shop=self.shop_a, customer=cust, mobile_price=Decimal("10000.00"), emi_duration=3, status=FinanceApplication.Status.APPROVED)
 
         # 1. Admin logs update status
         self.client.login(username="admin_user", password="AdminPassword123!")
@@ -351,13 +352,13 @@ class CustomerManagementUpgradeTests(TestCase):
 
         # Verify database has both historical records
         cust.refresh_from_db()
-        self.assertIn("Need two days time", cust.latest_update_status)
+        self.assertIn("Need 2 Days", cust.latest_update_status)
         self.assertEqual(cust.update_history.count(), 2)
 
         # 3. Admin logs back in and checks customer page
         self.client.login(username="admin_user", password="AdminPassword123!")
         admin_res = self.client.get(reverse("admin_all_customers"))
-        self.assertContains(admin_res, "Need two days time")
+        self.assertContains(admin_res, "Need 2 Days")
 
     def test_15_edit_next_due_date_and_reclassification(self):
         """
@@ -367,7 +368,7 @@ class CustomerManagementUpgradeTests(TestCase):
         """
         cust = Customer.objects.create(shop=self.shop_a, name="Date Reschedule Cust", primary_mobile="9876500051")
         app = FinanceApplication.objects.create(
-            shop=self.shop_a, customer=cust, mobile_price=Decimal("15000.00"), emi_duration=3
+            shop=self.shop_a, customer=cust, mobile_price=Decimal("15000.00"), emi_duration=3, status=FinanceApplication.Status.APPROVED
         )
         app.generate_default_schedule_if_missing()
 
@@ -391,11 +392,11 @@ class CustomerManagementUpgradeTests(TestCase):
         Exports to Excel and PDF match active search, filters, and sorting.
         """
         cust1 = Customer.objects.create(shop=self.shop_a, name="Export Alpha", primary_mobile="9876500061")
-        app1 = FinanceApplication.objects.create(shop=self.shop_a, customer=cust1, mobile_price=Decimal("18000.00"), emi_duration=3)
+        app1 = FinanceApplication.objects.create(shop=self.shop_a, customer=cust1, mobile_price=Decimal("18000.00"), emi_duration=3, status=FinanceApplication.Status.APPROVED)
         app1.record_customer_payment(amount=Decimal("6000.00"))
 
         cust2 = Customer.objects.create(shop=self.shop_a, name="Export Beta", primary_mobile="9876500062")
-        FinanceApplication.objects.create(shop=self.shop_a, customer=cust2, mobile_price=Decimal("24000.00"), emi_duration=6)
+        FinanceApplication.objects.create(shop=self.shop_a, customer=cust2, mobile_price=Decimal("24000.00"), emi_duration=6, status=FinanceApplication.Status.APPROVED)
 
         self.client.login(username="admin_user", password="AdminPassword123!")
 
@@ -425,13 +426,77 @@ class CustomerManagementUpgradeTests(TestCase):
         Shop A customer details page shows ONLY customers of Shop A, never Shop B.
         """
         cust_a = Customer.objects.create(shop=self.shop_a, name="Customer In Shop A", primary_mobile="9876500071")
-        FinanceApplication.objects.create(shop=self.shop_a, customer=cust_a, mobile_price=Decimal("15000.00"), emi_duration=3)
+        FinanceApplication.objects.create(shop=self.shop_a, customer=cust_a, mobile_price=Decimal("15000.00"), emi_duration=3, status=FinanceApplication.Status.APPROVED)
 
         cust_b = Customer.objects.create(shop=self.shop_b, name="Customer In Shop B", primary_mobile="9876500072")
-        FinanceApplication.objects.create(shop=self.shop_b, customer=cust_b, mobile_price=Decimal("15000.00"), emi_duration=3)
+        FinanceApplication.objects.create(shop=self.shop_b, customer=cust_b, mobile_price=Decimal("15000.00"), emi_duration=3, status=FinanceApplication.Status.APPROVED)
 
         self.client.login(username="admin_user", password="AdminPassword123!")
         shop_a_page = self.client.get(reverse("admin_shopwise_detail", kwargs={"shop_id": self.shop_a.id}))
         self.assertContains(shop_a_page, "Customer In Shop A")
         self.assertNotContains(shop_a_page, "Customer In Shop B")
+
+    def test_19_loss_customers_original_loss_column_and_kpi_card(self):
+        """
+        Tests that in Loss Customers page:
+        - Original Loss column is present and calculated as downpayment - remaining due.
+        - KPI card sums up original loss values instead of total device value.
+        """
+        # Customer 1: Price 30,000, Downpayment 5,000, Remaining 15,000 -> Original Loss = 5000 - 15000 = -10000
+        cust1 = Customer.objects.create(
+            shop=self.shop_a,
+            name="Loss Customer One",
+            primary_mobile="9876500081",
+            is_loss=True,
+            loss_date=self.today
+        )
+        app1 = FinanceApplication.objects.create(
+            shop=self.shop_a,
+            customer=cust1,
+            mobile_price=Decimal("30000.00"),
+            down_payment=Decimal("5000.00"),
+            monthly_emi=Decimal("5000.00"),
+            emi_duration=5,
+            status=FinanceApplication.Status.APPROVED
+        )
+        # 5 EMIs of 5000 each = 25000 total. Customer pays 10,000. Remaining due = 15,000
+        app1.record_customer_payment(amount=Decimal("10000.00"))
+
+        # Customer 2: Price 20,000, Downpayment 8,000, Remaining 6,000 -> Original Loss = 8000 - 6000 = 2000
+        cust2 = Customer.objects.create(
+            shop=self.shop_a,
+            name="Loss Customer Two",
+            primary_mobile="9876500082",
+            is_loss=True,
+            loss_date=self.today
+        )
+        app2 = FinanceApplication.objects.create(
+            shop=self.shop_a,
+            customer=cust2,
+            mobile_price=Decimal("20000.00"),
+            down_payment=Decimal("8000.00"),
+            monthly_emi=Decimal("4000.00"),
+            emi_duration=3,
+            status=FinanceApplication.Status.APPROVED
+        )
+        # 3 EMIs of 4000 each = 12000 total. Customer pays 6000. Remaining due = 6000
+        app2.record_customer_payment(amount=Decimal("6000.00"))
+
+        self.client.login(username="admin_user", password="AdminPassword123!")
+        res = self.client.get(reverse("admin_loss_customers"))
+        self.assertEqual(res.status_code, 200)
+
+        # Check context calculations
+        # cust1: total EMI 30,000, paid 10,000 -> remaining 20,000. original_loss: 5,000 - 20,000 = -15,000
+        # cust2: total EMI 20,000, paid 6,000 -> remaining 14,000. original_loss: 8,000 - 14,000 = -6,000
+        # total_original_loss: -15,000 + (-6,000) = -21,000
+        self.assertEqual(res.context["total_original_loss"], Decimal("-21000.00"))
+
+        # Check HTML content
+        self.assertContains(res, "Original Loss")
+        self.assertContains(res, "-15000.00")
+        self.assertContains(res, "-6000.00")
+        self.assertContains(res, "-21000.00")
+        self.assertNotContains(res, "Total Device Value")
+
 

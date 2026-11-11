@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block title %}All Assigned Shops — Follow-up Portal{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+    <!-- Breadcrumb & Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2 pb-3 border-bottom">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1 small">
+                    <li class="breadcrumb-item"><a href="{% url 'followup_dashboard' %}" class="text-decoration-none">Dashboard</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Assigned Retail Shops</li>
+                </ol>
+            </nav>
+            <h4 class="fw-bold text-dark mb-0">Your Authorized Retail Shops</h4>
+            <span class="small text-muted">All {{ total_assigned_count }} retail partner shops under your monitoring jurisdiction</span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <a href="{% url 'followup_dashboard' %}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+            </a>
+            <a href="{% url 'followup_tasks' %}" class="btn btn-sm btn-primary">
+                <i class="bi bi-list-check me-1"></i>View All Tasks
+            </a>
+        </div>
+    </div>
+
+    <!-- Search & Filter Bar -->
+    <div class="card border rounded-3 mb-4 shadow-sm" style="border-color: #e2e8f0;">
+        <div class="card-body p-3">
+            <form method="get" class="row g-2 align-items-center">
+                <div class="col-12 col-md-8 col-lg-6">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                        <input type="text" name="q" class="form-control border-start-0 ps-0" placeholder="Search by shop name, contact phone, or address..." value="{{ search_query }}">
+                        <button type="submit" class="btn btn-primary">Search</button>
+                        {% if search_query %}
+                        <a href="{% url 'followup_shops_list' %}" class="btn btn-outline-secondary" title="Clear Search">
+                            <i class="bi bi-x-lg"></i>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-12 col-md-4 col-lg-6 text-md-end text-muted small">
+                    Showing {{ shops_page.start_index }}–{{ shops_page.end_index }} of {{ total_assigned_count }} assigned shops
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Shops Table List Layout (Professional, Clean Fintech Style) -->
+    <div class="card border rounded-3 mb-4 shadow-sm" style="border-color: #e2e8f0;">
+        <div class="card-body p-0">
+            {% if shops_page %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" style="background-color: #ffffff;">
+                    <thead class="bg-light text-uppercase small text-muted" style="border-bottom: 1px solid #e2e8f0; font-size: 0.72rem; letter-spacing: 0.04em;">
+                        <tr>
+                            <th scope="col" class="ps-4">Shop Name</th>
+                            <th scope="col">Contact Phone</th>
+                            <th scope="col">Address</th>
+                            <th scope="col" class="text-center">Assigned Customers</th>
+                            <th scope="col" class="text-center">Today's Due</th>
+                            <th scope="col" class="text-center">Overdue</th>
+                            <th scope="col" class="text-end">Total Outstanding</th>
+                            <th scope="col" class="text-end pe-4">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody style="border-top: none;">
+                        {% for item in shops_page %}
+                        <tr style="border-bottom: 1px solid #f1f5f9;">
+                            <!-- Shop Name -->
+                            <td class="ps-4">
+                                <a href="{% url 'followup_shop_detail' shop_id=item.shop.pk %}" class="fw-bold text-dark text-decoration-none d-flex align-items-center gap-2">
+                                    <i class="bi bi-shop text-primary"></i>
+                                    <span>{{ item.shop.name }}</span>
+                                </a>
+                                {% if item.shop.owner_name %}
+                                <div class="text-muted small ps-4" style="font-size: 0.72rem;">Owner: {{ item.shop.owner_name }}</div>
+                                {% endif %}
+                            </td>
+
+                            <!-- Phone -->
+                            <td>
+                                {% if item.shop.phone %}
+                                <a href="tel:{{ item.shop.phone }}" class="text-dark small text-decoration-none">
+                                    <i class="bi bi-telephone-fill text-success me-1" style="font-size: 0.75rem;"></i>
+                                    <span class="font-monospace">{{ item.shop.phone }}</span>
+                                </a>
+                                {% else %}
+                                <span class="text-muted small">—</span>
+                                {% endif %}
+                            </td>
+
+                            <!-- Address -->
+                            <td>
+                                <span class="small text-muted text-truncate d-inline-block" style="max-width: 250px;">
+                                    {{ item.shop.address|default:"—" }}
+                                </span>
+                            </td>
+
+                            <!-- Assigned Customers -->
+                            <td class="text-center">
+                                <span class="badge bg-light text-dark border px-2 py-1 font-monospace">
+                                    {{ item.customer_count }}
+                                </span>
+                            </td>
+
+                            <!-- Today's Due -->
+                            <td class="text-center">
+                                {% if item.today_due_count > 0 %}
+                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
+                                    {{ item.today_due_count }} Due
+                                </span>
+                                {% else %}
+                                <span class="text-muted small">—</span>
+                                {% endif %}
+                            </td>
+
+                            <!-- Overdue -->
+                            <td class="text-center">
+                                {% if item.overdue_count > 0 %}
+                                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1">
+                                    {{ item.overdue_count }} Overdue
+                                </span>
+                                {% else %}
+                                <span class="text-muted small">0</span>
+                                {% endif %}
+                            </td>
+
+                            <!-- Total Outstanding -->
+                            <td class="text-end">
+                                <span class="fw-semibold text-dark small">₹{{ item.total_outstanding|floatformat:2 }}</span>
+                            </td>
+
+                            <!-- Action -->
+                            <td class="text-end pe-4">
+                                <a href="{% url 'followup_shop_detail' shop_id=item.shop.pk %}" class="btn btn-sm btn-outline-primary py-1 px-2.5">
+                                    View Shop Customers &rarr;
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if shops_page.has_other_pages %}
+            <div class="card-footer bg-white border-top py-3 d-flex justify-content-between align-items-center">
+                <span class="text-muted small">
+                    Showing Page {{ shops_page.number }} of {{ shops_page.paginator.num_pages }}
+                </span>
+                <ul class="pagination pagination-sm mb-0">
+                    {% if shops_page.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ shops_page.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}">Previous</a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled"><span class="page-link">Previous</span></li>
+                    {% endif %}
+
+                    {% for p in shops_page.paginator.page_range %}
+                        {% if p == shops_page.number %}
+                        <li class="page-item active"><span class="page-link">{{ p }}</span></li>
+                        {% elif p > shops_page.number|add:"-3" and p < shops_page.number|add:"3" %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ p }}{% if search_query %}&q={{ search_query }}{% endif %}">{{ p }}</a>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if shops_page.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ shops_page.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}">Next</a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled"><span class="page-link">Next</span></li>
+                    {% endif %}
+                </ul>
+            </div>
+            {% endif %}
+
+            {% else %}
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-shop-window display-6 d-block mb-2 text-muted"></i>
+                <h6 class="fw-semibold text-dark">No Assigned Shops Found</h6>
+                <p class="small mb-0">
+                    {% if search_query %}No shops matched your search "{{ search_query }}".{% else %}No retail shops have been assigned to your employee account yet.{% endif %}
+                </p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

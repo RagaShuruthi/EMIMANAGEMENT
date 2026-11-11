@@ -20,8 +20,18 @@ urlpatterns = [
     path("customers/<int:pk>/update-status/", views.admin_customer_update_status_view, name="admin_customer_update_status"),
     path("customers/<int:pk>/edit-due-date/", views.admin_customer_edit_due_date_view, name="admin_customer_edit_due_date"),
     path("customers/<int:pk>/record-payment/", views.admin_customer_record_payment_view, name="admin_customer_record_payment"),
+    path("customers/<int:pk>/move-to-loss/", views.admin_customer_move_to_loss_view, name="admin_customer_move_to_loss"),
+    path("customers/<int:pk>/restore-from-loss/", views.admin_customer_restore_from_loss_view, name="admin_customer_restore_from_loss"),
+    path("customers/<int:pk>/edit-financials/", views.admin_customer_edit_financials_view, name="admin_customer_edit_financials"),
+    path("customers/<int:pk>/delete/", views.admin_customer_delete_view, name="admin_customer_delete"),
     path("customers/export/<str:export_format>/", views.admin_customers_export_view, name="admin_customers_export"),
     path("customers/applications/<int:pk>/approval/", views.admin_application_approval_view, name="admin_application_approval"),
+
+    # Loss Customers List
+    path("loss-customers/", views.admin_loss_customers_view, name="admin_loss_customers"),
+
+    # Installment Updates (Amounts & Update Note)
+    path("installments/<int:pk>/update/", views.admin_update_installment_view, name="admin_update_installment"),
 
     # Completed Customers List
     path("completed-customers/", views.admin_completed_customers_view, name="admin_completed_customers"),
@@ -49,4 +59,5 @@ urlpatterns = [
     path("followups/<int:pk>/edit/", followup_views.admin_followup_edit_view, name="admin_followup_edit"),
     path("followups/<int:pk>/status/", followup_views.admin_followup_status_view, name="admin_followup_status"),
     path("followups/<int:pk>/reset-password/", followup_views.admin_followup_reset_password_view, name="admin_followup_reset_password"),
+    path("followups/<int:pk>/delete/", followup_views.admin_followup_delete_view, name="admin_followup_delete"),
 ]

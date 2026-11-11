@@ -1,0 +1,361 @@
+{% extends "base.html" %}
+
+{% block title %}Loss Customers — Mobile EMI Management System{% endblock %}
+
+{% block content %}
+<!-- Breadcrumbs & Header -->
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-1 small">
+                <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'admin_all_customers' %}">Customers</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Loss Customers</li>
+            </ol>
+        </nav>
+        <h2 class="fw-bold text-dark mb-0">Loss Customers Directory</h2>
+        <p class="text-muted small mb-0">Accounts classified as default or non-recoverable loss. Customer records, transaction ledger, and audit history are permanently preserved.</p>
+    </div>
+</div>
+
+<!-- Loss Summary KPI Cards -->
+<div class="row g-3 mb-4">
+    <!-- Card 1: Total Loss Customers -->
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card stat-card h-100 border-0 shadow-sm border-start border-danger border-4">
+            <div class="card-body p-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="stat-label text-danger">Loss Customers</span>
+                    <div class="stat-icon-wrapper bg-danger-subtle text-danger p-2 rounded-2">
+                        <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+                    </div>
+                </div>
+                <div class="stat-value text-danger">{{ total_loss_count }}</div>
+                <div class="text-muted small mt-1">Classified default accounts</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 2: Total Unpaid Balance (Amount Due) -->
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card stat-card h-100 border-0 shadow-sm border-start border-danger border-4">
+            <div class="card-body p-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="stat-label">Total Amount Due</span>
+                    <div class="stat-icon-wrapper bg-danger-subtle text-danger p-2 rounded-2">
+                        <i class="bi bi-x-octagon-fill fs-5"></i>
+                    </div>
+                </div>
+                <div class="stat-value text-danger">₹{{ total_loss_due|floatformat:2 }}</div>
+                <div class="text-muted small mt-1">Unrecovered outstanding sum</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 3: Amount Recovered/Paid -->
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card stat-card h-100 border-0 shadow-sm border-start border-warning border-4">
+            <div class="card-body p-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="stat-label">Amount Recovered</span>
+                    <div class="stat-icon-wrapper bg-warning-subtle text-warning p-2 rounded-2">
+                        <i class="bi bi-piggy-bank-fill fs-5"></i>
+                    </div>
+                </div>
+                <div class="stat-value text-dark">₹{{ total_loss_paid|floatformat:2 }}</div>
+                <div class="text-muted small mt-1">Paid prior to loss classification</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 4: Original Loss -->
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card stat-card h-100 border-0 shadow-sm border-start border-danger border-4">
+            <div class="card-body p-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="stat-label text-danger">Original Loss</span>
+                    <div class="stat-icon-wrapper bg-danger-subtle text-danger p-2 rounded-2">
+                        <i class="bi bi-graph-down-arrow fs-5"></i>
+                    </div>
+                </div>
+                <div class="stat-value text-danger">₹{{ total_original_loss|floatformat:2 }}</div>
+                <div class="text-muted small mt-1">Sum of Down Payment − Remaining Due</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters Bar -->
+<div class="card rounded-3 mb-4 shadow-sm border-0">
+    <div class="card-body p-3 bg-light rounded-3">
+        <form method="get" action="{% url 'admin_loss_customers' %}" id="lossCustomersFilterForm" class="row g-3 align-items-center">
+            <!-- Search -->
+            <div class="col-12 col-md-5">
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-search"></i></span>
+                    <input type="text" name="q" class="form-control border-start-0" placeholder="Search name, phone, model, shop..." value="{{ search_query }}">
+                </div>
+            </div>
+
+            <!-- Shop Filter -->
+            <div class="col-12 col-md-3">
+                <select name="shop_id" class="form-select" onchange="document.getElementById('lossCustomersFilterForm').submit()">
+                    <option value="">All Partner Shops</option>
+                    {% for s in all_shops %}
+                    <option value="{{ s.id }}" {% if shop_filter == s.id|stringformat:"s" %}selected{% endif %}>
+                        {{ s.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Sorting Dropdown -->
+            <div class="col-12 col-md-2">
+                <select name="sort" class="form-select" onchange="document.getElementById('lossCustomersFilterForm').submit()">
+                    <option value="">Sort by: Recent</option>
+                    <option value="name_asc" {% if sort_param == 'name_asc' %}selected{% endif %}>Name (A – Z)</option>
+                    <option value="name_desc" {% if sort_param == 'name_desc' %}selected{% endif %}>Name (Z – A)</option>
+                    <option value="paid_desc" {% if sort_param == 'paid_desc' %}selected{% endif %}>Amount Due (High to Low)</option>
+                    <option value="paid_asc" {% if sort_param == 'paid_asc' %}selected{% endif %}>Amount Due (Low to High)</option>
+                    <option value="loss_desc" {% if sort_param == 'loss_desc' %}selected{% endif %}>Original Loss (High to Low)</option>
+                    <option value="loss_asc" {% if sort_param == 'loss_asc' %}selected{% endif %}>Original Loss (Low to High)</option>
+                </select>
+            </div>
+
+            <!-- Filter / Reset -->
+            <div class="col-12 col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-primary flex-fill">Apply</button>
+                {% if search_query or shop_filter or sort_param %}
+                <a href="{% url 'admin_loss_customers' %}" class="btn btn-outline-secondary" title="Reset Filters">
+                    <i class="bi bi-x-circle"></i>
+                </a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Loss Customers Table -->
+<div class="card rounded-3 overflow-hidden shadow-sm border-0 mb-4">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom">
+        <h5 class="fw-bold mb-0 text-dark">
+            <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>Loss Account Directory ({{ total_loss_count }})
+        </h5>
+        <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
+            <i class="bi bi-shield-slash me-1"></i>Defaulted / Write-Off
+        </span>
+    </div>
+
+    <div class="table-responsive">
+        {% if customers %}
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light text-uppercase small text-muted" style="letter-spacing: 0.03em;">
+                <tr>
+                    <th scope="col">Customer Name</th>
+                    <th scope="col">Phone Number</th>
+                    <th scope="col">Shop Name</th>
+                    <th scope="col">Phone Model</th>
+                    <th scope="col" class="text-end">Total Amount</th>
+                    <th scope="col" class="text-end">Amount Paid</th>
+                    <th scope="col" class="text-end">Amount Due</th>
+                    <th scope="col" class="text-end">Original Loss</th>
+                    <th scope="col" class="text-center">EMI Details</th>
+                    <th scope="col" class="text-center">Loss Date</th>
+                    <th scope="col" style="min-width: 170px;">Reason / Notes</th>
+                    <th scope="col" class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in customers %}
+                <tr>
+                    <!-- Customer Name -->
+                    <td>
+                        <div class="fw-bold text-dark">{{ row.customer_name }}</div>
+                        <div class="small text-muted font-monospace">#{{ row.customer_id }}</div>
+                    </td>
+
+                    <!-- Phone Number -->
+                    <td>
+                        <div>
+                            <a href="tel:{{ row.phone }}" class="text-decoration-none text-dark fw-semibold">
+                                <i class="bi bi-telephone-fill me-1 text-primary small"></i>{{ row.phone }}
+                            </a>
+                        </div>
+                        {% if row.secondary_mobile %}
+                        <div class="small text-muted">
+                            <i class="bi bi-phone me-1"></i>{{ row.secondary_mobile }}
+                        </div>
+                        {% endif %}
+                    </td>
+
+                    <!-- Shop Name -->
+                    <td>
+                        <span class="badge bg-light text-dark border">
+                            <i class="bi bi-shop me-1 text-primary"></i>{{ row.shop_name }}
+                        </span>
+                    </td>
+
+                    <!-- Phone Model -->
+                    <td>
+                        <span class="fw-semibold text-dark">{{ row.mobile_model }}</span>
+                    </td>
+
+                    <!-- Total Amount -->
+                    <td class="text-end fw-semibold text-dark font-monospace">
+                        ₹{{ row.mobile_price|floatformat:2 }}
+                        <div class="small text-muted" style="font-size: 0.72rem;">DP: ₹{{ row.down_payment|floatformat:2 }}</div>
+                    </td>
+
+                    <!-- Amount Paid -->
+                    <td class="text-end fw-semibold text-success font-monospace">
+                        ₹{{ row.amount_paid|floatformat:2 }}
+                    </td>
+
+                    <!-- Amount Due -->
+                    <td class="text-end fw-bold text-danger font-monospace">
+                        ₹{{ row.remaining_balance|floatformat:2 }}
+                    </td>
+
+                    <!-- Original Loss -->
+                    <td class="text-end fw-bold font-monospace {% if row.original_loss < 0 %}text-danger{% else %}text-dark{% endif %}">
+                        ₹{{ row.original_loss|floatformat:2 }}
+                    </td>
+
+                    <!-- EMI Details -->
+                    <td class="text-center">
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace">
+                            ₹{{ row.monthly_emi|floatformat:2 }}
+                        </span>
+                        <div class="small text-muted">{{ row.duration_months }} Months</div>
+                    </td>
+
+                    <!-- Loss Date -->
+                    <td class="text-center">
+                        {% if row.loss_date %}
+                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle font-monospace px-2 py-1">
+                            <i class="bi bi-calendar-x me-1"></i>{{ row.loss_date|date:"d-m-Y" }}
+                        </span>
+                        {% else %}
+                        <span class="badge bg-light text-muted border font-monospace px-2 py-1">—</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Reason / Notes -->
+                    <td>
+                        <div class="small text-dark" style="max-width: 220px; white-space: pre-wrap;">
+                            {{ row.update_status }}
+                        </div>
+                    </td>
+
+                    <!-- Actions -->
+                    <td class="text-end text-nowrap">
+                        <div class="d-inline-flex align-items-center gap-1">
+                            <!-- Move to Customer List Button -->
+                            <button type="button" class="btn btn-sm btn-success py-1 px-2 text-nowrap" data-bs-toggle="modal" data-bs-target="#restoreLossModal{{ row.customer_id }}" title="Move to Customer List">
+                                <i class="bi bi-arrow-left-circle me-1"></i>Move to Customer List
+                            </button>
+
+                            <!-- View Details -->
+                            <a href="{% url 'admin_customer_detail' row.customer_id %}" class="btn btn-sm btn-outline-primary py-1 px-2" title="View Details">
+                                <i class="bi bi-eye"></i>
+                            </a>
+
+                            <!-- Delete Customer -->
+                            <button type="button" class="btn btn-sm btn-outline-danger py-1 px-2" data-bs-toggle="modal" data-bs-target="#deleteCustomerModal{{ row.customer_id }}" title="Permanently Delete">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+
+                        <!-- Modal: Move Customer to Customer List -->
+                        <div class="modal fade" id="restoreLossModal{{ row.customer_id }}" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog modal-dialog-centered">
+                                <div class="modal-content text-start">
+                                    <div class="modal-header bg-success-subtle border-bottom border-success-subtle">
+                                        <h6 class="modal-title fw-bold text-success">
+                                            <i class="bi bi-arrow-left-circle me-1"></i>Move to Customer List
+                                        </h6>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body py-3">
+                                        <p class="mb-2">Are you sure you want to move <strong>{{ row.customer_name }}</strong> back to the Customer List?</p>
+                                        <div class="small text-muted p-2 rounded bg-light border">
+                                            Outstanding Due: <strong class="text-danger">₹{{ row.remaining_balance|floatformat:2 }}</strong> &bull; Total Paid: <strong class="text-success">₹{{ row.amount_paid|floatformat:2 }}</strong> &bull; Original Loss: <strong class="{% if row.original_loss < 0 %}text-danger{% else %}text-dark{% endif %}">₹{{ row.original_loss|floatformat:2 }}</strong>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer bg-light border-0">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                                        <form method="post" action="{% url 'admin_customer_restore_from_loss' row.customer_id %}">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-success px-3">Confirm Move to Customer List</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Modal: Delete Customer Permanently -->
+                        <div class="modal fade" id="deleteCustomerModal{{ row.customer_id }}" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog modal-dialog-centered">
+                                <div class="modal-content text-start">
+                                    <div class="modal-header bg-danger text-white">
+                                        <h6 class="modal-title fw-bold">
+                                            <i class="bi bi-exclamation-triangle-fill me-1"></i>Permanent Customer Deletion
+                                        </h6>
+                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body py-3">
+                                        <p class="text-danger fw-semibold mb-2">Warning: This action is permanent and cannot be undone.</p>
+                                        <p class="small text-muted mb-0">
+                                            Deleting customer <strong>{{ row.customer_name }}</strong> will remove all related applications, documents, installments, and payment logs from the database.
+                                        </p>
+                                    </div>
+                                    <div class="modal-footer bg-light border-0">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                                        <form method="post" action="{% url 'admin_customer_delete' row.customer_id %}">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-danger px-3">Delete Permanently</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="p-5 text-center text-muted">
+            <i class="bi bi-shield-check display-4 text-success d-block mb-3"></i>
+            <h6 class="fw-bold">No Loss Accounts Found</h6>
+            <p class="small mb-0">No customer accounts are currently classified as loss or default.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Pagination -->
+    {% if customers.has_other_pages %}
+    <div class="card-footer bg-white border-top py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <small class="text-muted">Showing page {{ customers.number }} of {{ customers.paginator.num_pages }}</small>
+        <nav aria-label="Page navigation">
+            <ul class="pagination pagination-sm mb-0">
+                {% if customers.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ customers.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if shop_filter %}&shop_id={{ shop_filter }}{% endif %}{% if sort_param %}&sort={{ sort_param }}{% endif %}">Previous</a>
+                </li>
+                {% endif %}
+                <li class="page-item active">
+                    <span class="page-link">{{ customers.number }}</span>
+                </li>
+                {% if customers.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ customers.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if shop_filter %}&shop_id={{ shop_filter }}{% endif %}{% if sort_param %}&sort={{ sort_param }}{% endif %}">Next</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+

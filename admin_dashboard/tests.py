@@ -332,7 +332,7 @@ class AdminDashboardReworkTests(TestCase):
             emi_duration=3,
             monthly_emi=Decimal("8330.00"),
             monthly_due_day=15,
-            status=FinanceApplication.Status.SUBMITTED
+            status=FinanceApplication.Status.APPROVED
         )
 
         # Customer 2 for Shop 2
@@ -499,6 +499,10 @@ class AdminDashboardReworkTests(TestCase):
         """Admin applications list page filters by strictly Pending, Approved, and Rejected."""
         from applications.models import FinanceApplication
         self.client.login(username="admin_rework", password="AdminPassword123!")
+
+        # Ensure app1 starts in SUBMITTED state for testing approval workflow
+        self.app1.status = FinanceApplication.Status.SUBMITTED
+        self.app1.save(update_fields=["status"])
 
         # 1. View all applications
         res_all = self.client.get(reverse("admin_applications_list"))

@@ -3,7 +3,7 @@ Models for Finance Applications, Uploaded Documents, and Status Audit Trails.
 """
 
 import uuid
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -66,10 +66,17 @@ class FinanceApplication(models.Model):
         default=Decimal("0.00"),
         help_text="Initial upfront cash payment received from the customer."
     )
+    total_emi_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Total EMI Amount to be divided into monthly instalments (Phone Price + Down Payment)."
+    )
     monthly_emi = models.DecimalField(
         max_digits=12,
         decimal_places=2,
-        help_text="Agreed monthly EMI installment amount (Calculated: Total Financed / Due Months)."
+        help_text="Agreed monthly EMI installment amount (Calculated: Total EMI Amount / Due Months, rounded to nearest 10)."
     )
     emi_duration = models.PositiveIntegerField(
         choices=TenureMonths.choices,
@@ -116,6 +123,11 @@ class FinanceApplication(models.Model):
         editable=False,
         help_text="Unique key preventing duplicate submissions to financier."
     )
+    completed_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date when financing was completely settled by the customer."
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -134,21 +146,39 @@ class FinanceApplication(models.Model):
     def calculate_monthly_due_day(purchase_date):
         """
         Determines the monthly EMI due day based on phone purchase date:
-        - 1 to 5 or 31 -> 5th
+        - 31st of previous month to 5th -> 5th
         - 6 to 10 -> 10th
         - 11 to 15 -> 15th
         - 16 to 20 -> 20th
         - 21 to 25 -> 25th
-        - 26 to 30 -> 30th
+        - 26 to 30/31 -> 30th
         """
         if hasattr(purchase_date, "day"):
             day = purchase_date.day
-        elif isinstance(purchase_date, str) and "-" in purchase_date:
-            day = int(purchase_date.split("-")[-1][:2])
+        elif isinstance(purchase_date, str):
+            p_str = purchase_date.strip()
+            if "-" in p_str or "/" in p_str:
+                sep = "-" if "-" in p_str else "/"
+                parts = p_str.split(sep)
+                if len(parts) == 3:
+                    if len(parts[0]) == 4:  # YYYY-MM-DD
+                        day = int(parts[2][:2])
+                    else:  # DD-MM-YYYY
+                        day = int(parts[0][:2])
+                else:
+                    day = int(p_str[:2])
+            else:
+                try:
+                    day = int(p_str)
+                except Exception:
+                    day = 5
         else:
-            day = int(purchase_date)
+            try:
+                day = int(purchase_date)
+            except Exception:
+                day = 5
 
-        if day == 31 or 1 <= day <= 5:
+        if day == 31 or (1 <= day <= 5):
             return 5
         elif 6 <= day <= 10:
             return 10
@@ -165,33 +195,61 @@ class FinanceApplication(models.Model):
     def round_emi_to_tens(amount):
         """
         Rounds EMI amount to the nearest 10s:
-        e.g. 3333.33 -> 3330.00
-             3336.30 -> 3340.00
+        Formula: Math.round(Calculated Monthly EMI / 10) * 10
+        e.g. 5621 -> 5620
+             5626 -> 5630
+             11333 -> 11330
+             11336 -> 11340
+             15216.67 -> 15220
+             7608.33 -> 7610
+             4998 -> 5000
+             3333.33 -> 3330
+             3336.50 -> 3340
         """
-        if amount is None or amount <= Decimal("0"):
+        if amount is None:
             return Decimal("0.00")
-        val = float(amount)
-        rounded = int(round(val / 10.0) * 10)
-        return Decimal(f"{rounded:.2f}")
+        try:
+            d_val = Decimal(str(amount))
+            if d_val <= Decimal("0.00"):
+                return Decimal("0.00")
+            divided = d_val / Decimal("10")
+            rounded = divided.quantize(Decimal("1"), rounding=ROUND_HALF_UP) * Decimal("10")
+            return rounded.quantize(Decimal("0.01"))
+        except Exception:
+            return Decimal("0.00")
+
+    @property
+    def get_total_emi_amount(self):
+        """
+        Returns Total EMI Amount to be paid across instalments:
+        Phone Price (down payment is ignored for EMI calculation).
+        """
+        if self.total_emi_amount is not None and self.total_emi_amount > Decimal("0.00"):
+            return self.total_emi_amount
+        if self.mobile_price is not None:
+            return self.mobile_price
+        return Decimal("0.00")
 
     def save(self, *args, **kwargs):
         # Business rule:
         # Financier Request Amount = Total Selling Price - Down Payment
-        # e.g., if total selling price is 25,000 and down payment is 5,000, financier request is 20,000.
-        # Monthly EMI = Main Payment (Mobile Price) / Due Months (3 or 6), rounded to 10s.
+        # Total EMI Amount = Phone Price (Down payment is ignored for EMI calculation)
+        # Monthly EMI = Total EMI Amount / Selected Tenure (3 or 6), rounded to nearest 10s.
         if self.mobile_price is not None:
             down = self.down_payment if self.down_payment is not None else Decimal("0.00")
             self.financier_request_amount = max(Decimal("0.00"), self.mobile_price - down)
 
+            if not self.total_emi_amount or self.total_emi_amount <= Decimal("0.00"):
+                self.total_emi_amount = self.mobile_price
+
             if not self.monthly_emi or self.monthly_emi <= Decimal("0"):
                 if self.emi_duration and int(self.emi_duration) in (3, 6):
-                    raw_emi = self.financier_request_amount / Decimal(self.emi_duration)
+                    raw_emi = self.total_emi_amount / Decimal(self.emi_duration)
                     self.monthly_emi = self.round_emi_to_tens(raw_emi)
             else:
-                # If shop owner customized EMI, round it to nearest 10s as well
                 self.monthly_emi = self.round_emi_to_tens(self.monthly_emi)
 
-        # Calculate monthly due day from purchase application date if not manually chosen
+        # Calculate monthly due day from purchase application date if not set
         if not self.monthly_due_day and self.application_date:
             self.monthly_due_day = self.calculate_monthly_due_day(self.application_date)
 
@@ -212,7 +270,8 @@ class FinanceApplication(models.Model):
         Generates customer EMI schedule installments:
         - Exactly tenure months (3 or 6)
         - Due dates calculated on monthly_due_day for each month
-        - Financed amount / tenure with final installment settling paise rounding
+        - Sum of rounded monthly installments equals Total EMI Amount
+        - Final installment adjusted by difference to ensure exact total payable
         """
         import calendar
         from datetime import datetime, date
@@ -225,37 +284,54 @@ class FinanceApplication(models.Model):
             self.emi_schedules.all().delete()
 
         tenure = int(self.emi_duration or 6)
-        financed = self.financier_request_amount or Decimal("0.00")
-        if financed <= Decimal("0.00") or tenure <= 0:
+        total_emi = self.get_total_emi_amount
+        if total_emi <= Decimal("0.00") or tenure <= 0:
             return
 
         app_date = self.application_date or timezone.localdate()
         if isinstance(app_date, str):
             try:
-                app_date = datetime.strptime(app_date[:10], "%Y-%m-%d").date()
+                p_str = app_date.strip()
+                if "-" in p_str or "/" in p_str:
+                    sep = "-" if "-" in p_str else "/"
+                    parts = p_str.split(sep)
+                    if len(parts) == 3:
+                        if len(parts[0]) == 4:
+                            app_date = date(int(parts[0]), int(parts[1]), int(parts[2][:2]))
+                        else:
+                            app_date = date(int(parts[2][:4]), int(parts[1]), int(parts[0]))
+                    else:
+                        app_date = timezone.localdate()
+                else:
+                    app_date = timezone.localdate()
             except Exception:
                 app_date = timezone.localdate()
 
         due_day = self.monthly_due_day or self.calculate_monthly_due_day(app_date)
 
-        base_inst = (financed / Decimal(tenure)).quantize(Decimal("0.01"))
-        remainder = financed - (base_inst * (tenure - 1))
+        raw_emi = total_emi / Decimal(tenure)
+        rounded_emi = self.round_emi_to_tens(raw_emi)
+        if not self.monthly_emi or self.monthly_emi <= Decimal("0.00"):
+            self.monthly_emi = rounded_emi
+
+        # Base installment is the monthly EMI (customized or rounded)
+        # All installments maintain the exact same EMI value throughout the tenure without changing the last installment
+        base_inst = self.monthly_emi if (self.monthly_emi and self.monthly_emi > Decimal("0.00")) else rounded_emi
 
         cur_year = app_date.year
         cur_month = app_date.month
 
-        # Start first installment on next due cycle
-        if app_date.day >= due_day:
-            cur_month += 1
-            if cur_month > 12:
-                cur_month = 1
-                cur_year += 1
+        # First installment due date starts calculating from next month
+        cur_month += 1
+        if cur_month > 12:
+            cur_month = 1
+            cur_year += 1
 
         schedules = []
         for i in range(1, tenure + 1):
             _, last_day = calendar.monthrange(cur_year, cur_month)
             inst_due_date = date(cur_year, cur_month, min(due_day, last_day))
-            inst_amount = remainder if i == tenure else base_inst
+            inst_amount = base_inst
 
             schedules.append(
                 CustomerEMISchedule(
@@ -320,6 +396,15 @@ class FinanceApplication(models.Model):
                 remaining_to_distribute = Decimal("0.00")
             sched.save(update_fields=["amount_paid", "is_paid", "paid_date", "status", "updated_at"])
 
+        # Check if customer has fully settled EMI
+        if self.customer_remaining_balance <= Decimal("0.00") or not self.emi_schedules.filter(is_paid=False).exists():
+            if not self.completed_date:
+                self.completed_date = payment_date
+                self.save(update_fields=["completed_date", "updated_at"])
+            if not self.customer.completed_date:
+                self.customer.completed_date = payment_date
+                self.customer.save(update_fields=["completed_date", "updated_at"])
+
         return payment
 
     @property
@@ -330,9 +415,9 @@ class FinanceApplication(models.Model):
 
     @property
     def customer_remaining_balance(self):
-        """Remaining EMI balance: Financed Amount - Total Customer Paid."""
-        financed = self.financier_request_amount or Decimal("0.00")
-        return max(Decimal("0.00"), financed - self.total_customer_paid)
+        """Remaining EMI balance: Total EMI Amount - Total Customer Paid."""
+        total_emi = self.get_total_emi_amount
+        return max(Decimal("0.00"), total_emi - self.total_customer_paid)
 
     @property
     def next_unpaid_schedule(self):
@@ -392,6 +477,8 @@ class CustomerDocument(models.Model):
     class DocType(models.TextChoices):
         PHOTOGRAPH = "PHOTOGRAPH", "Customer Photograph"
         AADHAAR = "AADHAAR", "Aadhaar Card"
+        AADHAAR_FRONT = "AADHAAR_FRONT", "Aadhaar Card (Front)"
+        AADHAAR_BACK = "AADHAAR_BACK", "Aadhaar Card (Back)"
         PAN = "PAN", "PAN Card"
         VOTER_ID = "VOTER_ID", "Voter ID / Other Proof"
 

@@ -403,11 +403,14 @@ class FollowUpEmployeePortalIsolationTests(TestCase):
             is_active=True
         )
 
-        # Immediate refresh reflects Shop 2
+        # Immediate refresh reflects Shop 2 on dashboard
         res2 = self.client.get(reverse("followup_dashboard"))
         self.assertContains(res2, "Prime Mobiles")
         self.assertContains(res2, "Elite Electronics")
-        self.assertContains(res2, "Suresh Verma (Shop 2)")
+
+        # Customer queue across assigned shops reflects customers from Shop 2
+        res_tasks = self.client.get(reverse("followup_tasks"))
+        self.assertContains(res_tasks, "Suresh Verma (Shop 2)")
 
     def test_employee_cannot_access_unassigned_customer_detail_returns_403(self):
         """Cross-shop access check: Accessing customer from unassigned shop must return 403 Forbidden."""

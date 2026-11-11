@@ -348,6 +348,27 @@ def admin_followup_reset_password_view(request, pk):
     return redirect("admin_followup_detail", pk=employee.pk)
 
 
+@require_POST
+@login_required
+@admin_required
+def admin_followup_delete_view(request, pk):
+    """
+    Administrator view: Permanently deletes a follow-up staff user and all their assignments from the database.
+    URL: /admin-dashboard/followups/<int:pk>/delete/
+    """
+    employee = get_object_or_404(
+        User.objects.filter(role__in=[User.Role.FOLLOWUP, User.Role.EMPLOYEE]),
+        pk=pk
+    )
+    staff_name = employee.get_full_name() or employee.username
+    with transaction.atomic():
+        employee.delete()
+
+    messages.success(request, f"Follow-up person '{staff_name}' has been permanently deleted from the database.")
+    return redirect("admin_followup_list")
+
+
+
 # =======================================================
 # Part B: Public Employee Password Setup Workflow
 # =======================================================
@@ -417,25 +438,483 @@ def followup_dashboard_view(request):
     user = request.user
     today = timezone.localdate()
 
-    # Determine permitted shops (dynamically query active assignments)
+def _get_followup_assigned_shops(user):
+    """Returns queryset of active retail shops assigned to the given user."""
     if user.is_admin_role or user.is_superuser:
-        assigned_shops = Shop.objects.filter(is_active=True).order_by("name")
+        return Shop.objects.filter(is_active=True).order_by("name")
+    return Shop.objects.filter(
+        followup_assignments__employee=user,
+        followup_assignments__is_active=True,
+        is_active=True
+    ).order_by("name")
+
+
+def _calculate_customer_followup_data(customer, today, upcoming_days=7):
+    """
+    Computes accurate payment metrics and categorization for a customer.
+    - months_unpaid: Count of unpaid schedule installments whose due_date < today
+    - outstanding_amount: Total unpaid customer balance
+    - original_due_date: Scheduled due date of next unpaid installment
+    - calling_priority: 1 for Today's Due, 2 for Upcoming Due, 3 for Overdue/Pending, 4 for On Track
+    """
+    from datetime import timedelta
+    from decimal import Decimal
+
+    apps = list(customer.applications.all())
+    app = apps[0] if apps else None
+
+    if not app:
+        return {
+            "mobile_model": "—",
+            "monthly_emi": Decimal("0.00"),
+            "monthly_due_day": None,
+            "next_due_date": None,
+            "original_due_date": None,
+            "outstanding_amount": Decimal("0.00"),
+            "months_unpaid": 0,
+            "months_unpaid_text": "0 Months (On Track)",
+            "is_today_due": False,
+            "is_upcoming_due": False,
+            "is_pending_due": False,
+            "calling_priority": 4,
+        }
+
+    app.generate_default_schedule_if_missing()
+    next_unpaid = app.next_unpaid_schedule
+    next_due_date = next_unpaid.due_date if next_unpaid else None
+    outstanding_amount = app.customer_remaining_balance
+
+    # Accurate count of overdue unpaid installments
+    overdue_scheds = app.emi_schedules.filter(is_paid=False, due_date__lt=today)
+    months_unpaid = overdue_scheds.count()
+
+    due_today_scheds = app.emi_schedules.filter(is_paid=False, due_date=today)
+    is_due_today_sched = due_today_scheds.exists()
+
+    upcoming_scheds = app.emi_schedules.filter(
+        is_paid=False,
+        due_date__gt=today,
+        due_date__lte=today + timedelta(days=upcoming_days)
+    )
+    is_upcoming_sched = upcoming_scheds.exists()
+
+    if months_unpaid > 0:
+        months_unpaid_text = f"{months_unpaid} Month{'s' if months_unpaid > 1 else ''} Pending"
+    elif is_due_today_sched:
+        months_unpaid_text = "Due Today (1 Month)"
     else:
-        assigned_shops = Shop.objects.filter(
-            followup_assignments__employee=user,
-            followup_assignments__is_active=True,
-            is_active=True
-        ).order_by("name")
+        months_unpaid_text = "0 Months (On Track)"
+
+    # Latest FollowUpActivity outcome & scheduled callback
+    latest_act = customer.followup_activities.first()
+    outcome = latest_act.outcome if latest_act else None
+    act_status = latest_act.status if latest_act else None
+    act_next_date = latest_act.next_followup_date if latest_act else None
+    is_flagged = latest_act.is_flagged if latest_act else False
+
+    # 1. Today's Due
+    is_today_due = False
+    if is_due_today_sched and outcome != FollowUpActivity.Outcome.PAID:
+        is_today_due = True
+    elif act_next_date == today and act_status == FollowUpActivity.Status.PENDING:
+        is_today_due = True
+    elif outcome == FollowUpActivity.Outcome.NEED_TWO_DAYS and act_next_date == today:
+        is_today_due = True
+
+    # 2. Upcoming Dues (next 7 days, configurable)
+    is_upcoming_due = False
+    if not is_today_due:
+        if is_upcoming_sched and outcome != FollowUpActivity.Outcome.PAID:
+            is_upcoming_due = True
+        elif act_next_date and today < act_next_date <= today + timedelta(days=upcoming_days) and act_status == FollowUpActivity.Status.PENDING:
+            is_upcoming_due = True
+
+    # 3. Pending Dues (overdue installments or flagged for callback)
+    is_pending_due = False
+    if months_unpaid > 0 and outcome != FollowUpActivity.Outcome.PAID:
+        is_pending_due = True
+    elif outcome in (FollowUpActivity.Outcome.NOT_PAID, FollowUpActivity.Outcome.NEED_TWO_DAYS):
+        is_pending_due = True
+    elif is_flagged:
+        is_pending_due = True
+    elif act_next_date and act_next_date < today and act_status == FollowUpActivity.Status.PENDING:
+        is_pending_due = True
+
+    # Priority Calling Order:
+    # Priority 1: Today's Due
+    # Priority 2: Upcoming Dues
+    # Priority 3: Pending Dues
+    # Priority 4: On Track / Normal
+    if is_today_due:
+        calling_priority = 1
+    elif is_upcoming_due:
+        calling_priority = 2
+    elif is_pending_due:
+        calling_priority = 3
+    else:
+        calling_priority = 4
+
+    return {
+        "mobile_model": app.mobile_model,
+        "monthly_emi": app.monthly_emi,
+        "monthly_due_day": app.monthly_due_day,
+        "next_due_date": next_due_date,
+        "original_due_date": next_due_date,
+        "outstanding_amount": outstanding_amount,
+        "months_unpaid": months_unpaid,
+        "months_unpaid_text": months_unpaid_text,
+        "is_today_due": is_today_due,
+        "is_upcoming_due": is_upcoming_due,
+        "is_pending_due": is_pending_due,
+        "calling_priority": calling_priority,
+    }
+
+
+@login_required
+@followup_required
+def followup_dashboard_view(request):
+    """
+    1. FOLLOW-UP PERSON HOMEPAGE
+    Clean, minimal fintech homepage displaying:
+    - Welcome section
+    - Assigned shops summary
+    - Customer count
+    - Pending follow-ups count
+    - Today's Due count
+    - Upcoming Dues count
+    - Pending Dues count
+    - Completed Follow-ups count
+    - Top 5 Assigned Shops (dynamically sorted by highest customer count)
+    - Daily Task Priority Section (high priority calling tasks)
+    URL: /followups/ or /followups/dashboard/
+    """
+    from datetime import date, timedelta
+    from decimal import Decimal
+
+    user = request.user
+    today = timezone.localdate()
+    assigned_shops = _get_followup_assigned_shops(user)
 
     # Scoped Customers in assigned shops
     customers_qs = Customer.objects.filter(
         shop__in=assigned_shops
     ).select_related("shop").prefetch_related("applications", "followup_activities")
 
+    # Scoped Activities Base
+    activities_base = FollowUpActivity.objects.filter(
+        shop__in=assigned_shops
+    ).select_related("customer", "shop", "employee")
+
+    # Pending follow-ups
+    pending_followups = activities_base.filter(
+        status=FollowUpActivity.Status.PENDING
+    ).order_by("next_followup_date", "-created_at")
+
+    # Completed follow-ups
+    completed_followups = activities_base.filter(
+        status=FollowUpActivity.Status.COMPLETED
+    ).order_by("-created_at")
+
+    # Upcoming tasks
+    upcoming_tasks = activities_base.filter(
+        status=FollowUpActivity.Status.PENDING,
+        next_followup_date__isnull=False,
+        next_followup_date__gte=today
+    ).order_by("next_followup_date")
+
+    # Process due data and rank shops
+    customer_list = []
+    today_due_count = 0
+    upcoming_due_count = 0
+    pending_due_count = 0
+    total_outstanding_sum = Decimal("0.00")
+
+    # Calculate Top 5 Assigned Shops by customer count
+    shop_stats = []
+    for s in assigned_shops:
+        s_customers = Customer.objects.filter(shop=s)
+        c_count = s_customers.count()
+        shop_stats.append({
+            "shop": s,
+            "customer_count": c_count,
+        })
+    shop_stats.sort(key=lambda x: (x["customer_count"], x["shop"].name), reverse=True)
+    top_5_shops = [item["shop"] for item in shop_stats[:5]]
+
+    for customer in customers_qs.order_by("-created_at"):
+        metrics = _calculate_customer_followup_data(customer, today, upcoming_days=7)
+
+        customer.mobile_model = metrics["mobile_model"]
+        customer.monthly_emi = metrics["monthly_emi"]
+        customer.monthly_due_day = metrics["monthly_due_day"]
+        customer.next_due_date = metrics["next_due_date"]
+        customer.original_due_date = metrics["original_due_date"]
+        customer.outstanding_amount = metrics["outstanding_amount"]
+        customer.months_unpaid = metrics["months_unpaid"]
+        customer.months_unpaid_text = metrics["months_unpaid_text"]
+        customer.is_today_due = metrics["is_today_due"]
+        customer.is_upcoming_due = metrics["is_upcoming_due"]
+        customer.is_pending_due = metrics["is_pending_due"]
+        customer.calling_priority = metrics["calling_priority"]
+        customer.latest_activity = customer.followup_activities.first()
+
+        total_outstanding_sum += metrics["outstanding_amount"]
+
+        if metrics["is_today_due"]:
+            today_due_count += 1
+        if metrics["is_upcoming_due"]:
+            upcoming_due_count += 1
+        if metrics["is_pending_due"]:
+            pending_due_count += 1
+
+        customer_list.append(customer)
+
+    # Sort customers by Calling Priority: Today's Due first, then Upcoming Due, then Pending Due
+    max_date = date(2099, 12, 31)
+    customer_list.sort(key=lambda c: (c.calling_priority, c.next_due_date or max_date, c.name))
+
+    # Daily Task Priority queue for the homepage (Top urgent tasks)
+    priority_tasks = [c for c in customer_list if c.calling_priority in (1, 2, 3)][:15]
+    if not priority_tasks:
+        priority_tasks = customer_list[:10]
+
+    # Scoped Metrics
+    total_assigned_shops = assigned_shops.count()
+    total_customers = len(customer_list)
+    total_pending = pending_followups.count()
+    total_completed = completed_followups.count()
+    total_upcoming = upcoming_tasks.count()
+
+    context = {
+        "assigned_shops": assigned_shops,
+        "total_assigned_shops": total_assigned_shops,
+        "total_customers": total_customers,
+        "total_pending": total_pending,
+        "total_completed": total_completed,
+        "total_upcoming": total_upcoming,
+        "today_due_count": today_due_count,
+        "upcoming_due_count": upcoming_due_count,
+        "pending_due_count": pending_due_count,
+        "total_outstanding_sum": total_outstanding_sum,
+        "top_5_shops": top_5_shops,
+        "priority_tasks": priority_tasks,
+        "today": today,
+        # Backwards compatibility context keys for existing tests
+        "customers": priority_tasks,
+        "pending_followups": pending_followups[:10],
+        "completed_followups": completed_followups[:10],
+    }
+    return render(request, "followups/portal/dashboard.html", context)
+
+
+@login_required
+@followup_required
+def followup_shops_list_view(request):
+    """
+    2. ASSIGNED SHOPS – SEPARATE PAGE
+    Displays every shop assigned to the logged-in follow-up person (5, 20, 50+ shops).
+    Features:
+    - Search by shop name and phone number
+    - Number of assigned customers
+    - Outstanding payment summary
+    - Pagination and sorting by customer count
+    URL: /followups/shops/
+    """
+    from decimal import Decimal
+
+    user = request.user
+    today = timezone.localdate()
+    assigned_shops = _get_followup_assigned_shops(user)
+
+    search_query = request.GET.get("q", "").strip()
+    if search_query:
+        assigned_shops = assigned_shops.filter(
+            Q(name__icontains=search_query) |
+            Q(phone__icontains=search_query) |
+            Q(address__icontains=search_query) |
+            Q(owner_name__icontains=search_query)
+        )
+
+    # Calculate metrics for each assigned shop
+    shop_items = []
+    for s in assigned_shops:
+        customers = Customer.objects.filter(shop=s).prefetch_related("applications")
+        c_count = customers.count()
+        today_due_c = 0
+        overdue_c = 0
+        shop_outstanding = Decimal("0.00")
+
+        for c in customers:
+            app = c.applications.first()
+            if app:
+                shop_outstanding += app.customer_remaining_balance
+                if app.emi_schedules.filter(is_paid=False, due_date=today).exists():
+                    today_due_c += 1
+                if app.emi_schedules.filter(is_paid=False, due_date__lt=today).exists():
+                    overdue_c += 1
+
+        shop_items.append({
+            "shop": s,
+            "customer_count": c_count,
+            "today_due_count": today_due_c,
+            "overdue_count": overdue_c,
+            "total_outstanding": shop_outstanding,
+        })
+
+    # Sort descending by customer count
+    shop_items.sort(key=lambda x: (x["customer_count"], x["shop"].name), reverse=True)
+
+    paginator = Paginator(shop_items, 12)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
+    context = {
+        "shops_page": page_obj,
+        "total_assigned_count": len(shop_items),
+        "search_query": search_query,
+        "today": today,
+    }
+    return render(request, "followups/portal/shops_list.html", context)
+
+
+@login_required
+@followup_required
+def followup_shop_detail_view(request, shop_id):
+    """
+    3. INDIVIDUAL SHOP DETAILS PAGE
+    Opens when clicking any shop from Top 5 on homepage or from All Assigned Shops page.
+    Displays:
+    - Shop contact and owner information
+    - Shop-wise metrics (Total customers, Today's Due, Upcoming Dues, Pending Dues, Outstanding Amount)
+    - Shop-wise customer list with search and payment category filters
+    URL: /followups/shops/<int:shop_id>/
+    """
+    from datetime import date
+    from decimal import Decimal
+
+    user = request.user
+    today = timezone.localdate()
+    assigned_shops = _get_followup_assigned_shops(user)
+
+    # Server-side tenant security check: Employee cannot access unassigned shops
+    shop = get_object_or_404(Shop, pk=shop_id)
+    if shop not in assigned_shops:
+        return HttpResponseForbidden("Access Denied: You are not authorized to view this shop's data.")
+
+    customers_qs = Customer.objects.filter(shop=shop).prefetch_related("applications", "followup_activities")
+
+    search_query = request.GET.get("q", "").strip()
+    if search_query:
+        customers_qs = customers_qs.filter(
+            Q(name__icontains=search_query) |
+            Q(primary_mobile__icontains=search_query) |
+            Q(secondary_mobile__icontains=search_query)
+        )
+
+    # Multi-select dues filter
+    filter_due_today = (request.GET.get("due_today") == "1" or request.GET.get("due_filter") == "today")
+    filter_upcoming_due = (request.GET.get("upcoming_due") == "1" or request.GET.get("due_filter") == "upcoming")
+    filter_pending_due = (request.GET.get("pending_due") == "1" or request.GET.get("due_filter") == "pending")
+
+    customer_list = []
+    today_due_count = 0
+    upcoming_due_count = 0
+    pending_due_count = 0
+    total_shop_outstanding = Decimal("0.00")
+
+    for customer in customers_qs.order_by("-created_at"):
+        metrics = _calculate_customer_followup_data(customer, today, upcoming_days=7)
+
+        customer.mobile_model = metrics["mobile_model"]
+        customer.monthly_emi = metrics["monthly_emi"]
+        customer.monthly_due_day = metrics["monthly_due_day"]
+        customer.next_due_date = metrics["next_due_date"]
+        customer.original_due_date = metrics["original_due_date"]
+        customer.outstanding_amount = metrics["outstanding_amount"]
+        customer.months_unpaid = metrics["months_unpaid"]
+        customer.months_unpaid_text = metrics["months_unpaid_text"]
+        customer.is_today_due = metrics["is_today_due"]
+        customer.is_upcoming_due = metrics["is_upcoming_due"]
+        customer.is_pending_due = metrics["is_pending_due"]
+        customer.calling_priority = metrics["calling_priority"]
+        customer.latest_activity = customer.followup_activities.first()
+
+        total_shop_outstanding += metrics["outstanding_amount"]
+
+        if metrics["is_today_due"]:
+            today_due_count += 1
+        if metrics["is_upcoming_due"]:
+            upcoming_due_count += 1
+        if metrics["is_pending_due"]:
+            pending_due_count += 1
+
+        customer_list.append(customer)
+
+    max_date = date(2099, 12, 31)
+    customer_list.sort(key=lambda c: (c.calling_priority, c.next_due_date or max_date, c.name))
+
+    has_dues_filter = (filter_due_today or filter_upcoming_due or filter_pending_due)
+    if has_dues_filter:
+        filtered_customers = [
+            c for c in customer_list
+            if (filter_due_today and c.is_today_due) or
+               (filter_upcoming_due and c.is_upcoming_due) or
+               (filter_pending_due and c.is_pending_due)
+        ]
+    else:
+        filtered_customers = customer_list
+
+    paginator = Paginator(filtered_customers, 15)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
+    context = {
+        "shop": shop,
+        "customers": page_obj,
+        "total_shop_customers": len(customer_list),
+        "today_due_count": today_due_count,
+        "upcoming_due_count": upcoming_due_count,
+        "pending_due_count": pending_due_count,
+        "total_shop_outstanding": total_shop_outstanding,
+        "filter_due_today": filter_due_today,
+        "filter_upcoming_due": filter_upcoming_due,
+        "filter_pending_due": filter_pending_due,
+        "has_dues_filter": has_dues_filter,
+        "search_query": search_query,
+        "today": today,
+    }
+    return render(request, "followups/portal/shop_detail.html", context)
+
+
+@login_required
+@followup_required
+def followup_tasks_view(request):
+    """
+    4. DAILY PAYMENT TASKS & CUSTOMER DIRECTORY
+    Organises follow-up work into 3 priority categories:
+    1. Today's Due
+    2. Upcoming Dues (next 7 days)
+    3. Pending Dues (overdue unpaid)
+    Features:
+    - Simultaneous multi-select payment category filters (can select all 3 without duplicates)
+    - Shop filter dropdown
+    - Search by customer name, phone, address
+    - Redesigned customer table (No 'Due Today' column)
+    URL: /followups/tasks/
+    """
+    from datetime import date
+    from decimal import Decimal
+
+    user = request.user
+    today = timezone.localdate()
+    assigned_shops = _get_followup_assigned_shops(user)
+
+    customers_qs = Customer.objects.filter(
+        shop__in=assigned_shops
+    ).select_related("shop").prefetch_related("applications", "followup_activities")
+
     search_query = request.GET.get("q", "").strip()
     shop_filter = request.GET.get("shop_id", "").strip()
-    tab_view = request.GET.get("tab", "customers").strip().lower()
-    due_filter = request.GET.get("due_filter", "all").strip().lower()
 
     if shop_filter:
         customers_qs = customers_qs.filter(shop_id=shop_filter)
@@ -449,58 +928,8 @@ def followup_dashboard_view(request):
             Q(work_address__icontains=search_query)
         )
 
-    # Scoped Activities Base
-    activities_base = FollowUpActivity.objects.filter(
-        shop__in=assigned_shops
-    ).select_related("customer", "shop", "employee")
-
-    if shop_filter:
-        activities_base = activities_base.filter(shop_id=shop_filter)
-
-    # Pending follow-ups
-    pending_followups = activities_base.filter(
-        status=FollowUpActivity.Status.PENDING
-    ).order_by("next_followup_date", "-created_at")
-
-    # Completed follow-ups
-    completed_followups = activities_base.filter(
-        status=FollowUpActivity.Status.COMPLETED
-    ).order_by("-created_at")
-
-    # Upcoming tasks (Pending with next_followup_date >= today)
-    upcoming_tasks = activities_base.filter(
-        status=FollowUpActivity.Status.PENDING,
-        next_followup_date__isnull=False,
-        next_followup_date__gte=today
-    ).order_by("next_followup_date")
-
-    # Overdue tasks (Pending with next_followup_date < today)
-    overdue_tasks = activities_base.filter(
-        status=FollowUpActivity.Status.PENDING,
-        next_followup_date__isnull=False,
-        next_followup_date__lt=today
-    ).order_by("next_followup_date")
-
-    # Process due data for all scoped customers
-    customer_list = []
-    today_due_count = 0
-    upcoming_due_count = 0
-    pending_due_count = 0
-    all_count = 0
-
-    # Calculate customer count for each assigned shop and rank them
-    assigned_shops_with_counts = []
-    for s in assigned_shops:
-        c_count = Customer.objects.filter(shop=s).count()
-        assigned_shops_with_counts.append({
-            "shop": s,
-            "customer_count": c_count,
-        })
-    assigned_shops_with_counts.sort(key=lambda x: (x["customer_count"], x["shop"].name), reverse=True)
-    top_5_shops = [item["shop"] for item in assigned_shops_with_counts[:5]]
-    all_assigned_shops = [item["shop"] for item in assigned_shops_with_counts]
-
-    # Simultaneous multiple dues filter
+    # Multi-select dues filter
+    due_filter = request.GET.get("due_filter", "").strip().lower()
     filter_due_today = (
         request.GET.get("due_today") == "1" or
         "today" in request.GET.getlist("due_filter") or
@@ -517,132 +946,47 @@ def followup_dashboard_view(request):
         due_filter == "pending"
     )
 
+    customer_list = []
+    today_due_count = 0
+    upcoming_due_count = 0
+    pending_due_count = 0
+    all_count = 0
+    total_outstanding_sum = Decimal("0.00")
+
     for customer in customers_qs.order_by("-created_at"):
         all_count += 1
-        apps = list(customer.applications.all())
-        app = apps[0] if apps else None
+        metrics = _calculate_customer_followup_data(customer, today, upcoming_days=7)
 
-        mobile_model = app.mobile_model if app else "—"
-        monthly_emi = app.monthly_emi if app else Decimal("0.00")
-        monthly_due_day = app.monthly_due_day if app else None
+        customer.mobile_model = metrics["mobile_model"]
+        customer.monthly_emi = metrics["monthly_emi"]
+        customer.monthly_due_day = metrics["monthly_due_day"]
+        customer.next_due_date = metrics["next_due_date"]
+        customer.original_due_date = metrics["original_due_date"]
+        customer.outstanding_amount = metrics["outstanding_amount"]
+        customer.months_unpaid = metrics["months_unpaid"]
+        customer.months_unpaid_text = metrics["months_unpaid_text"]
+        customer.is_today_due = metrics["is_today_due"]
+        customer.is_upcoming_due = metrics["is_upcoming_due"]
+        customer.is_pending_due = metrics["is_pending_due"]
+        customer.calling_priority = metrics["calling_priority"]
+        customer.latest_activity = customer.followup_activities.first()
 
-        if app:
-            app.generate_default_schedule_if_missing()
-            next_unpaid_sched = app.next_unpaid_schedule
-            next_due_date = next_unpaid_sched.due_date if next_unpaid_sched else None
-            due_status = app.due_classification(today=today)
-            overdue_months = app.emi_schedules.filter(is_paid=False, due_date__lt=today).count()
-            due_today_scheds = app.emi_schedules.filter(is_paid=False, due_date=today).count()
+        total_outstanding_sum += metrics["outstanding_amount"]
 
-            if overdue_months > 0:
-                pending_months_count = overdue_months
-                pending_months_text = f"{overdue_months} Month{'s' if overdue_months > 1 else ''} Pending"
-            elif due_today_scheds > 0:
-                pending_months_count = 1
-                pending_months_text = "Due Today (1 Month)"
-            else:
-                pending_months_count = 0
-                pending_months_text = "0 Months Pending (On Track)"
-        else:
-            next_due_date = None
-            due_status = "NO_APP"
-            pending_months_count = 0
-            pending_months_text = "No Application"
-
-        # Calculate next due date from due day if missing
-        if not next_due_date and monthly_due_day:
-            try:
-                cur_month_due = today.replace(day=monthly_due_day)
-            except ValueError:
-                _, last_day = calendar.monthrange(today.year, today.month)
-                cur_month_due = today.replace(day=min(monthly_due_day, last_day))
-
-            if cur_month_due >= today:
-                next_due_date = cur_month_due
-            else:
-                next_month = 1 if today.month == 12 else today.month + 1
-                next_year = today.year + 1 if today.month == 12 else today.year
-                _, last_day = calendar.monthrange(next_year, next_month)
-                next_due_date = today.replace(year=next_year, month=next_month, day=min(monthly_due_day, last_day))
-
-        # Retrieve latest activity
-        latest_act = customer.followup_activities.first()
-        outcome = latest_act.outcome if latest_act else None
-        is_flagged = latest_act.is_flagged if latest_act else False
-        act_next_date = latest_act.next_followup_date if latest_act else None
-
-        # Check if customer has Today's Due
-        is_today_due = False
-        if due_status == "DUE_TODAY" or (next_due_date and next_due_date == today):
-            if outcome != FollowUpActivity.Outcome.PAID:
-                is_today_due = True
-        elif act_next_date == today and latest_act and latest_act.status == FollowUpActivity.Status.PENDING:
-            is_today_due = True
-        elif outcome == FollowUpActivity.Outcome.NEED_TWO_DAYS and act_next_date == today:
-            is_today_due = True
-
-        # Check if customer has Upcoming Due (next 2 days)
-        is_upcoming_due = False
-        if not is_today_due and (due_status == "UPCOMING_DUE" or (next_due_date and today < next_due_date <= today + timedelta(days=2))):
-            if outcome != FollowUpActivity.Outcome.PAID:
-                is_upcoming_due = True
-        elif not is_today_due and act_next_date and today < act_next_date <= today + timedelta(days=2) and latest_act and latest_act.status == FollowUpActivity.Status.PENDING:
-            is_upcoming_due = True
-
-        # Check if customer has Pending Due (overdue or flagged)
-        is_pending_due = False
-        if due_status == "OVERDUE" or pending_months_count > 0:
-            if outcome != FollowUpActivity.Outcome.PAID:
-                is_pending_due = True
-        elif outcome in [FollowUpActivity.Outcome.NOT_PAID, FollowUpActivity.Outcome.NEED_TWO_DAYS]:
-            is_pending_due = True
-        elif is_flagged:
-            is_pending_due = True
-        elif latest_act and latest_act.status == FollowUpActivity.Status.PENDING:
-            is_pending_due = True
-
-        if is_today_due:
+        if metrics["is_today_due"]:
             today_due_count += 1
-        if is_upcoming_due:
+        if metrics["is_upcoming_due"]:
             upcoming_due_count += 1
-        if is_pending_due:
+        if metrics["is_pending_due"]:
             pending_due_count += 1
-
-        # Calling Priority:
-        # 1st Priority: Today's Due
-        # 2nd Priority: Upcoming Due
-        # 3rd Priority: Pending Dues
-        # 4th Priority: On Track / Others
-        if is_today_due:
-            calling_priority = 1
-        elif is_upcoming_due:
-            calling_priority = 2
-        elif is_pending_due:
-            calling_priority = 3
-        else:
-            calling_priority = 4
-
-        customer.mobile_model = mobile_model
-        customer.monthly_emi = monthly_emi
-        customer.monthly_due_day = monthly_due_day
-        customer.next_due_date = next_due_date
-        customer.latest_activity = latest_act
-        customer.is_today_due = is_today_due
-        customer.is_upcoming_due = is_upcoming_due
-        customer.is_pending_due = is_pending_due
-        customer.pending_months_count = pending_months_count
-        customer.pending_months_text = pending_months_text
-        customer.calling_priority = calling_priority
-        customer.promised_date_initial = (today + timedelta(days=2))
 
         customer_list.append(customer)
 
-    # Sort customers by Calling Priority: Today's Due first, then Upcoming Due, then Pending Dues
-    from datetime import date
+    # Sort customers by Calling Priority: Today's Due first, then Upcoming Due, then Pending Due
     max_date = date(2099, 12, 31)
     customer_list.sort(key=lambda c: (c.calling_priority, c.next_due_date or max_date, c.name))
 
-    # Apply multi-selection dues filter if any selected
+    # Apply simultaneous multi-select filter
     has_dues_filter = (filter_due_today or filter_upcoming_due or filter_pending_due)
     if has_dues_filter:
         filtered_customers = [
@@ -654,38 +998,15 @@ def followup_dashboard_view(request):
     else:
         filtered_customers = customer_list
 
-    # Scoped Metrics
-    total_assigned_shops = assigned_shops.count()
-    total_customers = all_count
-    total_pending = pending_followups.count()
-    total_completed = completed_followups.count()
-    total_upcoming = upcoming_tasks.count()
-    total_overdue = overdue_tasks.count()
-
     paginator = Paginator(filtered_customers, 15)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
     context = {
-        "assigned_shops": assigned_shops,
-        "top_5_shops": top_5_shops,
-        "top_5_shop_ids": [str(s.pk) for s in top_5_shops],
-        "all_assigned_shops": all_assigned_shops,
         "customers": page_obj,
-        "pending_followups": pending_followups[:20],
-        "completed_followups": completed_followups[:20],
-        "upcoming_tasks": upcoming_tasks[:20],
-        "overdue_tasks": overdue_tasks[:20],
-        "total_assigned_shops": total_assigned_shops,
-        "total_customers": total_customers,
-        "total_pending": total_pending,
-        "total_completed": total_completed,
-        "total_upcoming": total_upcoming,
-        "total_overdue": total_overdue,
-        "search_query": search_query,
+        "assigned_shops": assigned_shops,
         "shop_filter": shop_filter,
-        "tab_view": tab_view,
-        "due_filter": due_filter,
+        "search_query": search_query,
         "filter_due_today": filter_due_today,
         "filter_upcoming_due": filter_upcoming_due,
         "filter_pending_due": filter_pending_due,
@@ -694,9 +1015,111 @@ def followup_dashboard_view(request):
         "upcoming_due_count": upcoming_due_count,
         "pending_due_count": pending_due_count,
         "all_count": all_count,
+        "total_outstanding_sum": total_outstanding_sum,
         "today": today,
     }
-    return render(request, "followups/portal/dashboard.html", context)
+    return render(request, "followups/portal/tasks.html", context)
+
+
+@login_required
+@followup_required
+def followup_pending_view(request):
+    """
+    5. DEDICATED PENDING FOLLOW-UPS PAGE
+    Shows only customers who require a follow-up action.
+    Columns:
+    1. Customer name
+    2. Shop name
+    3. Primary phone number
+    4. Secondary phone number
+    5. Device/model
+    6. Monthly EMI
+    7. Total outstanding amount
+    8. Number of months unpaid
+    9. Original EMI due date
+    10. Last follow-up date
+    11. Next follow-up date
+    12. Last follow-up outcome
+    13. Action button (Update Status)
+    URL: /followups/pending/
+    """
+    user = request.user
+    today = timezone.localdate()
+    assigned_shops = _get_followup_assigned_shops(user)
+
+    activities_qs = FollowUpActivity.objects.filter(
+        shop__in=assigned_shops,
+        status=FollowUpActivity.Status.PENDING
+    ).select_related("customer", "shop", "employee").order_by("next_followup_date", "-created_at")
+
+    shop_filter = request.GET.get("shop_id", "").strip()
+    if shop_filter:
+        activities_qs = activities_qs.filter(shop_id=shop_filter)
+
+    search_query = request.GET.get("q", "").strip()
+    if search_query:
+        activities_qs = activities_qs.filter(
+            Q(customer__name__icontains=search_query) |
+            Q(customer__primary_mobile__icontains=search_query) |
+            Q(customer__secondary_mobile__icontains=search_query) |
+            Q(shop__name__icontains=search_query)
+        )
+
+    # Date filter: today, overdue, upcoming, all
+    date_filter = request.GET.get("date_filter", "").strip().lower()
+    if date_filter == "today":
+        activities_qs = activities_qs.filter(next_followup_date=today)
+    elif date_filter == "overdue":
+        activities_qs = activities_qs.filter(next_followup_date__lt=today)
+    elif date_filter == "upcoming":
+        from datetime import timedelta
+        activities_qs = activities_qs.filter(next_followup_date__gt=today, next_followup_date__lte=today + timedelta(days=7))
+
+    # Enrich each pending activity with accurate application and schedule data
+    pending_items = []
+    for act in activities_qs:
+        cust = act.customer
+        metrics = _calculate_customer_followup_data(cust, today, upcoming_days=7)
+        cust.mobile_model = metrics["mobile_model"]
+        cust.monthly_emi = metrics["monthly_emi"]
+        cust.monthly_due_day = metrics["monthly_due_day"]
+        cust.next_due_date = metrics["next_due_date"]
+        cust.original_due_date = metrics["original_due_date"]
+        cust.outstanding_amount = metrics["outstanding_amount"]
+        cust.months_unpaid = metrics["months_unpaid"]
+        cust.months_unpaid_text = metrics["months_unpaid_text"]
+        cust.latest_activity = act
+
+        pending_items.append({
+            "activity": act,
+            "customer": cust,
+            "shop": act.shop,
+            "mobile_model": metrics["mobile_model"],
+            "monthly_emi": metrics["monthly_emi"],
+            "outstanding_amount": metrics["outstanding_amount"],
+            "months_unpaid": metrics["months_unpaid"],
+            "months_unpaid_text": metrics["months_unpaid_text"],
+            "original_due_date": metrics["original_due_date"],
+            "last_followup_date": act.created_at,
+            "next_followup_date": act.next_followup_date,
+            "outcome_display": act.get_outcome_display(),
+        })
+
+    paginator = Paginator(pending_items, 15)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
+    context = {
+        "pending_page": page_obj,
+        "assigned_shops": assigned_shops,
+        "total_pending_count": len(pending_items),
+        "shop_filter": shop_filter,
+        "search_query": search_query,
+        "date_filter": date_filter,
+        "today": today,
+    }
+    return render(request, "followups/portal/pending_list.html", context)
+
 
 
 @require_POST

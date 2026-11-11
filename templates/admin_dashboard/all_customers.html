@@ -100,14 +100,13 @@
                 </select>
             </div>
 
-            <!-- 3 Checkbox Due Filters: Red, Yellow, Purple -->
+            <!-- 3 Checkbox Due Filters: Due Today, Upcoming Due, Pending Due -->
             <div class="col-12 col-md-4 d-flex align-items-center flex-wrap gap-2">
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" name="due_today" value="1" id="allFilterDueToday" {% if filter_due_today %}checked{% endif %}
                         onchange="document.getElementById('allCustomersFilterForm').submit()">
                     <label class="form-check-label small fw-semibold text-danger" for="allFilterDueToday">
-                        Due Today <span class="badge bg-danger text-white rounded-pill ms-1">{{ count_due_today
-                            }}</span>
+                        Due Today
                     </label>
                 </div>
                 <div class="form-check">
@@ -116,9 +115,7 @@
                         onchange="document.getElementById('allCustomersFilterForm').submit()">
                     <label class="form-check-label small fw-semibold" style="color: #a16207;"
                         for="allFilterUpcomingDue">
-                        Upcoming Due <span class="badge rounded-pill ms-1"
-                            style="background-color: #fef08a; color: #854d0e; border: 1px solid #facc15;">{{
-                            count_upcoming_due }}</span>
+                        Upcoming Due
                     </label>
                 </div>
                 <div class="form-check">
@@ -126,9 +123,7 @@
                         id="allFilterPendingDue" {% if filter_pending_due %}checked{% endif %}
                         onchange="document.getElementById('allCustomersFilterForm').submit()">
                     <label class="form-check-label small fw-semibold" style="color: #6b21a8;" for="allFilterPendingDue">
-                        Pending Due <span class="badge rounded-pill ms-1"
-                            style="background-color: #f3e8ff; color: #6b21a8; border: 1px solid #d8b4fe;">{{
-                            count_pending_due }}</span>
+                        Pending Due
                     </label>
                 </div>
 
@@ -153,20 +148,17 @@
         <div>
             <h5 class="fw-bold mb-0 text-dark">
                 <i class="bi bi-people me-2 text-primary"></i>Customers List
-                <span class="badge bg-secondary-subtle text-secondary ms-2">{{ filtered_count }} of {{ total_count
-                    }}</span>
+                <span class="badge bg-secondary-subtle text-secondary ms-2">{{ filtered_count|default:"0" }} of {{ total_count|default:"0" }}</span>
             </h5>
             <small class="text-muted">Color-coded badges indicate real-time payment schedule status.</small>
         </div>
         <div class="d-flex align-items-center gap-2">
             <span class="badge bg-danger text-white border border-danger"><i class="bi bi-circle-fill me-1"
-                    style="font-size: 0.5rem;"></i>Red: Due Today</span>
+                    style="font-size: 0.5rem;"></i>Due Today</span>
             <span class="badge text-dark" style="background-color: #fef08a; border: 1px solid #facc15;"><i
-                    class="bi bi-circle-fill me-1 text-warning" style="font-size: 0.5rem;"></i>Yellow: Upcoming (2
-                Days)</span>
+                    class="bi bi-circle-fill me-1 text-warning" style="font-size: 0.5rem;"></i>Upcoming (2 Days)</span>
             <span class="badge" style="background-color: #f3e8ff; color: #6b21a8; border: 1px solid #d8b4fe;"><i
-                    class="bi bi-circle-fill me-1" style="color: #9333ea; font-size: 0.5rem;"></i>Purple: Pending
-                Due</span>
+                    class="bi bi-circle-fill me-1" style="color: #9333ea; font-size: 0.5rem;"></i>Pending Due</span>
         </div>
     </div>
 
@@ -337,6 +329,14 @@
                                 class="btn btn-sm btn-outline-secondary py-1 px-2" title="View Customer Dossier">
                                 <i class="bi bi-eye"></i>
                             </a>
+                            <button type="button" class="btn btn-sm btn-outline-warning py-1 px-2" title="Move to Loss"
+                                data-bs-toggle="modal" data-bs-target="#allMoveToLossModal{{ row.customer_id }}">
+                                <i class="bi bi-exclamation-triangle"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger py-1 px-2" title="Permanently Delete Customer"
+                                data-bs-toggle="modal" data-bs-target="#allDeleteCustomerModal{{ row.customer_id }}">
+                                <i class="bi bi-trash"></i>
+                            </button>
                         </div>
                     </td>
                 </tr>
@@ -496,6 +496,81 @@
             </div>
         </div>
         {% endif %}
+
+        <!-- MODAL 4: Permanently Delete Customer -->
+        <div class="modal fade" id="allDeleteCustomerModal{{ row.customer_id }}" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header bg-danger text-white py-3">
+                        <h5 class="modal-title fw-bold">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>Permanently Delete Customer
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-4 text-start">
+                        <div class="text-center mb-3">
+                            <div class="d-inline-flex p-3 rounded-circle bg-danger-subtle text-danger mb-2">
+                                <i class="bi bi-person-x-fill fs-2"></i>
+                            </div>
+                            <h5 class="fw-bold text-dark mb-1">Delete "{{ row.customer_name }}"?</h5>
+                            <span class="badge bg-secondary-subtle text-secondary font-monospace">Customer ID #{{ row.customer_id }} &bull; {{ row.shop_name }}</span>
+                        </div>
+                        <div class="alert alert-danger border-danger-subtle small mb-0">
+                            <div class="fw-bold mb-1"><i class="bi bi-shield-exclamation me-1"></i> Irreversible Action:</div>
+                            This will <strong>permanently delete</strong> this customer from the database, including all application files, EMI schedules, payment transaction receipts, and notes. This cannot be undone.
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light py-2">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                        <form method="post" action="{% url 'admin_customer_delete' pk=row.customer_id %}" class="d-inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button type="submit" class="btn btn-danger btn-sm">
+                                <i class="bi bi-trash-fill me-1"></i> Permanently Delete
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL 5: Move to Loss List -->
+        <div class="modal fade" id="allMoveToLossModal{{ row.customer_id }}" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content text-start">
+                    <div class="modal-header bg-warning-subtle border-bottom border-warning-subtle">
+                        <h6 class="modal-title fw-bold text-dark">
+                            <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>Move Customer to Loss
+                        </h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <form method="post" action="{% url 'admin_customer_move_to_loss' pk=row.customer_id %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <div class="modal-body py-3">
+                            <p class="mb-3">Are you sure you want to move this customer to the Loss list?</p>
+                            <div class="p-2 rounded bg-light border mb-3 small">
+                                <strong>Customer:</strong> {{ row.customer_name }} (#{{ row.customer_id }})<br>
+                                <strong>Phone:</strong> {{ row.phone }}<br>
+                                <strong>Shop:</strong> {{ row.shop_name }}<br>
+                                <strong>Amount Due:</strong> <span class="text-danger fw-bold">₹{{ row.remaining_balance|floatformat:2 }}</span>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label small fw-semibold text-secondary">Reason / Note (Optional)</label>
+                                <input type="text" name="reason" class="form-control form-control-sm" placeholder="e.g. Defaulted, unable to contact, write-off">
+                            </div>
+                            <div class="form-text small text-muted">
+                                Moving to Loss preserves all customer records, EMI schedule, and audit logs while separating them from active customers.
+                            </div>
+                        </div>
+                        <div class="modal-footer bg-light border-0">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-sm btn-warning px-3 fw-semibold">Confirm Move to Loss</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
         {% endfor %}
         {% else %}
         <div class="text-center py-5">

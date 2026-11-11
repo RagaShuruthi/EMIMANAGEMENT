@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+
+{% block title %}{{ shop.name }} — Shop Details — Follow-up Portal{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+    <!-- Breadcrumb & Header -->
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 pb-3 border-bottom">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1 small">
+                    <li class="breadcrumb-item"><a href="{% url 'followup_dashboard' %}" class="text-decoration-none">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'followup_shops_list' %}" class="text-decoration-none">Assigned Shops</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">{{ shop.name }}</li>
+                </ol>
+            </nav>
+            <div class="d-flex align-items-center gap-2">
+                <h4 class="fw-bold text-dark mb-0">{{ shop.name }}</h4>
+                <span class="badge bg-light text-primary border small">Retail Partner Store</span>
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <a href="{% url 'followup_shops_list' %}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i>All Assigned Shops
+            </a>
+            <a href="{% url 'followup_tasks' %}?shop_id={{ shop.pk }}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-funnel me-1"></i>Filter In Tasks
+            </a>
+        </div>
+    </div>
+
+    <!-- Shop Details & Contact Info Header Card -->
+    <div class="card border rounded-3 mb-4 shadow-sm" style="border-color: #e2e8f0;">
+        <div class="card-body p-3">
+            <div class="row g-3 align-items-center">
+                <div class="col-12 col-md-4">
+                    <div class="small text-muted text-uppercase" style="font-size: 0.7rem;">Store Owner / Contact</div>
+                    <div class="fw-bold text-dark">{{ shop.owner_name|default:"—" }}</div>
+                    {% if shop.phone %}
+                    <a href="tel:{{ shop.phone }}" class="small text-decoration-none text-primary d-inline-flex align-items-center gap-1 mt-0.5">
+                        <i class="bi bi-telephone-fill text-success"></i>
+                        <span class="font-monospace fw-semibold">{{ shop.phone }}</span>
+                    </a>
+                    {% endif %}
+                </div>
+                <div class="col-12 col-md-5">
+                    <div class="small text-muted text-uppercase" style="font-size: 0.7rem;">Retail Location</div>
+                    <div class="small text-dark text-truncate d-inline-block" style="max-width: 380px;">
+                        <i class="bi bi-geo-alt text-secondary me-1"></i>{{ shop.address|default:"No address registered" }}
+                    </div>
+                    {% if shop.email %}
+                    <div class="small text-muted mt-0.5"><i class="bi bi-envelope me-1"></i>{{ shop.email }}</div>
+                    {% endif %}
+                </div>
+                <div class="col-12 col-md-3 text-md-end">
+                    <div class="small text-muted text-uppercase" style="font-size: 0.7rem;">Shop Outstanding Balance</div>
+                    <div class="fs-5 fw-bold text-primary">₹{{ total_shop_outstanding|floatformat:2 }}</div>
+                    <div class="small text-muted">{{ total_shop_customers }} registered customer{{ total_shop_customers|pluralize }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shop Metric Summary Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="card border p-3 bg-white h-100" style="border-color: #e2e8f0;">
+                <div class="small text-muted text-uppercase fw-semibold" style="font-size: 0.7rem;">Total Customers</div>
+                <div class="fs-4 fw-bold text-dark my-1">{{ total_shop_customers }}</div>
+                <span class="small text-muted">In this shop</span>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <a href="?due_today=1{% if search_query %}&q={{ search_query }}{% endif %}" class="text-decoration-none">
+                <div class="card border p-3 bg-white h-100 hover-shadow-sm transition-all" style="border-color: #e2e8f0;">
+                    <div class="small text-muted text-uppercase fw-semibold" style="font-size: 0.7rem;">Today's Due</div>
+                    <div class="fs-4 fw-bold text-dark my-1">{{ today_due_count }}</div>
+                    <span class="small text-danger">Due today &rarr;</span>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-md-3">
+            <a href="?upcoming_due=1{% if search_query %}&q={{ search_query }}{% endif %}" class="text-decoration-none">
+                <div class="card border p-3 bg-white h-100 hover-shadow-sm transition-all" style="border-color: #e2e8f0;">
+                    <div class="small text-muted text-uppercase fw-semibold" style="font-size: 0.7rem;">Upcoming Dues (7 Days)</div>
+                    <div class="fs-4 fw-bold text-dark my-1">{{ upcoming_due_count }}</div>
+                    <span class="small text-muted">Approaching dues &rarr;</span>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-md-3">
+            <a href="?pending_due=1{% if search_query %}&q={{ search_query }}{% endif %}" class="text-decoration-none">
+                <div class="card border p-3 bg-white h-100 hover-shadow-sm transition-all" style="border-color: #e2e8f0;">
+                    <div class="small text-muted text-uppercase fw-semibold" style="font-size: 0.7rem;">Pending Dues</div>
+                    <div class="fs-4 fw-bold text-dark my-1">{{ pending_due_count }}</div>
+                    <span class="small text-secondary">Overdue payments &rarr;</span>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <!-- Shop Customers Table with Multi-Select Payment Filters -->
+    <div class="card border rounded-3 mb-4 shadow-sm" style="border-color: #e2e8f0;">
+        <div class="card-header bg-white py-3 px-4 d-flex justify-content-between align-items-center flex-wrap gap-3 border-bottom" style="border-color: #eaecf0;">
+            <!-- Filter Pills -->
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="small text-muted fw-bold text-uppercase" style="font-size: 0.72rem;">Filters:</span>
+
+                <!-- Today's Due Toggle -->
+                <a href="?{% if filter_due_today %}{% else %}due_today=1{% endif %}{% if filter_upcoming_due %}&upcoming_due=1{% endif %}{% if filter_pending_due %}&pending_due=1{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}"
+                   class="btn btn-sm {% if filter_due_today %}btn-danger shadow-sm{% else %}btn-outline-danger{% endif %} py-1 px-2.5 d-inline-flex align-items-center gap-1">
+                    <span>Today's Due</span>
+                    <span class="badge {% if filter_due_today %}bg-white text-danger{% else %}bg-danger text-white{% endif %} rounded-pill ms-1">{{ today_due_count }}</span>
+                </a>
+
+                <!-- Upcoming Due Toggle -->
+                <a href="?{% if filter_due_today %}due_today=1&{% endif %}{% if filter_upcoming_due %}{% else %}upcoming_due=1{% endif %}{% if filter_pending_due %}&pending_due=1{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}"
+                   class="btn btn-sm {% if filter_upcoming_due %}btn-warning text-dark shadow-sm{% else %}btn-outline-warning text-dark{% endif %} py-1 px-2.5 d-inline-flex align-items-center gap-1">
+                    <span>Upcoming Dues</span>
+                    <span class="badge {% if filter_upcoming_due %}bg-dark text-white{% else %}bg-warning text-dark{% endif %} rounded-pill ms-1">{{ upcoming_due_count }}</span>
+                </a>
+
+                <!-- Pending Due Toggle -->
+                <a href="?{% if filter_due_today %}due_today=1&{% endif %}{% if filter_upcoming_due %}upcoming_due=1&{% endif %}{% if filter_pending_due %}{% else %}pending_due=1{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}"
+                   class="btn btn-sm {% if filter_pending_due %}btn-secondary shadow-sm{% else %}btn-outline-secondary{% endif %} py-1 px-2.5 d-inline-flex align-items-center gap-1">
+                    <span>Pending Dues</span>
+                    <span class="badge {% if filter_pending_due %}bg-white text-dark{% else %}bg-secondary text-white{% endif %} rounded-pill ms-1">{{ pending_due_count }}</span>
+                </a>
+
+                <!-- Clear / All -->
+                {% if has_dues_filter or search_query %}
+                <a href="{% url 'followup_shop_detail' shop_id=shop.pk %}" class="btn btn-sm btn-link text-muted p-0 text-decoration-none ms-1">
+                    <i class="bi bi-x-circle me-1"></i>Reset
+                </a>
+                {% endif %}
+            </div>
+
+            <!-- Customer Search -->
+            <form method="get" class="d-flex gap-2">
+                {% if filter_due_today %}<input type="hidden" name="due_today" value="1">{% endif %}
+                {% if filter_upcoming_due %}<input type="hidden" name="upcoming_due" value="1">{% endif %}
+                {% if filter_pending_due %}<input type="hidden" name="pending_due" value="1">{% endif %}
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" name="q" class="form-control border-start-0 ps-0" placeholder="Search customer, phone..." value="{{ search_query }}">
+                    <button type="submit" class="btn btn-primary">Search</button>
+                    {% if search_query %}
+                    <a href="?{% if filter_due_today %}due_today=1&{% endif %}{% if filter_upcoming_due %}upcoming_due=1&{% endif %}{% if filter_pending_due %}pending_due=1{% endif %}" class="btn btn-outline-secondary" title="Clear Search">
+                        <i class="bi bi-x-lg"></i>
+                    </a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+
+        <div class="card-body p-0">
+            {% if customers %}
+                {% include "followups/portal/_customer_table.html" %}
+
+                <!-- Pagination -->
+                {% if customers.has_other_pages %}
+                <div class="card-footer bg-white border-top py-3 d-flex justify-content-between align-items-center">
+                    <span class="text-muted small">
+                        Showing Page {{ customers.number }} of {{ customers.paginator.num_pages }}
+                    </span>
+                    <ul class="pagination pagination-sm mb-0">
+                        {% if customers.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ customers.previous_page_number }}{% if filter_due_today %}&due_today=1{% endif %}{% if filter_upcoming_due %}&upcoming_due=1{% endif %}{% if filter_pending_due %}&pending_due=1{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}">Previous</a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled"><span class="page-link">Previous</span></li>
+                        {% endif %}
+
+                        {% for p in customers.paginator.page_range %}
+                            {% if p == customers.number %}
+                            <li class="page-item active"><span class="page-link">{{ p }}</span></li>
+                            {% elif p > customers.number|add:"-3" and p < customers.number|add:"3" %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ p }}{% if filter_due_today %}&due_today=1{% endif %}{% if filter_upcoming_due %}&upcoming_due=1{% endif %}{% if filter_pending_due %}&pending_due=1{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}">{{ p }}</a>
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if customers.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ customers.next_page_number }}{% if filter_due_today %}&due_today=1{% endif %}{% if filter_upcoming_due %}&upcoming_due=1{% endif %}{% if filter_pending_due %}&pending_due=1{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}">Next</a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled"><span class="page-link">Next</span></li>
+                        {% endif %}
+                    </ul>
+                </div>
+                {% endif %}
+
+            {% else %}
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-person-x display-6 d-block mb-2 text-muted"></i>
+                <h6 class="fw-semibold text-dark">No Customers Found</h6>
+                <p class="small mb-0">
+                    {% if search_query or has_dues_filter %}No customer records matched your filter criteria in {{ shop.name }}.{% else %}No customer records exist under this retail store yet.{% endif %}
+                </p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function handleModalOutcomeChange(pk) {
+    const radioNeed = document.getElementById('outcomeRadioNeedTime' + pk);
+    const box = document.getElementById('callbackCalendarBox' + pk);
+    if (radioNeed && box) {
+        if (radioNeed.checked) {
+            box.classList.remove('d-none');
+        } else {
+            box.classList.add('d-none');
+        }
+    }
+}
+
+function updateCallbackDaysHelper(pk, todayStr) {
+    const input = document.getElementById('promisedDateInput' + pk);
+    const helper = document.getElementById('callbackHelperText' + pk);
+    const label = document.getElementById('callbackDaysLabel' + pk);
+    if (!input || !input.value) return;
+
+    const selected = new Date(input.value + 'T00:00:00');
+    const today = new Date(todayStr + 'T00:00:00');
+    const diffMs = selected - today;
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+    let msg = '';
+    if (diffDays <= 0) {
+        msg = 'Follow-up scheduled for today';
+    } else if (diffDays === 1) {
+        msg = 'Follow-up scheduled in 1 day';
+    } else {
+        msg = 'Follow-up scheduled in ' + diffDays + ' days';
+    }
+    if (helper) helper.textContent = msg + ' (' + input.value + ')';
+    if (label) label.textContent = msg;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.status-update-form').forEach(function(form) {
+        form.addEventListener('submit', function() {
+            const btn = form.querySelector('.submit-btn');
+            if (btn) {
+                const text = btn.querySelector('.btn-text');
+                const spinner = btn.querySelector('.btn-spinner');
+                if (text) text.textContent = 'Saving...';
+                if (spinner) spinner.classList.remove('d-none');
+                btn.disabled = true;
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

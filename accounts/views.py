@@ -38,6 +38,15 @@ class RoleBasedLoginView(auth_views.LoginView):
                 form.add_error(None, "Access Denied: Your account is not authorized as a Retail Partner Shop.")
                 return self.form_invalid(form)
 
+        # Deactivated Shop Check:
+        # If the shop is deactivated, it should not login
+        if not (user.is_admin_role or user.is_superuser):
+            user_shops = user.shops.all()
+            if user.is_shop_owner_role or user_shops.exists():
+                if not user_shops.filter(is_active=True).exists():
+                    form.add_error(None, "Access Denied: Your shop has been deactivated. Please contact the administrator.")
+                    return self.form_invalid(form)
+
         # Handle Remember Me checkbox
         remember_me = self.request.POST.get("remember_me")
         if remember_me:
@@ -77,6 +86,15 @@ def role_redirect_view(request):
         return redirect("admin_dashboard")
     if request.user.is_followup_role:
         return redirect("followup_dashboard")
+
+    # If the user is associated with a deactivated shop, log them out and redirect to login
+    user_shops = request.user.shops.all()
+    if (request.user.is_shop_owner_role or user_shops.exists()) and not user_shops.filter(is_active=True).exists():
+        from django.contrib.auth import logout
+        logout(request)
+        messages.error(request, "Access Denied: Your shop has been deactivated. Please contact the administrator.")
+        return redirect("login")
+
     return redirect("shop_dashboard")
 
 

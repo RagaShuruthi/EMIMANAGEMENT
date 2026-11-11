@@ -5,11 +5,17 @@ electronic application submission, payment tracking, and shop statistics.
 """
 
 from decimal import Decimal
+import io
+import os
+import calendar
+import json
+from PIL import Image
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.files.uploadedfile import InMemoryUploadedFile
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Sum, Q
+from django.db.models import Sum, Q, Count
 from django.http import HttpResponseForbidden, Http404
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
@@ -31,8 +37,11 @@ def get_authenticated_shop(request):
     if not user.is_authenticated:
         return None
 
-    # Check direct shop assignment
-    shop = user.shops.filter(is_active=True).first() or user.shops.first()
+    # Check direct shop assignment: retail shop owners strictly access only active shops
+    if user.is_admin_role or user.is_superuser:
+        shop = user.shops.filter(is_active=True).first() or user.shops.first()
+    else:
+        shop = user.shops.filter(is_active=True).first()
 
     # Admin fallback or shop switcher
     if not shop and (user.is_admin_role or user.is_superuser):
@@ -45,6 +54,83 @@ def get_authenticated_shop(request):
             request.session["admin_active_shop_id"] = shop.id
 
     return shop
+
+
+def compress_image_if_needed(uploaded_file, max_size_bytes=1024 * 1024):
+    """
+    Compresses uploaded images so that the file size stored in the database/disk
+    is guaranteed to be <= 1MB (1,048,576 bytes).
+    Non-image files (such as PDFs) or images already <= 1MB are preserved intact.
+    """
+    if not uploaded_file:
+        return uploaded_file
+
+    if uploaded_file.size <= max_size_bytes:
+        return uploaded_file
+
+    try:
+        uploaded_file.seek(0)
+        img = Image.open(uploaded_file)
+    except Exception:
+        # Not a valid image file (e.g. PDF), leave intact
+        uploaded_file.seek(0)
+        return uploaded_file
+
+    try:
+        format_name = "JPEG"
+        ext = ".jpg"
+        if img.mode in ("RGBA", "LA", "P"):
+            background = Image.new("RGB", img.size, (255, 255, 255))
+            if img.mode == "P":
+                img = img.convert("RGBA")
+            background.paste(img, mask=img.split()[-1] if "A" in img.mode else None)
+            img = background
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
+
+        # Clamp max dimension to 2000px if excessively large
+        max_dim = 2000
+        if max(img.width, img.height) > max_dim:
+            img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+
+        quality = 85
+        buffer = io.BytesIO()
+        img.save(buffer, format=format_name, quality=quality, optimize=True)
+
+        # Progressively lower quality if still > 1MB
+        while buffer.tell() > max_size_bytes and quality > 30:
+            quality -= 10
+            buffer = io.BytesIO()
+            img.save(buffer, format=format_name, quality=quality, optimize=True)
+
+        # If still > 1MB, progressively downscale dimensions
+        while buffer.tell() > max_size_bytes:
+            new_w = int(img.width * 0.8)
+            new_h = int(img.height * 0.8)
+            if new_w < 300 or new_h < 300:
+                break
+            img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+            buffer = io.BytesIO()
+            img.save(buffer, format=format_name, quality=quality, optimize=True)
+
+        buffer.seek(0)
+        output_size = buffer.getbuffer().nbytes
+
+        orig_base, _ = os.path.splitext(uploaded_file.name)
+        new_filename = f"{orig_base}{ext}"
+
+        compressed_file = InMemoryUploadedFile(
+            file=buffer,
+            field_name=getattr(uploaded_file, "field_name", None),
+            name=new_filename,
+            content_type="image/jpeg",
+            size=output_size,
+            charset=None
+        )
+        return compressed_file
+    except Exception:
+        uploaded_file.seek(0)
+        return uploaded_file
 
 
 @login_required
@@ -92,14 +178,16 @@ def shop_dashboard_view(request):
         shop=shop, status=FinanceApplication.Status.REJECTED
     ).count()
 
-    # 7. Total Amount Requested from Financier
-    amount_requested_agg = FinanceApplication.objects.filter(shop=shop).aggregate(
+    # 7. Total Amount Requested from Financier (Excluding Rejected)
+    amount_requested_agg = FinanceApplication.objects.filter(shop=shop).exclude(
+        status=FinanceApplication.Status.REJECTED
+    ).aggregate(
         total=Sum("financier_request_amount")
     )["total"] or Decimal("0.00")
 
-    # 8. Total Amount Received from Financier
+    # 8. Total Amount Received from Financier (Direct Shop Payout or Application Payout)
     amount_received_agg = FinancierPayment.objects.filter(
-        application__shop=shop
+        Q(shop=shop) | Q(application__shop=shop)
     ).aggregate(total=Sum("amount_received"))["total"] or Decimal("0.00")
 
     # 9. Outstanding Amount Yet to Be Received
@@ -165,6 +253,7 @@ def customer_registration_view(request):
         mobile_model = request.POST.get("mobile_model", "").strip()
         mobile_price_str = request.POST.get("mobile_price", "0").replace(",", "").strip()
         down_payment_str = request.POST.get("down_payment", "0").replace(",", "").strip()
+        total_emi_str = request.POST.get("total_emi_amount", "").replace(",", "").strip()
         emi_duration_str = request.POST.get("emi_duration", "6").strip()
         submission_action = request.POST.get("action", "submit")  # "submit" or "draft"
 
@@ -197,19 +286,29 @@ def customer_registration_view(request):
             errors.append("Secondary mobile number 2 must be exactly 10 digits without letters, spaces, or symbols.")
             field_errors["secondary_mobile"] = "Secondary mobile number 2 must be exactly 10 digits without letters, spaces, or symbols."
 
+        # Phone model validation: Alphabets, Numbers, Spaces, and Symbols (- _ + ( ) / .)
         if not mobile_model:
             errors.append("Mobile phone model is required.")
             field_errors["mobile_model"] = "Mobile phone model is required."
+        elif not re.match(r"^[A-Za-z0-9\s\-_\+\(\)\/\.]+$", mobile_model):
+            errors.append("Phone model contains invalid characters. Only letters, numbers, spaces, and symbols (- _ + ( ) / .) are allowed.")
+            field_errors["mobile_model"] = "Only letters, numbers, spaces, and symbols (- _ + ( ) / .) are allowed."
 
-        # Mandatory documents validation
+        # Mandatory documents validation (Photo + Aadhaar Front & Back)
         doc_photo = request.FILES.get("doc_photo")
-        doc_aadhaar = request.FILES.get("doc_aadhaar")
+        doc_aadhaar_front = request.FILES.get("doc_aadhaar_front") or request.FILES.get("doc_aadhaar")
+        doc_aadhaar_back = request.FILES.get("doc_aadhaar_back")
+        legacy_aadhaar = request.FILES.get("doc_aadhaar")
+
         if not doc_photo:
             errors.append("Customer Photograph upload is mandatory.")
             field_errors["doc_photo"] = "Customer Photograph upload is mandatory."
-        if not doc_aadhaar:
-            errors.append("Aadhaar Card document upload is mandatory.")
-            field_errors["doc_aadhaar"] = "Aadhaar Card document upload is mandatory."
+        if not doc_aadhaar_front:
+            errors.append("Aadhaar Card Front document upload is mandatory.")
+            field_errors["doc_aadhaar_front"] = "Aadhaar Card Front document upload is mandatory."
+        if not doc_aadhaar_back and not legacy_aadhaar:
+            errors.append("Aadhaar Card Back document upload is mandatory.")
+            field_errors["doc_aadhaar_back"] = "Aadhaar Card Back document upload is mandatory."
 
         try:
             mobile_price = Decimal(mobile_price_str or "0")
@@ -226,6 +325,9 @@ def customer_registration_view(request):
             if down_payment < Decimal("0"):
                 errors.append("Down payment cannot be negative.")
                 field_errors["down_payment"] = "Down payment cannot be negative."
+            elif mobile_price > Decimal("0") and down_payment > mobile_price:
+                errors.append("Down payment cannot be greater than the actual phone price.")
+                field_errors["down_payment"] = "Down payment cannot be greater than the actual phone price."
         except Exception:
             errors.append("Invalid down payment amount.")
             field_errors["down_payment"] = "Invalid down payment amount."
@@ -239,7 +341,7 @@ def customer_registration_view(request):
             errors.append("Invalid EMI tenure duration. Choose 3 or 6 months.")
             emi_duration = 6
 
-        # Monthly due day (shop owner can customize or default to date cycle)
+        # Monthly due day: automatically calculated from application date, but editable by shop owner
         try:
             monthly_due_day = int(monthly_due_day_str)
             if not (1 <= monthly_due_day <= 31):
@@ -250,8 +352,18 @@ def customer_registration_view(request):
         # Financier Request Amount = Total Selling Price - Down Payment
         calculated_request_amount = max(Decimal("0.00"), mobile_price - down_payment)
 
-        # Monthly EMI: Financed Amount / Due Months (3 or 6), rounded to nearest 10s
-        # Editable by shop owner
+        # Total EMI Amount: Phone Price (Down payment is ignored for EMI calculation)
+        try:
+            if total_emi_str:
+                total_emi = Decimal(total_emi_str)
+                if total_emi <= Decimal("0.00"):
+                    total_emi = mobile_price
+            else:
+                total_emi = mobile_price
+        except Exception:
+            total_emi = mobile_price
+
+        # Monthly EMI = Total EMI Amount / Selected Tenure (3 or 6), rounded to nearest 10s
         monthly_emi_str = request.POST.get("monthly_emi", "").replace(",", "").strip()
         custom_emi = None
         if monthly_emi_str:
@@ -262,9 +374,11 @@ def customer_registration_view(request):
 
         if custom_emi and custom_emi > Decimal("0"):
             calculated_monthly_emi = FinanceApplication.round_emi_to_tens(custom_emi)
-        else:
-            raw_emi = (calculated_request_amount / Decimal(emi_duration)) if (emi_duration in (3, 6) and calculated_request_amount > Decimal("0")) else Decimal("0.00")
+        elif emi_duration in (3, 6) and total_emi > Decimal("0.00"):
+            raw_emi = total_emi / Decimal(emi_duration)
             calculated_monthly_emi = FinanceApplication.round_emi_to_tens(raw_emi)
+        else:
+            calculated_monthly_emi = Decimal("0.00")
 
         form_data = {
             "customer_name": customer_name,
@@ -277,7 +391,8 @@ def customer_registration_view(request):
             "mobile_model": mobile_model,
             "mobile_price": mobile_price_str if mobile_price_str != "0" else "",
             "down_payment": down_payment_str,
-            "monthly_emi": monthly_emi_str,
+            "total_emi_amount": str(total_emi) if total_emi > Decimal("0.00") else "",
+            "monthly_emi": str(calculated_monthly_emi) if calculated_monthly_emi > Decimal("0.00") else "",
             "emi_duration": str(emi_duration),
         }
 
@@ -320,6 +435,7 @@ def customer_registration_view(request):
                         mobile_model=mobile_model,
                         mobile_price=mobile_price,
                         down_payment=down_payment,
+                        total_emi_amount=total_emi,
                         monthly_emi=calculated_monthly_emi,
                         emi_duration=emi_duration,
                         monthly_due_day=monthly_due_day,
@@ -332,24 +448,31 @@ def customer_registration_view(request):
 
                     application.save()
 
-                    # 4. Handle Document Uploads
-                    doc_files = {
-                        CustomerDocument.DocType.PHOTOGRAPH: request.FILES.get("doc_photo"),
-                        CustomerDocument.DocType.AADHAAR: request.FILES.get("doc_aadhaar"),
-                        CustomerDocument.DocType.PAN: request.FILES.get("doc_pan"),
-                        CustomerDocument.DocType.VOTER_ID: request.FILES.get("doc_voter"),
-                    }
+                    # 4. Handle Document Uploads (compressed to <= 1MB)
+                    doc_files = [
+                        (CustomerDocument.DocType.PHOTOGRAPH, request.FILES.get("doc_photo")),
+                        (
+                            CustomerDocument.DocType.AADHAAR_FRONT
+                            if request.FILES.get("doc_aadhaar_front")
+                            else CustomerDocument.DocType.AADHAAR,
+                            doc_aadhaar_front,
+                        ),
+                        (CustomerDocument.DocType.AADHAAR_BACK, doc_aadhaar_back),
+                        (CustomerDocument.DocType.PAN, request.FILES.get("doc_pan")),
+                        (CustomerDocument.DocType.VOTER_ID, request.FILES.get("doc_voter")),
+                    ]
 
-                    for doc_type, uploaded_file in doc_files.items():
+                    for doc_type, uploaded_file in doc_files:
                         if uploaded_file:
+                            final_file = compress_image_if_needed(uploaded_file)
                             CustomerDocument.objects.create(
                                 application=application,
                                 customer=customer,
                                 document_type=doc_type,
-                                file=uploaded_file,
+                                file=final_file,
                                 original_filename=uploaded_file.name,
-                                file_size=uploaded_file.size,
-                                mime_type=uploaded_file.content_type or "application/octet-stream",
+                                file_size=final_file.size,
+                                mime_type=getattr(final_file, "content_type", None) or uploaded_file.content_type or "application/octet-stream",
                             )
 
                     # 5. Audit History Log
@@ -380,11 +503,12 @@ def customer_registration_view(request):
             except Exception as e:
                 messages.error(request, f"Error saving customer application: {e}")
 
+    initial_due_day = str(FinanceApplication.calculate_monthly_due_day(timezone.now().date()))
     context = {
         "shop": shop,
         "active_nav": "add_customer",
         "today_date": timezone.now().strftime("%Y-%m-%d"),
-        "form_data": {},
+        "form_data": {"monthly_due_day": initial_due_day},
         "field_errors": {},
     }
     return render(request, "shops/portal/customer_register.html", context)
@@ -544,9 +668,9 @@ def financier_payments_view(request):
         except Exception as e:
             messages.error(request, f"Error recording payment: {e}")
 
-    # Query all payments for this shop ordered by date desc
+    # Query all payments for this shop (both direct shop payouts and application payouts)
     payments_qs = (
-        FinancierPayment.objects.filter(application__shop=shop)
+        FinancierPayment.objects.filter(Q(shop=shop) | Q(application__shop=shop))
         .select_related("application", "application__customer")
         .order_by("-payment_date", "-created_at")
     )
@@ -600,8 +724,10 @@ def financier_payments_view(request):
     if current_group:
         daily_groups.append(current_group)
 
-    # Global shop aggregates
-    total_requested = FinanceApplication.objects.filter(shop=shop).aggregate(
+    # Global shop aggregates (excluding rejected)
+    total_requested = FinanceApplication.objects.filter(shop=shop).exclude(
+        status=FinanceApplication.Status.REJECTED
+    ).aggregate(
         total=Sum("financier_request_amount")
     )["total"] or Decimal("0.00")
     total_received = payments_qs.aggregate(total=Sum("amount_received"))["total"] or Decimal("0.00")
@@ -647,19 +773,236 @@ def financier_payments_view(request):
 @login_required
 def shop_reports_view(request):
     """
-    Shop Finance & Application Performance Reports.
-    Provides aggregated metrics, date-range filtering, and status summaries.
+    Shop Sales Performance, Reports & Analytics Dashboard.
+    Features:
+    1. Last Month Sales vs This Month Sales comparison with deltas and growth %
+    2. Best Sales Month in This Year with peak metrics and annual contribution
+    3. 12-Month Month-by-Month breakdown table with MoM growth
+    4. Interactive Chart.js visualization for monthly sales revenue and units
+    5. Top Selling Phone Models in the shop
+    6. Application lifecycle pipeline breakdown
     URL: /shop-dashboard/reports/
     """
     shop = get_authenticated_shop(request)
     if not shop:
         return HttpResponseForbidden("Unauthorized shop access.")
 
-    # Status counts breakdown
+    today = timezone.localdate() if hasattr(timezone, "localdate") else timezone.now().date()
+    current_year = today.year
+    current_month = today.month
+
+    # Selected year filter (default: current year)
+    try:
+        selected_year = int(request.GET.get("year", current_year))
+    except (ValueError, TypeError):
+        selected_year = current_year
+
+    # Base QuerySet: All eligible sales applications for this shop (excluding rejected)
+    base_sales_qs = FinanceApplication.objects.filter(shop=shop).exclude(
+        status=FinanceApplication.Status.REJECTED
+    )
+
+    # Helper function: Retrieve sales metrics for any specific year and month
+    def get_month_sales(y, m):
+        m_qs = base_sales_qs.filter(
+            Q(application_date__year=y, application_date__month=m) |
+            (Q(application_date__isnull=True) & Q(created_at__year=y, created_at__month=m))
+        )
+        agg = m_qs.aggregate(
+            total_sales=Sum("mobile_price"),
+            total_financed=Sum("financier_request_amount"),
+            total_down=Sum("down_payment")
+        )
+        sales_val = agg["total_sales"] or Decimal("0.00")
+        fin_val = agg["total_financed"] or Decimal("0.00")
+        down_val = agg["total_down"] or Decimal("0.00")
+        return {
+            "year": y,
+            "month": m,
+            "month_name": calendar.month_name[m],
+            "month_abbr": calendar.month_abbr[m],
+            "full_label": f"{calendar.month_name[m]} {y}",
+            "short_label": f"{calendar.month_abbr[m]} {y}",
+            "count": m_qs.count(),
+            "total_sales": sales_val,
+            "total_financed": fin_val,
+            "total_down": down_val,
+        }
+
+    # ---------------------------------------------------------
+    # 1. Last Month Sales vs This Month Sales
+    # ---------------------------------------------------------
+    if selected_year == current_year:
+        this_m_num = current_month
+        this_m_year = current_year
+    else:
+        this_m_num = 12
+        this_m_year = selected_year
+
+    if this_m_num > 1:
+        last_m_num = this_m_num - 1
+        last_m_year = this_m_year
+    else:
+        last_m_num = 12
+        last_m_year = this_m_year - 1
+
+    this_month_data = get_month_sales(this_m_year, this_m_num)
+    last_month_data = get_month_sales(last_m_year, last_m_num)
+
+    # Calculate differences & growth percentages
+    sales_diff = this_month_data["total_sales"] - last_month_data["total_sales"]
+    t_sales_flt = float(this_month_data["total_sales"])
+    l_sales_flt = float(last_month_data["total_sales"])
+    if l_sales_flt > 0:
+        sales_growth_pct = round(((t_sales_flt - l_sales_flt) / l_sales_flt) * 100.0, 1)
+    else:
+        sales_growth_pct = 100.0 if t_sales_flt > 0 else 0.0
+
+    units_diff = this_month_data["count"] - last_month_data["count"]
+    l_units = last_month_data["count"]
+    if l_units > 0:
+        units_growth_pct = round(((this_month_data["count"] - l_units) / l_units) * 100.0, 1)
+    else:
+        units_growth_pct = 100.0 if this_month_data["count"] > 0 else 0.0
+
+    financed_diff = this_month_data["total_financed"] - last_month_data["total_financed"]
+    down_diff = this_month_data["total_down"] - last_month_data["total_down"]
+
+    comparison = {
+        "sales_diff": sales_diff,
+        "sales_growth_pct": sales_growth_pct,
+        "is_sales_up": sales_diff > 0,
+        "is_sales_down": sales_diff < 0,
+        "units_diff": units_diff,
+        "units_growth_pct": units_growth_pct,
+        "is_units_up": units_diff > 0,
+        "is_units_down": units_diff < 0,
+        "financed_diff": financed_diff,
+        "down_diff": down_diff,
+    }
+
+    # ---------------------------------------------------------
+    # 2. 12 Months Breakdown & Best Sales Month in This Year
+    # ---------------------------------------------------------
+    months_data = []
+    annual_total_sales = Decimal("0.00")
+    annual_total_units = 0
+    annual_total_financed = Decimal("0.00")
+    annual_total_down = Decimal("0.00")
+
+    prev_month_sales_val = None
+
+    for m in range(1, 13):
+        m_data = get_month_sales(selected_year, m)
+        annual_total_sales += m_data["total_sales"]
+        annual_total_units += m_data["count"]
+        annual_total_financed += m_data["total_financed"]
+        annual_total_down += m_data["total_down"]
+
+        # Month-over-month growth within the year
+        curr_sales_f = float(m_data["total_sales"])
+        if prev_month_sales_val is not None:
+            if prev_month_sales_val > 0:
+                mom_growth = round(((curr_sales_f - prev_month_sales_val) / prev_month_sales_val) * 100.0, 1)
+            else:
+                mom_growth = 100.0 if curr_sales_f > 0 else 0.0
+        else:
+            mom_growth = None
+
+        prev_month_sales_val = curr_sales_f
+
+        m_data["mom_growth"] = mom_growth
+        m_data["is_current"] = (selected_year == current_year and m == current_month)
+        months_data.append(m_data)
+
+    # Determine Best Sales Month in This Year
+    months_with_sales = [m for m in months_data if m["total_sales"] > 0]
+    best_month = None
+    if months_with_sales:
+        best_month = max(months_with_sales, key=lambda x: (x["total_sales"], x["count"]))
+        for m in months_data:
+            m["is_best"] = (m["month"] == best_month["month"])
+    else:
+        for m in months_data:
+            m["is_best"] = False
+
+    annual_avg_monthly_sales = annual_total_sales / Decimal("12") if annual_total_sales > 0 else Decimal("0.00")
+    for m in months_data:
+        if annual_total_sales > 0:
+            m["annual_share_pct"] = round((float(m["total_sales"]) / float(annual_total_sales)) * 100.0, 1)
+        else:
+            m["annual_share_pct"] = 0.0
+
+    if best_month:
+        if annual_total_sales > 0:
+            best_month["annual_share_pct"] = round((float(best_month["total_sales"]) / float(annual_total_sales)) * 100.0, 1)
+        else:
+            best_month["annual_share_pct"] = 0.0
+
+        if annual_avg_monthly_sales > 0:
+            best_month["above_avg_diff"] = best_month["total_sales"] - annual_avg_monthly_sales
+            best_month["above_avg_pct"] = round(
+                ((float(best_month["total_sales"]) - float(annual_avg_monthly_sales)) / float(annual_avg_monthly_sales)) * 100.0, 1
+            )
+        else:
+            best_month["above_avg_diff"] = Decimal("0.00")
+            best_month["above_avg_pct"] = 0.0
+
+    annual_summary = {
+        "year": selected_year,
+        "total_sales": annual_total_sales,
+        "total_units": annual_total_units,
+        "total_financed": annual_total_financed,
+        "total_down": annual_total_down,
+        "avg_monthly_sales": annual_avg_monthly_sales,
+    }
+
+    # ---------------------------------------------------------
+    # 3. Chart Datasets (Labels, Sales ₹, Units Count)
+    # ---------------------------------------------------------
+    chart_labels = [m["month_abbr"] for m in months_data]
+    chart_sales = [float(m["total_sales"]) for m in months_data]
+    chart_units = [m["count"] for m in months_data]
+    best_month_idx = (best_month["month"] - 1) if best_month else -1
+
+    # ---------------------------------------------------------
+    # 4. Top Selling Mobile Models in Selected Year
+    # ---------------------------------------------------------
+    top_models_qs = (
+        base_sales_qs.filter(
+            Q(application_date__year=selected_year) |
+            (Q(application_date__isnull=True) & Q(created_at__year=selected_year))
+        )
+        .values("mobile_model")
+        .annotate(units_sold=Count("id"), total_revenue=Sum("mobile_price"))
+        .order_by("-units_sold", "-total_revenue")[:5]
+    )
+    top_models = []
+    for item in top_models_qs:
+        units = item["units_sold"] or 0
+        rev = item["total_revenue"] or Decimal("0.00")
+        avg_p = (rev / units) if units > 0 else Decimal("0.00")
+        top_models.append({
+            "mobile_model": item["mobile_model"],
+            "units_sold": units,
+            "total_revenue": rev,
+            "avg_price": avg_p,
+            "share_pct": round((float(rev) / float(annual_total_sales)) * 100.0, 1) if annual_total_sales > 0 else 0.0,
+        })
+
+    # Available years list for filter (past 2 years, current year, next year)
+    available_years = [current_year - 2, current_year - 1, current_year, current_year + 1]
+    if selected_year not in available_years:
+        available_years.append(selected_year)
+    available_years = sorted(list(set(available_years)))
+
+    # ---------------------------------------------------------
+    # 5. Status counts breakdown & Financial Sums (Preserved)
+    # ---------------------------------------------------------
     statuses = [
         ("SUBMITTED", "Submitted Applications", FinanceApplication.Status.SUBMITTED, "primary"),
         ("APPROVED", "Approved Applications", FinanceApplication.Status.APPROVED, "success"),
-        ("PENDING", "Pending Applications", [FinanceApplication.Status.DRAFT, FinanceApplication.Status.READY, FinanceApplication.Status.UNDER_REVIEW], "warning"),
+        ("PENDING", "Pending Review", [FinanceApplication.Status.DRAFT, FinanceApplication.Status.READY, FinanceApplication.Status.UNDER_REVIEW], "warning"),
         ("REJECTED", "Rejected Applications", FinanceApplication.Status.REJECTED, "danger"),
         ("PAID", "Fully Paid by Financier", FinanceApplication.Status.PAID, "info"),
     ]
@@ -678,13 +1021,32 @@ def shop_reports_view(request):
         })
 
     # Financial sums
-    total_req = FinanceApplication.objects.filter(shop=shop).aggregate(total=Sum("financier_request_amount"))["total"] or Decimal("0.00")
-    total_rec = FinancierPayment.objects.filter(application__shop=shop).aggregate(total=Sum("amount_received"))["total"] or Decimal("0.00")
+    total_req = FinanceApplication.objects.filter(shop=shop).exclude(
+        status=FinanceApplication.Status.REJECTED
+    ).aggregate(total=Sum("financier_request_amount"))["total"] or Decimal("0.00")
+    total_rec = FinancierPayment.objects.filter(
+        Q(shop=shop) | Q(application__shop=shop)
+    ).aggregate(total=Sum("amount_received"))["total"] or Decimal("0.00")
     outstanding = max(Decimal("0.00"), total_req - total_rec)
 
     context = {
         "shop": shop,
         "active_nav": "reports",
+        "selected_year": selected_year,
+        "current_year": current_year,
+        "current_month": current_month,
+        "available_years": available_years,
+        "this_month_data": this_month_data,
+        "last_month_data": last_month_data,
+        "comparison": comparison,
+        "best_month": best_month,
+        "annual_summary": annual_summary,
+        "months_table": months_data,
+        "top_models": top_models,
+        "chart_labels_json": json.dumps(chart_labels),
+        "chart_sales_json": json.dumps(chart_sales),
+        "chart_units_json": json.dumps(chart_units),
+        "best_month_idx": best_month_idx,
         "status_breakdown": status_breakdown,
         "total_requested": total_req,
         "total_received": total_rec,

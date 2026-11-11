@@ -248,6 +248,9 @@ class ShopCRUDAndActionsTests(TestCase):
             "gpay": "9876508899",
             "address": "1 Rome Blvd",
             "is_active": True,
+            "login_username": "marcus_beacon",
+            "login_password": "BeaconPassword123!",
+            "confirm_password": "BeaconPassword123!",
         }
         response = self.client.post(reverse("add_shop"), data)
         shop = Shop.objects.get(name="Beacon Mobile")
@@ -348,7 +351,6 @@ class ShopCRUDAndActionsTests(TestCase):
             "email": "alan@enigma.com",
             "address": "Bletchley Park",
             "is_active": True,
-            "create_credentials": True,
             "login_username": "alanturing",
             "login_password": "SecretPassword123!",
             "confirm_password": "SecretPassword123!",
@@ -419,6 +421,9 @@ class ShopCRUDAndActionsTests(TestCase):
             "gpay": "9876543211",
             "address": "45 MG Road, Bangalore",
             "is_active": True,
+            "login_username": "zenith_owner",
+            "login_password": "ZenithPassword123!",
+            "confirm_password": "ZenithPassword123!",
         }
         res_post = self.client.post(reverse("add_shop"), data)
         shop = Shop.objects.get(name="Zenith Mobile Store")
@@ -513,6 +518,7 @@ class ShopSearchAndPaginationTests(TestCase):
             financier_request_amount=Decimal("70000.00"),
             monthly_emi=Decimal("11666.67"),
             emi_duration=6,
+            status=FinanceApplication.Status.APPROVED,
         )
 
         # Filter by payment due
@@ -687,3 +693,459 @@ class ShopAPITests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.shop1.refresh_from_db()
         self.assertFalse(self.shop1.is_active)
+
+
+class ShopLoginAddCustomerComprehensiveTests(TestCase):
+    """
+    Verifies the 12 explicit scenarios specified in the Add Customer page requirements:
+    1. Registration on 4th -> Due 5th
+    2. Registration on 8th -> Due 10th
+    3. Registration on 13th -> Due 15th
+    4. Registration on 18th -> Due 20th
+    5. Registration on 23rd -> Due 25th
+    6. Registration on 28th -> Due 30th
+    7. Phone model allows alphabets, numbers, spaces, and symbols
+    8. 3-month EMI divided by 3 and rounded to nearest 10
+    9. 6-month EMI divided by 6 and rounded to nearest 10
+    10. Final installment adjustment ensures exact total without overcharging
+    11. Payment collection correctly updates customer remaining balance
+    12. Stored rounded EMI is consistent across dashboards
+    """
+
+    def setUp(self):
+        from accounts.models import User
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.owner = User.objects.create_user(username="shopowner_test", password="Password123!", role=User.Role.SHOP_OWNER)
+        self.shop = Shop.objects.create(name="Apex Mobile Store", owner_name="Apex Owner", phone="9988776655", address="Market Road", owner_account=self.owner)
+        self.client.login(username="shopowner_test", password="Password123!")
+
+    def test_scenarios_1_to_6_automatic_due_dates(self):
+        """Scenarios 1-6: Customer registration day maps automatically to monthly due date."""
+        from applications.models import FinanceApplication
+        test_cases = [
+            ("2026-11-04", 5),
+            ("2026-11-08", 10),
+            ("2026-11-13", 15),
+            ("2026-11-18", 20),
+            ("2026-11-23", 25),
+            ("2026-11-28", 30),
+            ("2026-10-31", 5),
+            ("04-11-2026", 5),
+            ("28-11-2026", 30),
+        ]
+        for dt_str, expected_due in test_cases:
+            due = FinanceApplication.calculate_monthly_due_day(dt_str)
+            self.assertEqual(due, expected_due, f"Failed for date {dt_str}: got {due}, expected {expected_due}")
+
+    def test_scenario_7_phone_model_alphabets_numbers_and_symbols(self):
+        """Scenario 7: Phone model accepts alphabets, numbers, spaces, and symbols like -, _, +, (, ), /, ."""
+        from applications.models import FinanceApplication
+        from customers.models import Customer
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        valid_models = [
+            "Samsung Galaxy S24 Ultra",
+            "iPhone 16 Pro Max",
+            "Redmi Note 14 5G",
+            "OnePlus Nord CE 4",
+            "Vivo V30 Pro",
+            "Samsung A35 5G",
+            "Nothing Phone (2a)",
+            "OPPO Reno 12 Pro+",
+            "Model-X_Plus (2026) / 256GB + 5G.v2",
+        ]
+
+        photo = SimpleUploadedFile("photo.jpg", b"photo_bytes", content_type="image/jpeg")
+        aadhaar = SimpleUploadedFile("aadhaar.pdf", b"aadhaar_bytes", content_type="application/pdf")
+
+        for idx, model_name in enumerate(valid_models):
+            data = {
+                "application_date": "2026-11-04",
+                "customer_name": f"Model Test Customer {idx}",
+                "primary_mobile": f"98765432{idx:02d}",
+                "secondary_mobile": f"98765433{idx:02d}",
+                "work_address": "Tech Park",
+                "home_address": "City Colony",
+                "mobile_model": model_name,
+                "mobile_price": "34000.00",
+                "down_payment": "11650.00",
+                "total_emi_amount": "45650.00",
+                "emi_duration": "6",
+                "doc_photo": photo,
+                "doc_aadhaar": aadhaar,
+                "action": "submit"
+            }
+            resp = self.client.post(reverse("shop_customer_add"), data)
+            self.assertEqual(resp.status_code, 302)
+            app = FinanceApplication.objects.get(customer__primary_mobile=f"98765432{idx:02d}")
+            self.assertEqual(app.mobile_model, model_name)
+
+    def test_scenarios_8_9_10_emi_calculation_rounding_and_final_adjustment(self):
+        """
+        Scenarios 8, 9, 10:
+        Phone Price: 34,000, Down Payment: 11,650 (Down payment is ignored for EMI calculation: not added, not subtracted)
+        3 Months: 34,000 / 3 = 11,333.33 -> 11,330. Inst #1: 11330, #2: 11330, #3: 11340 (Sum: 34,000).
+        6 Months: 34,000 / 6 = 5,666.67 -> 5,670. Inst #1-#5: 5670 each, #6: 5650 (Sum: 34,000).
+        """
+        from applications.models import FinanceApplication
+        from customers.models import Customer
+        from decimal import Decimal
+
+        cust = Customer.objects.create(shop=self.shop, name="EMI Formula Customer", primary_mobile="9911223344", secondary_mobile="9911223355")
+
+        # 3 Months
+        app3 = FinanceApplication.objects.create(
+            shop=self.shop,
+            customer=cust,
+            application_date="2026-11-28",
+            mobile_model="iPhone 16 Pro Max",
+            mobile_price=Decimal("34000.00"),
+            down_payment=Decimal("11650.00"),
+            emi_duration=3,
+        )
+        self.assertEqual(app3.monthly_emi, Decimal("11330.00"))
+        scheds3 = list(app3.emi_schedules.order_by("installment_number"))
+        self.assertEqual(len(scheds3), 3)
+        self.assertEqual([s.amount for s in scheds3], [Decimal("11330.00"), Decimal("11330.00"), Decimal("11330.00")])
+
+        # 6 Months
+        app6 = FinanceApplication.objects.create(
+            shop=self.shop,
+            customer=cust,
+            application_date="2026-11-28",
+            mobile_model="Samsung Galaxy S24 Ultra",
+            mobile_price=Decimal("34000.00"),
+            down_payment=Decimal("11650.00"),
+            emi_duration=6,
+        )
+        self.assertEqual(app6.monthly_emi, Decimal("5670.00"))
+        scheds6 = list(app6.emi_schedules.order_by("installment_number"))
+        self.assertEqual(len(scheds6), 6)
+        self.assertEqual([s.amount for s in scheds6], [Decimal("5670.00")] * 6)
+
+    def test_scenario_11_payment_collection_updates_remaining_balance(self):
+        """Scenario 11: Payment collection correctly reduces customer's remaining balance."""
+        from applications.models import FinanceApplication
+        from customers.models import Customer
+        from decimal import Decimal
+
+        cust = Customer.objects.create(shop=self.shop, name="Payment Customer", primary_mobile="9900112233", secondary_mobile="9900112244")
+        app = FinanceApplication.objects.create(
+            shop=self.shop,
+            customer=cust,
+            application_date="2026-11-04",
+            mobile_model="OnePlus Nord CE 4",
+            mobile_price=Decimal("34000.00"),
+            down_payment=Decimal("11650.00"),
+            emi_duration=6,
+        )
+        self.assertEqual(app.customer_remaining_balance, Decimal("34000.00"))
+
+        app.record_customer_payment(Decimal("5670.00"))
+        self.assertEqual(app.customer_remaining_balance, Decimal("28330.00"))
+
+        app.record_customer_payment(Decimal("5670.00"))
+        self.assertEqual(app.customer_remaining_balance, Decimal("22660.00"))
+
+    def test_scenario_12_same_emi_values_consistent_across_dashboards(self):
+        """Scenario 12: Stored rounded monthly EMI value appears consistently on dashboard and detail pages."""
+        from applications.models import FinanceApplication
+        from customers.models import Customer
+        from decimal import Decimal
+
+        cust = Customer.objects.create(shop=self.shop, name="Consistency Customer", primary_mobile="9955443322", secondary_mobile="9955443311")
+        app = FinanceApplication.objects.create(
+            shop=self.shop,
+            customer=cust,
+            application_date="2026-11-18",
+            mobile_model="Vivo V30 Pro",
+            mobile_price=Decimal("34000.00"),
+            down_payment=Decimal("11650.00"),
+            emi_duration=6,
+            status=FinanceApplication.Status.SUBMITTED,
+        )
+
+        resp_dash = self.client.get(reverse("shop_dashboard"))
+        self.assertEqual(resp_dash.status_code, 200)
+        self.assertContains(resp_dash, "5670.00")
+
+        resp_detail = self.client.get(reverse("shop_application_detail", kwargs={"pk": app.pk}))
+        self.assertEqual(resp_detail.status_code, 200)
+        self.assertContains(resp_detail, "5670.00")
+        self.assertContains(resp_detail, "Vivo V30 Pro")
+
+
+class ShopReportsAndAnalyticsTests(TestCase):
+    """
+    Test suite for Shop Owner Dashboard Reports & Analytics Page:
+    - Last Month Sales vs This Month Sales comparison
+    - Best Sales Month in This Year identification & peak metrics
+    - Month-by-month performance breakdown & Chart data
+    - Top Selling Mobile Models
+    """
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from shops.models import Shop
+        from customers.models import Customer
+        from datetime import date
+        User = get_user_model()
+
+        self.owner = User.objects.create_user(
+            username="analytics_owner",
+            password="ShopPassword123!",
+            role=User.Role.SHOP_OWNER
+        )
+        self.shop = Shop.objects.create(
+            name="Apex Mobile Studio",
+            owner_name="Anil Kumar",
+            owner_account=self.owner,
+            phone="9876543210",
+            address="Commercial Street, Bangalore",
+            is_active=True
+        )
+        self.client.login(username="analytics_owner", password="ShopPassword123!")
+
+        self.customer = Customer.objects.create(
+            shop=self.shop,
+            name="Pooja Sharma",
+            primary_mobile="9887766554",
+            secondary_mobile="9887766550",
+            home_address="Indiranagar, Bangalore",
+            work_address="Tech Park, Bangalore"
+        )
+
+    def test_reports_view_accessible_and_renders_successfully(self):
+        """Shop owner can view reports & analytics page with HTTP 200."""
+        response = self.client.get(reverse("shop_reports"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "shops/portal/reports.html")
+        self.assertContains(response, "Sales Reports & Analytics")
+        self.assertContains(response, "Apex Mobile Studio")
+
+    def test_last_month_vs_this_month_comparison_metrics(self):
+        """Compares Last Month Sales vs This Month Sales accurately."""
+        from django.utils import timezone
+        from applications.models import FinanceApplication
+        from datetime import date
+        from decimal import Decimal
+
+        today = timezone.localdate()
+        this_year = today.year
+        this_month = today.month
+
+        # Determine last month
+        if this_month > 1:
+            last_month = this_month - 1
+            last_year = this_year
+        else:
+            last_month = 12
+            last_year = this_year - 1
+
+        # Create sales in Last Month: 2 phones @ 25,000 each = 50,000 total sales
+        FinanceApplication.objects.create(
+            shop=self.shop,
+            customer=self.customer,
+            application_date=date(last_year, last_month, 10),
+            mobile_model="Samsung Galaxy A35",
+            mobile_price=Decimal("25000.00"),
+            down_payment=Decimal("5000.00"),
+            financier_request_amount=Decimal("20000.00"),
+            emi_duration=6,
+            status=FinanceApplication.Status.APPROVED
+        )
+        FinanceApplication.objects.create(
+            shop=self.shop,
+            customer=self.customer,
+            application_date=date(last_year, last_month, 15),
+            mobile_model="Redmi Note 14 5G",
+            mobile_price=Decimal("25000.00"),
+            down_payment=Decimal("5000.00"),
+            financier_request_amount=Decimal("20000.00"),
+            emi_duration=6,
+            status=FinanceApplication.Status.APPROVED
+        )
+
+        # Create sales in This Month: 3 phones @ 30,000 each = 90,000 total sales
+        for i in range(3):
+            FinanceApplication.objects.create(
+                shop=self.shop,
+                customer=self.customer,
+                application_date=date(this_year, this_month, 5 + i),
+                mobile_model="OnePlus Nord CE 4",
+                mobile_price=Decimal("30000.00"),
+                down_payment=Decimal("6000.00"),
+                financier_request_amount=Decimal("24000.00"),
+                emi_duration=6,
+                status=FinanceApplication.Status.APPROVED
+            )
+
+        response = self.client.get(reverse("shop_reports"))
+        self.assertEqual(response.status_code, 200)
+
+        # Check Last Month metrics
+        last_m_data = response.context["last_month_data"]
+        self.assertEqual(last_m_data["count"], 2)
+        self.assertEqual(last_m_data["total_sales"], Decimal("50000.00"))
+
+        # Check This Month metrics
+        this_m_data = response.context["this_month_data"]
+        self.assertEqual(this_m_data["count"], 3)
+        self.assertEqual(this_m_data["total_sales"], Decimal("90000.00"))
+
+        # Check comparison deltas
+        comp = response.context["comparison"]
+        self.assertEqual(comp["sales_diff"], Decimal("40000.00"))
+        # Growth = ((90000 - 50000) / 50000) * 100 = 80.0%
+        self.assertEqual(comp["sales_growth_pct"], 80.0)
+        self.assertTrue(comp["is_sales_up"])
+        self.assertEqual(comp["units_diff"], 1)
+
+        # Verify page displays comparison values
+        self.assertContains(response, "Last Month Sales vs This Month Sales")
+        self.assertContains(response, "+80.0%")
+        self.assertContains(response, "₹50000.00")
+        self.assertContains(response, "₹90000.00")
+
+    def test_best_sales_month_in_this_year_calculated_and_highlighted(self):
+        """Identifies and highlights the Best Sales Month in the selected year."""
+        from django.utils import timezone
+        from applications.models import FinanceApplication
+        from datetime import date
+        from decimal import Decimal
+
+        today = timezone.localdate()
+        year = today.year
+
+        # Sales in March: ₹30,000 (1 phone)
+        FinanceApplication.objects.create(
+            shop=self.shop,
+            customer=self.customer,
+            application_date=date(year, 3, 10),
+            mobile_model="Vivo V30",
+            mobile_price=Decimal("30000.00"),
+            down_payment=Decimal("5000.00"),
+            financier_request_amount=Decimal("25000.00"),
+            emi_duration=6,
+            status=FinanceApplication.Status.APPROVED
+        )
+
+        # Sales in August (PEAK): ₹1,20,000 (3 phones @ 40,000)
+        for i in range(3):
+            FinanceApplication.objects.create(
+                shop=self.shop,
+                customer=self.customer,
+                application_date=date(year, 8, 12 + i),
+                mobile_model="iPhone 16 Pro",
+                mobile_price=Decimal("40000.00"),
+                down_payment=Decimal("10000.00"),
+                financier_request_amount=Decimal("30000.00"),
+                emi_duration=6,
+                status=FinanceApplication.Status.APPROVED
+            )
+
+        # Sales in September: ₹40,000 (1 phone)
+        FinanceApplication.objects.create(
+            shop=self.shop,
+            customer=self.customer,
+            application_date=date(year, 9, 20),
+            mobile_model="OnePlus 12",
+            mobile_price=Decimal("40000.00"),
+            down_payment=Decimal("8000.00"),
+            financier_request_amount=Decimal("32000.00"),
+            emi_duration=6,
+            status=FinanceApplication.Status.APPROVED
+        )
+
+        response = self.client.get(reverse("shop_reports") + f"?year={year}")
+        self.assertEqual(response.status_code, 200)
+
+        best = response.context["best_month"]
+        self.assertIsNotNone(best)
+        self.assertEqual(best["month_name"], "August")
+        self.assertEqual(best["total_sales"], Decimal("120000.00"))
+        self.assertEqual(best["count"], 3)
+
+        # Check annual total = 30k + 120k + 40k = 190k
+        annual = response.context["annual_summary"]
+        self.assertEqual(annual["total_sales"], Decimal("190000.00"))
+        self.assertEqual(annual["total_units"], 5)
+
+        # Check template displays Best Sales Month trophy and August
+        self.assertContains(response, f"Best Sales Month in {year}")
+        self.assertContains(response, f"August {year}")
+        self.assertContains(response, "₹120000.00")
+        self.assertContains(response, "Peak Annual Revenue")
+
+    def test_top_selling_models_and_empty_handling(self):
+        """Top models breakdown displays correct metrics, and empty year handles gracefully."""
+        # Query a past year with no sales
+        response = self.client.get(reverse("shop_reports") + "?year=2020")
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.context["best_month"])
+        self.assertContains(response, "No Sales Recorded in 2020")
+
+    def test_customer_registration_downpayment_and_dual_aadhaar(self):
+        """Test down payment cannot exceed price, and dual Aadhaar uploads are saved properly."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from applications.models import CustomerDocument, FinanceApplication
+
+        self.client.login(username="shoptestowner", password="ShopOwnerPassword123!")
+
+        photo = SimpleUploadedFile("face.jpg", b"fake photo content", content_type="image/jpeg")
+        aadhaar_front = SimpleUploadedFile("aadhaar_f.jpg", b"fake aadhaar front", content_type="image/jpeg")
+        aadhaar_back = SimpleUploadedFile("aadhaar_b.jpg", b"fake aadhaar back", content_type="image/jpeg")
+
+        # 1. Down payment greater than actual price should fail
+        invalid_data = {
+            "customer_name": "Test DP Customer",
+            "primary_mobile": "9812345670",
+            "secondary_mobile": "9812345671",
+            "home_address": "Home Address Test",
+            "work_address": "Work Address Test",
+            "mobile_model": "OnePlus 12",
+            "mobile_price": "30000.00",
+            "down_payment": "35000.00",  # Greater than 30000!
+            "monthly_emi": "10000.00",
+            "emi_duration": "3",
+            "monthly_due_day": "15",
+            "doc_photo": photo,
+            "doc_aadhaar_front": aadhaar_front,
+            "doc_aadhaar_back": aadhaar_back,
+            "action": "submit"
+        }
+        res_fail = self.client.post(reverse("shop_customer_add"), invalid_data)
+        self.assertEqual(res_fail.status_code, 200)
+        self.assertContains(res_fail, "Down payment cannot be greater than the actual phone price")
+
+        # 2. Valid down payment and dual Aadhaar should succeed
+        valid_photo = SimpleUploadedFile("face2.jpg", b"fake photo content", content_type="image/jpeg")
+        valid_af = SimpleUploadedFile("aadhaar_front.jpg", b"fake aadhaar front", content_type="image/jpeg")
+        valid_ab = SimpleUploadedFile("aadhaar_back.jpg", b"fake aadhaar back", content_type="image/jpeg")
+
+        valid_data = {
+            "customer_name": "Test DP Success Customer",
+            "primary_mobile": "9812345678",
+            "secondary_mobile": "9812345679",
+            "home_address": "Home Address Test",
+            "work_address": "Work Address Test",
+            "mobile_model": "OnePlus 12",
+            "mobile_price": "30000.00",
+            "down_payment": "5000.00",  # Valid! <= 30000
+            "monthly_emi": "10000.00",
+            "emi_duration": "3",
+            "monthly_due_day": "15",
+            "doc_photo": valid_photo,
+            "doc_aadhaar_front": valid_af,
+            "doc_aadhaar_back": valid_ab,
+            "action": "submit"
+        }
+        res_ok = self.client.post(reverse("shop_customer_add"), valid_data)
+        self.assertEqual(res_ok.status_code, 302)
+
+        app = FinanceApplication.objects.get(customer__primary_mobile="9812345678")
+        docs = list(app.documents.all())
+        doc_types = [d.document_type for d in docs]
+        self.assertIn(CustomerDocument.DocType.PHOTOGRAPH, doc_types)
+        self.assertIn(CustomerDocument.DocType.AADHAAR_FRONT, doc_types)
+        self.assertIn(CustomerDocument.DocType.AADHAAR_BACK, doc_types)

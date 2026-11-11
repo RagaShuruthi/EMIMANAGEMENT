@@ -17,14 +17,8 @@ class ShopForm(forms.ModelForm):
     """
     Form for registering and editing retail shop records.
     Provides fields for shop profile, GPay and bank account disbursement details,
-    as well as optional inline shop-owner login account creation.
+    as well as direct shop-owner login account (Username & Password) creation and editing.
     """
-    create_credentials = forms.BooleanField(
-        required=False,
-        initial=False,
-        label="Create Shop Owner Login Account",
-        help_text="Check this box to set up portal login credentials (username and password)."
-    ) 
     login_username = forms.CharField(
         max_length=150,
         required=False,
@@ -143,6 +137,17 @@ class ShopForm(forms.ModelForm):
         self.fields["bank_account_number"].required = False
         self.fields["bank_ifsc_code"].required = False
 
+        # When editing an existing shop, pre-populate existing username and assigned password
+        if self.instance and self.instance.pk:
+            if self.instance.owner_account:
+                self.fields["login_username"].initial = self.instance.owner_account.username
+            if self.instance.assigned_password:
+                self.fields["login_password"].initial = self.instance.assigned_password
+                self.fields["confirm_password"].initial = self.instance.assigned_password
+                self.fields["login_password"].widget.attrs["value"] = self.instance.assigned_password
+                self.fields["confirm_password"].widget.attrs["value"] = self.instance.assigned_password
+            self.fields["login_password"].help_text = "Current password shown. You can edit or replace it as needed."
+
     def clean_name(self):
         name = self.cleaned_data.get("name", "").strip()
         if not name:
@@ -195,25 +200,34 @@ class ShopForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
-        create_credentials = cleaned_data.get("create_credentials")
         login_username = cleaned_data.get("login_username", "").strip()
         login_password = cleaned_data.get("login_password", "")
         confirm_password = cleaned_data.get("confirm_password", "")
 
-        # If user checked create_credentials OR entered a username/password
-        if create_credentials or login_username or login_password:
-            if not login_username:
-                self.add_error("login_username", "Username is required when creating a login account.")
-            elif User.objects.filter(username__iexact=login_username).exists():
+        is_edit = bool(self.instance and self.instance.pk)
+        existing_owner = self.instance.owner_account if is_edit else None
+
+        # Username validation
+        if login_username:
+            qs = User.objects.filter(username__iexact=login_username)
+            if existing_owner:
+                qs = qs.exclude(pk=existing_owner.pk)
+            if qs.exists():
                 self.add_error("login_username", f"Username '{login_username}' is already taken. Please choose another.")
+        elif is_edit and existing_owner:
+            # Preserve existing owner username if omitted
+            cleaned_data["login_username"] = existing_owner.username
 
-            if not login_password:
-                self.add_error("login_password", "Password is required when creating a login account.")
-            elif len(login_password) < 6:
+        # Password validation
+        if login_password:
+            if len(login_password) < 6:
                 self.add_error("login_password", "Password must be at least 6 characters long.")
-
-            if login_password and confirm_password and login_password != confirm_password:
+            if confirm_password and login_password != confirm_password:
                 self.add_error("confirm_password", "Passwords do not match.")
+            elif not confirm_password:
+                self.add_error("confirm_password", "Please confirm password.")
+        elif not is_edit and login_username:
+            self.add_error("login_password", "Portal login password is required when specifying a username.")
 
         return cleaned_data
 

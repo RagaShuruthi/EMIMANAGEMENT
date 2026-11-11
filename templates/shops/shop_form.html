@@ -212,54 +212,79 @@
 
                     <!-- Section: Shop Owner Login Account & Password -->
                     <h6 class="fw-bold text-dark text-uppercase small letter-spacing-1 border-bottom pb-2 mb-3 mt-4">
-                        <i class="bi bi-key me-1 text-primary"></i> 3. Shop Owner Login & Password
+                        <i class="bi bi-shield-lock me-1 text-primary"></i> 3. Shop Owner Login Credentials
                     </h6>
 
-                    <!-- Create New Account & Password Card -->
+                    <!-- Shop Owner Account & Password Card (Direct Required Credentials) -->
                     <div class="card bg-light border p-3 mb-4 rounded-3">
-                        <div class="form-check mb-2">
-                            {{ form.create_credentials }}
-                            <label class="form-check-label fw-bold text-dark"
-                                for="{{ form.create_credentials.id_for_label }}">
-                                Create new login credentials (Username & Password) for this shop owner
-                            </label>
-                            <div class="small text-muted">
-                                If checked, an authorized Shop Owner account will be created immediately with the
-                                specified password.
-                            </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="fw-bold text-dark small">
+                                {% if shop %}Edit Shop Owner Portal Credentials{% else %}New Shop Owner Portal Credentials{% endif %}
+                            </span>
+                            <span class="badge bg-primary-subtle text-primary border">
+                                {% if shop %}Authorized Account{% else %}Mandatory Login Account{% endif %}
+                            </span>
+                        </div>
+                        <div class="small text-muted mb-3">
+                            {% if shop %}
+                            These credentials authorize the shop owner to sign in to the Shop Portal. Changes to the username or password will take effect immediately.
+                            {% else %}
+                            Every registered shop must have authorized login credentials so the shop owner can log in to their portal, register customers, and submit finance requests.
+                            {% endif %}
                         </div>
 
-                        <div class="row g-3 mt-1">
+                        <div class="row g-3">
                             <div class="col-12">
                                 <label for="{{ form.login_username.id_for_label }}"
                                     class="form-label small fw-semibold text-secondary">
-                                    Login Username
+                                    Login Username <span class="text-danger">*</span>
                                 </label>
-                                {{ form.login_username }}
+                                <div class="input-group">
+                                    <span class="input-group-text bg-white"><i class="bi bi-person-fill text-muted"></i></span>
+                                    {{ form.login_username }}
+                                </div>
                                 {% if form.login_username.errors %}
                                 <div class="text-danger small mt-1">{{ form.login_username.errors.0 }}</div>
+                                {% else %}
+                                <div class="form-text small text-muted">Unique portal sign-in identifier for the shop owner.</div>
                                 {% endif %}
                             </div>
 
                             <div class="col-12 col-md-6">
                                 <label for="{{ form.login_password.id_for_label }}"
                                     class="form-label small fw-semibold text-secondary">
-                                    Login Password
+                                    Login Password <span class="text-danger">*</span>
                                 </label>
-                                {{ form.login_password }}
+                                <div class="input-group">
+                                    <span class="input-group-text bg-white"><i class="bi bi-key-fill text-muted"></i></span>
+                                    {{ form.login_password }}
+                                    <button class="btn btn-outline-secondary" type="button" onclick="togglePassVisibility('{{ form.login_password.id_for_label }}', this)" title="Show / Hide Password">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </div>
                                 {% if form.login_password.errors %}
                                 <div class="text-danger small mt-1">{{ form.login_password.errors.0 }}</div>
+                                {% else %}
+                                <div class="form-text small text-muted">Minimum 6 characters.</div>
                                 {% endif %}
                             </div>
 
                             <div class="col-12 col-md-6">
                                 <label for="{{ form.confirm_password.id_for_label }}"
                                     class="form-label small fw-semibold text-secondary">
-                                    Confirm Password
+                                    Confirm Password <span class="text-danger">*</span>
                                 </label>
-                                {{ form.confirm_password }}
+                                <div class="input-group">
+                                    <span class="input-group-text bg-white"><i class="bi bi-lock-fill text-muted"></i></span>
+                                    {{ form.confirm_password }}
+                                    <button class="btn btn-outline-secondary" type="button" onclick="togglePassVisibility('{{ form.confirm_password.id_for_label }}', this)" title="Show / Hide Password">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </div>
                                 {% if form.confirm_password.errors %}
                                 <div class="text-danger small mt-1">{{ form.confirm_password.errors.0 }}</div>
+                                {% else %}
+                                <div class="form-text small text-muted">Must match the password entered above.</div>
                                 {% endif %}
                             </div>
                         </div>
@@ -268,19 +293,89 @@
                     <hr class="my-4">
 
                     <!-- Actions -->
-                    <div class="d-flex justify-content-end gap-2">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                         {% if shop %}
-                        <a href="{% url 'shop_detail' pk=shop.pk %}" class="btn btn-outline-secondary px-4">Cancel</a>
-                        {% else %}
-                        <a href="{% url 'shop_list' %}" class="btn btn-outline-secondary px-4">Cancel</a>
-                        {% endif %}
-                        <button type="submit" class="btn btn-primary px-4 shadow-sm">
-                            <i class="bi bi-check-lg me-1"></i> Save Shop Record
+                        <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteShopFormModal">
+                            <i class="bi bi-trash-fill me-1"></i> Delete Shop
                         </button>
+                        {% else %}
+                        <div></div>
+                        {% endif %}
+                        <div class="d-flex gap-2">
+                            {% if shop %}
+                            <a href="{% url 'shop_detail' pk=shop.pk %}" class="btn btn-outline-secondary px-4">Cancel</a>
+                            {% else %}
+                            <a href="{% url 'shop_list' %}" class="btn btn-outline-secondary px-4">Cancel</a>
+                            {% endif %}
+                            <button type="submit" class="btn btn-primary px-4 shadow-sm">
+                                <i class="bi bi-check-lg me-1"></i> Save Shop Record
+                            </button>
+                        </div>
                     </div>
                 </form>
             </div>
         </div>
     </div>
 </div>
+
+{% if shop %}
+<!-- Permanent Delete Shop Modal -->
+<div class="modal fade" id="deleteShopFormModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-danger text-white py-3">
+                <h5 class="modal-title fw-bold">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>Permanently Delete Shop
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="text-center mb-3">
+                    <div class="d-inline-flex p-3 rounded-circle bg-danger-subtle text-danger mb-2">
+                        <i class="bi bi-trash3-fill fs-2"></i>
+                    </div>
+                    <h5 class="fw-bold text-dark mb-1">Delete "{{ shop.name }}"?</h5>
+                    <span class="badge bg-secondary-subtle text-secondary font-monospace">Shop ID #{{ shop.id }}</span>
+                </div>
+                <div class="alert alert-danger border-danger-subtle small mb-0">
+                    <div class="fw-bold mb-1"><i class="bi bi-shield-exclamation me-1"></i> Irreversible Action:</div>
+                    This will <strong>permanently delete</strong> the shop record from the database, along with its owner login account, associated follow-up assignments, customers, applications, and payout logs. This cannot be undone.
+                </div>
+            </div>
+            <div class="modal-footer bg-light py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <form method="post" action="{% url 'delete_shop' pk=shop.pk %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger btn-sm">
+                        <i class="bi bi-trash-fill me-1"></i> Permanently Delete
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function togglePassVisibility(inputId, btn) {
+        var input = document.getElementById(inputId);
+        if (!input) return;
+        var icon = btn.querySelector('i');
+        if (input.type === 'password') {
+            input.type = 'text';
+            if (icon) {
+                icon.classList.remove('bi-eye');
+                icon.classList.add('bi-eye-slash');
+            }
+        } else {
+            input.type = 'password';
+            if (icon) {
+                icon.classList.remove('bi-eye-slash');
+                icon.classList.add('bi-eye');
+            }
+        }
+    }
+</script>
 {% endblock %}

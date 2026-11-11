@@ -52,6 +52,26 @@ class Customer(models.Model):
         related_name="customer_latest_updates",
         help_text="User who logged the latest update."
     )
+    is_loss = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="True if customer is moved to the Loss list."
+    )
+    loss_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date when customer was moved to the Loss list."
+    )
+    loss_reason = models.TextField(
+        blank=True,
+        default="",
+        help_text="Reason or notes when customer was moved to Loss."
+    )
+    completed_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date on which the customer's EMI was fully completed."
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

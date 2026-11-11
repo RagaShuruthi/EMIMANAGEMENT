@@ -1,56 +1,766 @@
 {% extends "shops/portal/shop_base.html" %}
 
-{% block title %}Financing Reports — {{ shop.name }}{% endblock %}
+{% block title %}Sales Reports & Analytics — {{ shop.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .comparison-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .comparison-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+    }
+    .vs-circle {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: #f1f5f9;
+        color: #475569;
+        font-weight: 800;
+        font-size: 0.85rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid #e2e8f0;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+    }
+    .best-month-card {
+        background: linear-gradient(135deg, #fffbeb 0%, #ffffff 50%, #fef3c7 100%);
+        border: 2px solid #fde68a;
+        border-radius: 14px;
+        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.08);
+    }
+    .trophy-badge {
+        width: 56px;
+        height: 56px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.75rem;
+        box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3);
+    }
+    .table-sales-row:hover {
+        background-color: #f8fafc;
+    }
+    .best-month-row {
+        background-color: #fffbeb !important;
+        font-weight: 600;
+    }
+    .current-month-row {
+        background-color: #f0fdf4 !important;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-    <div>
-        <h3 class="fw-bold text-dark mb-1">Reports & Analytics</h3>
-        <p class="text-muted small mb-0">Financial disbursements, application pipeline, and settlement overview</p>
-    </div>
-</div>
+<div class="container-fluid px-0">
+    <!-- Breadcrumb & Top Bar -->
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1 small">
+                    <li class="breadcrumb-item"><a href="{% url 'shop_dashboard' %}" class="text-decoration-none text-muted">Dashboard</a></li>
+                    <li class="breadcrumb-item active text-primary fw-semibold" aria-current="page">Reports & Analytics</li>
+                </ol>
+            </nav>
+            <h3 class="fw-bold text-dark mb-1 d-flex align-items-center gap-2">
+                <i class="bi bi-bar-chart-line-fill text-primary"></i>
+                Sales Reports & Analytics
+            </h3>
+            <p class="text-muted small mb-0">
+                Track monthly sales growth, compare performance vs last month, and review peak sales records for <strong>{{ shop.name }}</strong>.
+            </p>
+        </div>
 
-<!-- Financial Aggregates -->
-<div class="row g-3 mb-4">
-    <div class="col-12 col-md-4">
-        <div class="metric-card border-primary-subtle">
-            <div class="metric-label text-primary">Total Financier Requested</div>
-            <div class="metric-value text-primary fs-3">₹{{ total_requested|floatformat:2 }}</div>
-            <small class="text-muted">Total loan amount submitted to financier</small>
+        <!-- Year Selector Filter & Navigation -->
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <form method="get" action="{% url 'shop_reports' %}" class="d-flex align-items-center gap-2">
+                <label for="yearSelect" class="small fw-semibold text-secondary mb-0">Year:</label>
+                <select name="year" id="yearSelect" class="form-select form-select-sm fw-semibold shadow-sm" onchange="this.form.submit()" style="min-width: 110px;">
+                    {% for y in available_years %}
+                    <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+            <a href="{% url 'shop_dashboard' %}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i> Dashboard
+            </a>
+            <a href="{% url 'shop_customer_add' %}" class="btn btn-sm btn-primary">
+                <i class="bi bi-plus-circle me-1"></i> Add Customer
+            </a>
         </div>
     </div>
-    <div class="col-12 col-md-4">
-        <div class="metric-card border-success-subtle">
-            <div class="metric-label text-success">Total Amount Received</div>
-            <div class="metric-value text-success fs-3">₹{{ total_received|floatformat:2 }}</div>
-            <small class="text-muted">Total credited into shop account</small>
-        </div>
-    </div>
-    <div class="col-12 col-md-4">
-        <div class="metric-card border-warning-subtle">
-            <div class="metric-label text-warning-emphasis">Outstanding Balance Due</div>
-            <div class="metric-value text-warning-emphasis fs-3">₹{{ outstanding|floatformat:2 }}</div>
-            <small class="text-muted">Pending receipt from financier</small>
-        </div>
-    </div>
-</div>
 
-<!-- Status Pipeline Breakdown -->
-<div class="card border-0 shadow-sm rounded-3">
-    <div class="card-header bg-white py-3 border-bottom">
-        <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-funnel me-1 text-primary"></i>Application Lifecycle Pipeline</h6>
-    </div>
-    <div class="card-body p-4">
-        <div class="row g-3">
-            {% for item in status_breakdown %}
-            <div class="col-12 col-sm-6 col-md-4 col-xl">
-                <div class="p-3 border rounded-3 bg-light text-center">
-                    <div class="small fw-semibold text-secondary text-uppercase mb-1">{{ item.label }}</div>
-                    <div class="fs-2 fw-bold text-{{ item.badge_color }}">{{ item.count }}</div>
+    <!-- ========================================================= -->
+    <!-- 1. LAST MONTH SALES VS THIS MONTH SALES COMPARISON PANEL   -->
+    <!-- ========================================================= -->
+    <div class="card border-0 shadow-sm rounded-3 mb-4">
+        <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-primary-subtle text-primary p-2 rounded-2">
+                    <i class="bi bi-arrow-left-right fs-6"></i>
+                </span>
+                <div>
+                    <h5 class="fw-bold mb-0 text-dark">Last Month Sales vs This Month Sales</h5>
+                    <small class="text-muted">Direct comparative analysis of recent monthly performance</small>
                 </div>
             </div>
-            {% endfor %}
+            <div>
+                <span class="badge bg-light text-secondary border px-3 py-2 fw-semibold">
+                    <i class="bi bi-calendar-range me-1 text-primary"></i>
+                    {{ last_month_data.month_abbr }} {{ last_month_data.year }} vs {{ this_month_data.month_abbr }} {{ this_month_data.year }}
+                </span>
+            </div>
+        </div>
+
+        <div class="card-body p-4">
+            <div class="row g-3 align-items-center">
+                <!-- Last Month Card -->
+                <div class="col-12 col-lg-5">
+                    <div class="comparison-card p-4 h-100">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div>
+                                <span class="badge bg-secondary-subtle text-secondary text-uppercase fw-bold px-2 py-1 mb-1">
+                                    Last Month
+                                </span>
+                                <h4 class="fw-bold text-dark mb-0">{{ last_month_data.full_label }}</h4>
+                            </div>
+                            <div class="bg-light text-secondary rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 42px; height: 42px;">
+                                <i class="bi bi-calendar-check fs-5"></i>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <span class="text-muted small text-uppercase fw-semibold d-block">Total Sales Revenue</span>
+                            <div class="fs-2 fw-bold text-dark font-monospace">₹{{ last_month_data.total_sales|floatformat:2 }}</div>
+                        </div>
+
+                        <div class="row g-2 pt-2 border-top">
+                            <div class="col-4">
+                                <small class="text-muted d-block">Phones Sold</small>
+                                <span class="fw-bold text-dark font-monospace">{{ last_month_data.count }} Units</span>
+                            </div>
+                            <div class="col-4">
+                                <small class="text-muted d-block">Financed</small>
+                                <span class="fw-bold text-dark font-monospace">₹{{ last_month_data.total_financed|floatformat:0 }}</span>
+                            </div>
+                            <div class="col-4">
+                                <small class="text-muted d-block">Down Payment</small>
+                                <span class="fw-bold text-dark font-monospace">₹{{ last_month_data.total_down|floatformat:0 }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Middle VS & Growth Delta -->
+                <div class="col-12 col-lg-2 text-center py-2">
+                    <div class="d-flex flex-column align-items-center justify-content-center gap-2">
+                        <div class="vs-circle">VS</div>
+
+                        <!-- Growth Percentage Badge -->
+                        <div>
+                            {% if comparison.is_sales_up %}
+                            <span class="badge bg-success text-white px-3 py-2 fs-6 shadow-sm">
+                                <i class="bi bi-graph-up-arrow me-1"></i>+{{ comparison.sales_growth_pct }}%
+                            </span>
+                            <small class="text-success fw-bold d-block mt-1">Growth this month</small>
+                            {% elif comparison.is_sales_down %}
+                            <span class="badge bg-danger text-white px-3 py-2 fs-6 shadow-sm">
+                                <i class="bi bi-graph-down-arrow me-1"></i>{{ comparison.sales_growth_pct }}%
+                            </span>
+                            <small class="text-danger fw-bold d-block mt-1">Dip vs last month</small>
+                            {% else %}
+                            <span class="badge bg-secondary text-white px-3 py-2 fs-6">
+                                <i class="bi bi-dash me-1"></i>0.0%
+                            </span>
+                            <small class="text-muted d-block mt-1">Equal performance</small>
+                            {% endif %}
+                        </div>
+
+                        <!-- Revenue Difference -->
+                        <div class="bg-light border rounded px-2 py-1 small font-monospace text-nowrap">
+                            <span class="text-muted">Diff:</span>
+                            <strong class="{% if comparison.is_sales_up %}text-success{% elif comparison.is_sales_down %}text-danger{% else %}text-secondary{% endif %}">
+                                {% if comparison.is_sales_up %}+{% endif %}₹{{ comparison.sales_diff|floatformat:2 }}
+                            </strong>
+                        </div>
+
+                        <!-- Units Difference -->
+                        <div class="small text-muted font-monospace">
+                            {% if comparison.is_units_up %}
+                            <span class="text-success fw-semibold"><i class="bi bi-arrow-up"></i>+{{ comparison.units_diff }} Phones</span>
+                            {% elif comparison.is_units_down %}
+                            <span class="text-danger fw-semibold"><i class="bi bi-arrow-down"></i>{{ comparison.units_diff }} Phones</span>
+                            {% else %}
+                            <span>0 Phone change</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- This Month Card -->
+                <div class="col-12 col-lg-5">
+                    <div class="comparison-card p-4 h-100 border-primary-subtle bg-light-subtle" style="border-left: 4px solid #2563eb;">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div>
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <span class="badge bg-primary text-white text-uppercase fw-bold px-2 py-1">
+                                        This Month
+                                    </span>
+                                    {% if this_month_data.month == current_month and this_month_data.year == current_year %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 small">
+                                        <i class="bi bi-dot"></i>Live
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                <h4 class="fw-bold text-dark mb-0">{{ this_month_data.full_label }}</h4>
+                            </div>
+                            <div class="bg-primary-subtle text-primary rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 42px; height: 42px;">
+                                <i class="bi bi-lightning-charge-fill fs-5"></i>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <span class="text-muted small text-uppercase fw-semibold d-block">Total Sales Revenue</span>
+                            <div class="fs-2 fw-bold text-primary font-monospace">₹{{ this_month_data.total_sales|floatformat:2 }}</div>
+                        </div>
+
+                        <div class="row g-2 pt-2 border-top">
+                            <div class="col-4">
+                                <small class="text-muted d-block">Phones Sold</small>
+                                <span class="fw-bold text-primary font-monospace">{{ this_month_data.count }} Units</span>
+                            </div>
+                            <div class="col-4">
+                                <small class="text-muted d-block">Financed</small>
+                                <span class="fw-bold text-dark font-monospace">₹{{ this_month_data.total_financed|floatformat:0 }}</span>
+                            </div>
+                            <div class="col-4">
+                                <small class="text-muted d-block">Down Payment</small>
+                                <span class="fw-bold text-dark font-monospace">₹{{ this_month_data.total_down|floatformat:0 }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- 2. BEST SALES MONTH IN THIS YEAR (HIGHLIGHT TROPHY BANNER) -->
+    <!-- ========================================================= -->
+    <div class="mb-4">
+        {% if best_month %}
+        <div class="best-month-card p-4">
+            <div class="row g-4 align-items-center">
+                <div class="col-12 col-md-auto d-flex align-items-center justify-content-center">
+                    <div class="trophy-badge">
+                        <i class="bi bi-trophy-fill"></i>
+                    </div>
+                </div>
+                <div class="col-12 col-md">
+                    <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                        <span class="badge bg-warning text-dark text-uppercase fw-bold px-2 py-1">
+                            <i class="bi bi-star-fill me-1"></i>Best Sales Month in {{ selected_year }}
+                        </span>
+                        <span class="badge bg-dark text-white px-2 py-1 small">
+                            Peak Annual Revenue
+                        </span>
+                    </div>
+                    <h2 class="fw-bold text-dark mb-1">
+                        {{ best_month.month_name }} {{ selected_year }}
+                    </h2>
+                    <p class="text-muted mb-0 small">
+                        Highest recorded monthly sales performance for {{ shop.name }} in {{ selected_year }}.
+                        Contributed <strong>{{ best_month.annual_share_pct }}%</strong> of the total annual phone financing revenue.
+                    </p>
+                </div>
+                <div class="col-12 col-md-auto">
+                    <div class="row g-3 text-center text-md-end">
+                        <div class="col-6 col-md-auto pe-md-4 border-end-md">
+                            <div class="text-muted small text-uppercase fw-semibold">Peak Sales Revenue</div>
+                            <div class="fs-3 fw-bold text-dark font-monospace text-warning-emphasis">
+                                ₹{{ best_month.total_sales|floatformat:2 }}
+                            </div>
+                            <span class="badge bg-success-subtle text-success small font-monospace">
+                                +{{ best_month.above_avg_pct }}% vs Monthly Avg
+                            </span>
+                        </div>
+                        <div class="col-6 col-md-auto">
+                            <div class="text-muted small text-uppercase fw-semibold">Phones Sold</div>
+                            <div class="fs-3 fw-bold text-dark font-monospace">
+                                {{ best_month.count }} <span class="fs-6 text-muted fw-normal">Units</span>
+                            </div>
+                            <span class="badge bg-primary-subtle text-primary small font-monospace">
+                                Financed: ₹{{ best_month.total_financed|floatformat:0 }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="card border-0 shadow-sm rounded-3 p-4 text-center">
+            <div class="py-3">
+                <i class="bi bi-calendar-x text-muted display-6 mb-2 d-block"></i>
+                <h5 class="fw-bold text-dark mb-1">No Sales Recorded in {{ selected_year }}</h5>
+                <p class="text-muted small mb-3">No completed customer phone financing sales found for this year yet.</p>
+                <a href="{% url 'shop_customer_add' %}" class="btn btn-sm btn-primary">
+                    <i class="bi bi-plus-circle me-1"></i> Register New Customer Sale
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- 3. ANNUAL SUMMARY KPI CARDS (SELECTED YEAR)               -->
+    <!-- ========================================================= -->
+    <div class="row g-3 mb-4">
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="metric-card border-primary-subtle">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="metric-label text-primary">Annual Total Sales</span>
+                    <span class="badge bg-primary-subtle text-primary">{{ selected_year }}</span>
+                </div>
+                <div class="metric-value text-primary fs-3">₹{{ annual_summary.total_sales|floatformat:2 }}</div>
+                <small class="text-muted">Total retail price value sold</small>
+            </div>
+        </div>
+
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="metric-card border-success-subtle">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="metric-label text-success">Total Phones Sold</span>
+                    <span class="badge bg-success-subtle text-success">{{ selected_year }}</span>
+                </div>
+                <div class="metric-value text-success fs-3">{{ annual_summary.total_units }} <span class="fs-5 text-muted fw-normal">Units</span></div>
+                <small class="text-muted">Completed customer devices</small>
+            </div>
+        </div>
+
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="metric-card border-info-subtle">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="metric-label text-info-emphasis">Monthly Average</span>
+                    <span class="badge bg-info-subtle text-info-emphasis">12 Months</span>
+                </div>
+                <div class="metric-value text-dark fs-3">₹{{ annual_summary.avg_monthly_sales|floatformat:2 }}</div>
+                <small class="text-muted">Mean sales revenue per month</small>
+            </div>
+        </div>
+
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="metric-card border-warning-subtle">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="metric-label text-warning-emphasis">Down Payment Cash</span>
+                    <span class="badge bg-warning-subtle text-warning-emphasis">Collected</span>
+                </div>
+                <div class="metric-value text-dark fs-3">₹{{ annual_summary.total_down|floatformat:2 }}</div>
+                <small class="text-muted">Financed loan: ₹{{ annual_summary.total_financed|floatformat:0 }}</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- 4. MONTHLY SALES CHART (CHART.JS)                         -->
+    <!-- ========================================================= -->
+    <div class="card border-0 shadow-sm rounded-3 mb-4">
+        <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+                <h5 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-graph-up text-primary me-2"></i>{{ selected_year }} Monthly Sales Trend & Volume
+                </h5>
+                <small class="text-muted">Monthly sales revenue (₹) and units sold (Phones) across all 12 calendar months</small>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <div class="d-flex align-items-center gap-1 small">
+                    <span class="d-inline-block rounded-1" style="width: 12px; height: 12px; background: #2563eb;"></span>
+                    <span class="text-muted">Monthly Sales (₹)</span>
+                </div>
+                <div class="d-flex align-items-center gap-1 small">
+                    <span class="d-inline-block rounded-1" style="width: 12px; height: 12px; background: #f59e0b;"></span>
+                    <span class="text-muted">Best Month 🏆</span>
+                </div>
+                <div class="d-flex align-items-center gap-1 small">
+                    <span class="d-inline-block rounded-circle" style="width: 10px; height: 10px; background: #10b981;"></span>
+                    <span class="text-muted">Phones Sold</span>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-4">
+            <div style="position: relative; height: 320px; width: 100%;">
+                <canvas id="monthlySalesChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- 5. 12-MONTH DETAILED SALES BREAKDOWN TABLE                -->
+    <!-- ========================================================= -->
+    <div class="card border-0 shadow-sm rounded-3 mb-4">
+        <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+                <h5 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-table text-primary me-2"></i>{{ selected_year }} Month-by-Month Performance Breakdown
+                </h5>
+                <small class="text-muted">Complete audit of units, revenue, financing, and month-over-month growth</small>
+            </div>
+            <span class="badge bg-light text-secondary border px-3 py-1 font-monospace">
+                Annual Total: ₹{{ annual_summary.total_sales|floatformat:2 }}
+            </span>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3" style="width: 50px;">#</th>
+                        <th>Month</th>
+                        <th class="text-center">Phones Sold</th>
+                        <th class="text-end">Total Sales Revenue</th>
+                        <th class="text-end">Financed Loan</th>
+                        <th class="text-end">Down Payment</th>
+                        <th class="text-center">MoM Growth</th>
+                        <th class="text-end pe-3">Annual Share</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in months_table %}
+                    <tr class="table-sales-row {% if m.is_best %}best-month-row{% elif m.is_current %}current-month-row{% endif %}">
+                        <td class="ps-3 text-muted small">{{ m.month }}</td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="fw-bold text-dark">{{ m.month_name }}</span>
+                                {% if m.is_best %}
+                                <span class="badge bg-warning text-dark small fw-bold px-2 py-1">
+                                    <i class="bi bi-trophy-fill me-1"></i>Best Month
+                                </span>
+                                {% endif %}
+                                {% if m.is_current %}
+                                <span class="badge bg-success-subtle text-success border border-success-subtle small px-2 py-1">
+                                    <i class="bi bi-dot"></i>Current
+                                </span>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="text-center font-monospace fw-semibold">
+                            {% if m.count > 0 %}
+                            <span class="badge bg-light text-dark border px-2 py-1">{{ m.count }} Devices</span>
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end font-monospace fw-bold {% if m.is_best %}text-warning-emphasis{% else %}text-dark{% endif %}">
+                            ₹{{ m.total_sales|floatformat:2 }}
+                        </td>
+                        <td class="text-end font-monospace text-muted">
+                            ₹{{ m.total_financed|floatformat:2 }}
+                        </td>
+                        <td class="text-end font-monospace text-muted">
+                            ₹{{ m.total_down|floatformat:2 }}
+                        </td>
+                        <td class="text-center">
+                            {% if m.mom_growth != None %}
+                                {% if m.mom_growth > 0 %}
+                                <span class="badge bg-success-subtle text-success small font-monospace">
+                                    <i class="bi bi-arrow-up"></i>+{{ m.mom_growth }}%
+                                </span>
+                                {% elif m.mom_growth < 0 %}
+                                <span class="badge bg-danger-subtle text-danger small font-monospace">
+                                    <i class="bi bi-arrow-down"></i>{{ m.mom_growth }}%
+                                </span>
+                                {% else %}
+                                <span class="badge bg-light text-secondary border small font-monospace">
+                                    0.0%
+                                </span>
+                                {% endif %}
+                            {% else %}
+                            <span class="text-muted small fst-italic">Baseline</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end pe-3 font-monospace small">
+                            {% if m.annual_share_pct > 0 %}
+                            <strong>{{ m.annual_share_pct }}%</strong>
+                            {% else %}
+                            <span class="text-muted">0.0%</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-light fw-bold">
+                    <tr>
+                        <td class="ps-3" colspan="2">Annual Summary Total ({{ selected_year }})</td>
+                        <td class="text-center font-monospace">{{ annual_summary.total_units }} Devices</td>
+                        <td class="text-end font-monospace text-primary fs-6">₹{{ annual_summary.total_sales|floatformat:2 }}</td>
+                        <td class="text-end font-monospace text-muted">₹{{ annual_summary.total_financed|floatformat:2 }}</td>
+                        <td class="text-end font-monospace text-muted">₹{{ annual_summary.total_down|floatformat:2 }}</td>
+                        <td class="text-center font-monospace text-muted">12 Mo</td>
+                        <td class="text-end pe-3 font-monospace">100.0%</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- 6. TOP SELLING PHONE MODELS IN THIS YEAR                   -->
+    <!-- ========================================================= -->
+    <div class="row g-4 mb-4">
+        <div class="col-12 col-lg-6">
+            <div class="card border-0 shadow-sm rounded-3 h-100">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold mb-0 text-dark">
+                        <i class="bi bi-phone text-primary me-2"></i>Top Selling Mobile Models in {{ selected_year }}
+                    </h6>
+                    <span class="badge bg-primary-subtle text-primary small">Top 5 by Volume</span>
+                </div>
+                <div class="card-body p-0">
+                    {% if top_models %}
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light small">
+                                <tr>
+                                    <th class="ps-3">Phone Model</th>
+                                    <th class="text-center">Units</th>
+                                    <th class="text-end">Total Revenue</th>
+                                    <th class="text-end pe-3">Share</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in top_models %}
+                                <tr>
+                                    <td class="ps-3">
+                                        <div class="fw-bold text-dark">{{ item.mobile_model }}</div>
+                                        <small class="text-muted font-monospace">Avg: ₹{{ item.avg_price|floatformat:0 }}</small>
+                                    </td>
+                                    <td class="text-center font-monospace fw-bold">
+                                        <span class="badge bg-light text-dark border">{{ item.units_sold }} Sold</span>
+                                    </td>
+                                    <td class="text-end font-monospace fw-bold text-dark">
+                                        ₹{{ item.total_revenue|floatformat:2 }}
+                                    </td>
+                                    <td class="text-end pe-3 font-monospace small text-primary fw-semibold">
+                                        {{ item.share_pct }}%
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="p-4 text-center text-muted small">
+                        No phone sales recorded for {{ selected_year }}.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Application Lifecycle Pipeline (Preserved Feature) -->
+        <div class="col-12 col-lg-6">
+            <div class="card border-0 shadow-sm rounded-3 h-100">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold mb-0 text-dark">
+                        <i class="bi bi-funnel text-primary me-2"></i>Application Status Pipeline
+                    </h6>
+                    <span class="badge bg-light text-secondary border small">Lifecycle Status</span>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row g-3">
+                        {% for item in status_breakdown %}
+                        <div class="col-6 col-md-4">
+                            <div class="p-3 border rounded-3 bg-light text-center h-100">
+                                <div class="small fw-semibold text-secondary text-uppercase mb-1" style="font-size: 0.72rem;">{{ item.label }}</div>
+                                <div class="fs-3 fw-bold text-{{ item.badge_color }} font-monospace">{{ item.count }}</div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mt-4 pt-3 border-top">
+                        <div class="d-flex justify-content-between align-items-center small mb-1">
+                            <span class="text-muted">Total Requested from Financier:</span>
+                            <strong class="font-monospace text-primary">₹{{ total_requested|floatformat:2 }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center small mb-1">
+                            <span class="text-muted">Total Disbursed into Shop A/C:</span>
+                            <strong class="font-monospace text-success">₹{{ total_received|floatformat:2 }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center small">
+                            <span class="text-muted">Outstanding Balance Due:</span>
+                            <strong class="font-monospace text-warning-emphasis">₹{{ outstanding|floatformat:2 }}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<!-- Embedded Chart Data -->
+<script id="reportsAnalyticsData" type="application/json">
+{
+    "labels": {{ chart_labels_json|safe }},
+    "sales": {{ chart_sales_json|safe }},
+    "units": {{ chart_units_json|safe }},
+    "bestIdx": {{ best_month_idx }}
+}
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const rawDataEl = document.getElementById("reportsAnalyticsData");
+    if (!rawDataEl) return;
+
+    let chartData = { labels: [], sales: [], units: [], bestIdx: -1 };
+    try {
+        chartData = JSON.parse(rawDataEl.textContent);
+    } catch(e) {
+        console.error("Failed to parse analytics chart JSON:", e);
+    }
+
+    const canvas = document.getElementById("monthlySalesChart");
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+
+    // Dynamic bar colors: Highlight the Best Month in warm gold/amber (#f59e0b) and others in #2563eb
+    const barBackgrounds = chartData.sales.map((val, idx) => {
+        if (idx === chartData.bestIdx && val > 0) {
+            return "rgba(245, 158, 11, 0.85)"; // Best month trophy amber
+        }
+        return val > 0 ? "rgba(37, 99, 235, 0.75)" : "rgba(226, 232, 240, 0.6)";
+    });
+
+    const barBorders = chartData.sales.map((val, idx) => {
+        if (idx === chartData.bestIdx && val > 0) {
+            return "#d97706";
+        }
+        return val > 0 ? "#1d4ed8" : "#cbd5e1";
+    });
+
+    new Chart(ctx, {
+        type: "bar",
+        data: {
+            labels: chartData.labels,
+            datasets: [
+                {
+                    label: "Monthly Sales (₹)",
+                    data: chartData.sales,
+                    backgroundColor: barBackgrounds,
+                    borderColor: barBorders,
+                    borderWidth: 1.5,
+                    borderRadius: 6,
+                    yAxisID: "ySales",
+                    order: 2
+                },
+                {
+                    label: "Phones Sold (Units)",
+                    data: chartData.units,
+                    type: "line",
+                    borderColor: "#10b981",
+                    backgroundColor: "rgba(16, 185, 129, 0.15)",
+                    borderWidth: 2.5,
+                    pointBackgroundColor: "#10b981",
+                    pointBorderColor: "#ffffff",
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    tension: 0.3,
+                    yAxisID: "yUnits",
+                    order: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: "index",
+                intersect: false,
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: "rgba(15, 23, 42, 0.95)",
+                    titleFont: { size: 13, weight: "bold", family: "'Open Sans', sans-serif" },
+                    bodyFont: { size: 12, family: "'JetBrains Mono', monospace" },
+                    padding: 12,
+                    cornerRadius: 8,
+                    callbacks: {
+                        label: function(context) {
+                            if (context.dataset.yAxisID === "ySales") {
+                                const val = Number(context.parsed.y || 0);
+                                const isBest = (context.dataIndex === chartData.bestIdx && val > 0);
+                                return "Sales Revenue: ₹" + val.toLocaleString("en-IN", { minimumFractionDigits: 2 }) + (isBest ? " 🏆 (Best Month)" : "");
+                            } else {
+                                return "Phones Sold: " + context.parsed.y + " Devices";
+                            }
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        font: { weight: "600", family: "'Open Sans', sans-serif" },
+                        color: "#64748b"
+                    }
+                },
+                ySales: {
+                    type: "linear",
+                    position: "left",
+                    beginAtZero: true,
+                    grid: {
+                        color: "#f1f5f9"
+                    },
+                    ticks: {
+                        color: "#64748b",
+                        font: { family: "'JetBrains Mono', monospace", size: 11 },
+                        callback: function(val) {
+                            if (val >= 100000) return "₹" + (val / 100000).toFixed(1) + "L";
+                            if (val >= 1000) return "₹" + (val / 1000).toFixed(0) + "k";
+                            return "₹" + val;
+                        }
+                    }
+                },
+                yUnits: {
+                    type: "linear",
+                    position: "right",
+                    beginAtZero: true,
+                    grid: {
+                        drawOnChartArea: false
+                    },
+                    ticks: {
+                        color: "#10b981",
+                        stepSize: 1,
+                        font: { family: "'JetBrains Mono', monospace", size: 11 },
+                        callback: function(val) {
+                            return val + " pcs";
+                        }
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
 {% endblock %}

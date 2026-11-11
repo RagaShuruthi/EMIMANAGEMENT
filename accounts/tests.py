@@ -116,3 +116,40 @@ class RoleBasedLoginTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Access Denied: Your account is not authorized as an Administrator.")
+
+    def test_deactivated_shop_cannot_login(self):
+        """If a shop is deactivated, its owner account cannot log in and receives an access denied error."""
+        self.shop.is_active = False
+        self.shop.save()
+        if self.shop.owner_account:
+            self.shop.owner_account.is_active = False
+            self.shop.owner_account.save()
+
+        response = self.client.post(
+            reverse("login"),
+            {"username": "test_shop_portal", "password": "ShopPassword123!"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_reactivated_shop_can_login(self):
+        """When a shop is reactivated, the owner account can log in again."""
+        self.shop.is_active = False
+        self.shop.save()
+        if self.shop.owner_account:
+            self.shop.owner_account.is_active = False
+            self.shop.owner_account.save()
+
+        # Reactivate
+        self.shop.is_active = True
+        self.shop.save()
+        if self.shop.owner_account:
+            self.shop.owner_account.is_active = True
+            self.shop.owner_account.save()
+
+        response = self.client.post(
+            reverse("login"),
+            {"username": "test_shop_portal", "password": "ShopPassword123!"}
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("shop_dashboard"))

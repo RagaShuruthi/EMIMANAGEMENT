@@ -423,6 +423,14 @@
                 </a>
             </div>
 
+            <!-- Loss Customers -->
+            <div class="admin-nav-item">
+                <a class="admin-nav-link {% if active_page == 'loss_customers' %}active{% endif %}" href="{% url 'admin_loss_customers' %}">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <span>Loss Customers</span>
+                </a>
+            </div>
+
             <div class="sidebar-section-heading">Finances & Payouts</div>
             <!-- 4. Shop Payments (Money Admin Owes to Shops) -->
             <div class="admin-nav-item">
@@ -534,7 +542,22 @@
                     {% if user.is_followup_role %}
                     <li class="nav-item">
                         <a class="nav-link text-dark fw-semibold" href="{% url 'followup_dashboard' %}">
-                            <i class="bi bi-clipboard2-check me-1 text-primary"></i> Follow-up Operations
+                            <i class="bi bi-speedometer2 me-1 text-primary"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark fw-semibold" href="{% url 'followup_shops_list' %}">
+                            <i class="bi bi-shop me-1 text-primary"></i> Assigned Shops
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark fw-semibold" href="{% url 'followup_tasks' %}">
+                            <i class="bi bi-calendar2-check me-1 text-primary"></i> Payment Tasks
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark fw-semibold" href="{% url 'followup_pending' %}">
+                            <i class="bi bi-clock-history me-1 text-primary"></i> Pending Follow-ups
                         </a>
                     </li>
                     {% elif user.is_shop_owner_role %}
@@ -675,9 +698,19 @@
         (function() {
             function isPhoneField(el) {
                 if (!el || el.tagName !== 'INPUT') return false;
+                if (el.dataset.noPhoneSanitize === 'true') return false;
                 var t = (el.type || '').toLowerCase();
                 var n = (el.name || '').toLowerCase();
                 var id = (el.id || '').toLowerCase();
+
+                // Explicitly exclude non-phone fields such as device models, variants, prices, and amounts
+                if (n.includes('model') || id.includes('model')) return false;
+                if (n.includes('price') || id.includes('price')) return false;
+                if (n.includes('amount') || id.includes('amount')) return false;
+                if (n.includes('brand') || id.includes('brand')) return false;
+                if (n.includes('imei') || id.includes('imei')) return false;
+                if (n.includes('variant') || id.includes('variant')) return false;
+
                 if (t === 'tel') return true;
                 if (n.includes('phone') || n.includes('mobile') || n.includes('gpay')) return true;
                 if (id.includes('phone') || id.includes('mobile') || id.includes('gpay')) return true;

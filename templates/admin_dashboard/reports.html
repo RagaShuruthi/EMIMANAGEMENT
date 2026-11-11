@@ -261,51 +261,30 @@
 <!-- 1. TOP 4 OVERALL KPI STAT CARDS                -->
 <!-- ============================================== -->
 <div class="row g-3 mb-4">
-    <!-- Card 1: Total Customers Added -->
-    <div class="col-12 col-sm-6 col-xl-3">
-        <div class="kpi-stat-card">
-            <div class="d-flex align-items-center gap-3 mb-3">
-                <div class="kpi-icon-circle kpi-icon-blue">
-                    <i class="bi bi-people-fill"></i>
-                </div>
-                <div>
-                    <span class="text-muted small fw-bold text-uppercase d-block" style="font-size: 0.72rem; letter-spacing: 0.04em;">Total Customers Added</span>
-                    <div class="kpi-val">{{ dataset_a.total_customers }}</div>
-                </div>
-            </div>
-            <div>
-                {% if pct_customers >= 0 %}
-                <span class="delta-indicator-up"><i class="bi bi-caret-up-fill"></i> +{{ pct_customers }}% vs {{ prev_month_name }} {{ sel_year }}</span>
-                {% else %}
-                <span class="delta-indicator-down"><i class="bi bi-caret-down-fill"></i> {{ pct_customers }}% vs {{ prev_month_name }} {{ sel_year }}</span>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
-    <!-- Card 2: Payout to Shops -->
+    <!-- Card 1: Total Financed This Month -->
     <div class="col-12 col-sm-6 col-xl-3">
         <div class="kpi-stat-card">
             <div class="d-flex align-items-center gap-3 mb-3">
                 <div class="kpi-icon-circle kpi-icon-purple">
-                    <i class="bi bi-shop"></i>
+                    <i class="bi bi-wallet2"></i>
                 </div>
                 <div>
-                    <span class="text-muted small fw-bold text-uppercase d-block" style="font-size: 0.72rem; letter-spacing: 0.04em;">Payout to Shops</span>
+                    <span class="text-muted small fw-bold text-uppercase d-block" style="font-size: 0.72rem; letter-spacing: 0.04em;">Total Financed This Month</span>
                     <div class="kpi-val">₹{{ dataset_a.total_payouts|floatformat:0 }}</div>
                 </div>
             </div>
-            <div>
+            <div class="d-flex justify-content-between align-items-center">
                 {% if pct_payouts >= 0 %}
                 <span class="delta-indicator-up"><i class="bi bi-caret-up-fill"></i> +{{ pct_payouts }}% vs {{ prev_month_name }} {{ sel_year }}</span>
                 {% else %}
                 <span class="delta-indicator-down"><i class="bi bi-caret-down-fill"></i> {{ pct_payouts }}% vs {{ prev_month_name }} {{ sel_year }}</span>
                 {% endif %}
+                <span class="badge bg-light text-muted border small font-monospace">Shop Payouts</span>
             </div>
         </div>
     </div>
 
-    <!-- Card 3: Collections from Customers -->
+    <!-- Card 2: Total Collected This Month -->
     <div class="col-12 col-sm-6 col-xl-3">
         <div class="kpi-stat-card">
             <div class="d-flex align-items-center gap-3 mb-3">
@@ -313,40 +292,65 @@
                     <i class="bi bi-cash-stack"></i>
                 </div>
                 <div>
-                    <span class="text-muted small fw-bold text-uppercase d-block" style="font-size: 0.72rem; letter-spacing: 0.04em;">Collections from Customers</span>
-                    <div class="kpi-val">₹{{ dataset_a.total_collections|floatformat:0 }}</div>
+                    <span class="text-muted small fw-bold text-uppercase d-block" style="font-size: 0.72rem; letter-spacing: 0.04em;">Total Collected This Month</span>
+                    <div class="kpi-val text-success">₹{{ dataset_a.total_collections|floatformat:0 }}</div>
                 </div>
             </div>
-            <div>
+            <div class="d-flex justify-content-between align-items-center">
                 {% if pct_collections >= 0 %}
                 <span class="delta-indicator-up"><i class="bi bi-caret-up-fill"></i> +{{ pct_collections }}% vs {{ prev_month_name }} {{ sel_year }}</span>
                 {% else %}
                 <span class="delta-indicator-down"><i class="bi bi-caret-down-fill"></i> {{ pct_collections }}% vs {{ prev_month_name }} {{ sel_year }}</span>
                 {% endif %}
+                <span class="badge bg-success-subtle text-success border small font-monospace">EMI Receipts</span>
             </div>
         </div>
     </div>
 
-    <!-- Card 4: Total Profit (Finance Margin) -->
+    <!-- Card 3: Cash Flow Difference (Collections - Financed) -->
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="kpi-stat-card">
+            <div class="d-flex align-items-center gap-3 mb-3">
+                <div class="kpi-icon-circle kpi-icon-blue">
+                    <i class="bi bi-arrow-left-right"></i>
+                </div>
+                <div>
+                    <span class="text-muted small fw-bold text-uppercase d-block" style="font-size: 0.72rem; letter-spacing: 0.04em;">Cash Flow Difference</span>
+                    <div class="kpi-val {% if dataset_a.cash_flow_diff >= 0 %}text-primary{% else %}text-danger{% endif %}">
+                        {% if dataset_a.cash_flow_diff > 0 %}+{% endif %}₹{{ dataset_a.cash_flow_diff|floatformat:0 }}
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex justify-content-between align-items-center">
+                {% if pct_cash_flow >= 0 %}
+                <span class="delta-indicator-up"><i class="bi bi-caret-up-fill"></i> +{{ pct_cash_flow }}% vs {{ prev_month_name }} {{ sel_year }}</span>
+                {% else %}
+                <span class="delta-indicator-down"><i class="bi bi-caret-down-fill"></i> {{ pct_cash_flow }}% vs {{ prev_month_name }} {{ sel_year }}</span>
+                {% endif %}
+                <span class="badge bg-primary-subtle text-primary border small font-monospace">Collections − Financed</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 4: Total Finance Margin -->
     <div class="col-12 col-sm-6 col-xl-3">
         <div class="kpi-stat-card">
             <div class="d-flex align-items-center gap-3 mb-3">
                 <div class="kpi-icon-circle kpi-icon-orange">
-                    <i class="bi bi-graph-up-arrow"></i>
+                    <i class="bi bi-award-fill"></i>
                 </div>
                 <div>
-                    <span class="text-muted small fw-bold text-uppercase d-block" style="font-size: 0.72rem; letter-spacing: 0.04em;">Total Profit (Finance Margin)</span>
-                    <div class="kpi-val {% if dataset_a.net_profit >= 0 %}text-success{% else %}text-danger{% endif %}">
-                        ₹{{ dataset_a.net_profit|floatformat:0 }}
+                    <span class="text-muted small fw-bold text-uppercase d-block" style="font-size: 0.72rem; letter-spacing: 0.04em;">Total Finance Margin</span>
+                    <div class="kpi-val text-dark">
+                        ₹{{ dataset_a.total_finance_margin|floatformat:0 }}
                     </div>
                 </div>
             </div>
-            <div>
-                {% if pct_profit >= 0 %}
-                <span class="delta-indicator-up"><i class="bi bi-caret-up-fill"></i> +{{ pct_profit }}% vs {{ prev_month_name }} {{ sel_year }}</span>
-                {% else %}
-                <span class="delta-indicator-down"><i class="bi bi-caret-down-fill"></i> {{ pct_profit }}% vs {{ prev_month_name }} {{ sel_year }}</span>
-                {% endif %}
+            <div class="d-flex justify-content-between align-items-center">
+                <span class="text-muted small">
+                    <strong class="text-dark">+₹{{ dataset_a.monthly_finance_margin|floatformat:0 }}</strong> in {{ sel_month_name }}
+                </span>
+                <span class="badge bg-warning-subtle text-dark border small font-monospace">Expected Margin</span>
             </div>
         </div>
     </div>
@@ -381,7 +385,7 @@
                 <span><span class="chart-legend-dot" style="background-color: #3b82f6;"></span> Sales Financed (₹)</span>
                 <span><span class="chart-legend-dot" style="background-color: #8b5cf6;"></span> Shop Payouts (₹)</span>
                 <span><span class="chart-legend-dot" style="background-color: #10b981;"></span> Collections (₹)</span>
-                <span><span class="chart-legend-dot" style="background-color: #f59e0b;"></span> Profit (₹)</span>
+                <span><span class="chart-legend-dot" style="background-color: #f59e0b;"></span> Cash Flow Diff (₹)</span>
             </div>
 
             <div class="flex-grow-1" style="min-height: 310px;">
@@ -430,7 +434,7 @@
                             <td>
                                 <div class="d-flex align-items-center gap-2">
                                     <i class="bi bi-wallet2" style="color: #8b5cf6;"></i>
-                                    <span class="fw-semibold text-dark">Shop Payout</span>
+                                    <span class="fw-semibold text-dark">Total Financed / Payouts</span>
                                 </div>
                             </td>
                             <td class="text-end font-monospace text-muted">₹{{ dataset_b.total_payouts|floatformat:0 }}</td>
@@ -447,7 +451,7 @@
                             <td>
                                 <div class="d-flex align-items-center gap-2">
                                     <i class="bi bi-cash-stack text-success"></i>
-                                    <span class="fw-semibold text-dark">Collections</span>
+                                    <span class="fw-semibold text-dark">Customer Collections</span>
                                 </div>
                             </td>
                             <td class="text-end font-monospace text-muted">₹{{ dataset_b.total_collections|floatformat:0 }}</td>
@@ -463,17 +467,36 @@
                         <tr>
                             <td>
                                 <div class="d-flex align-items-center gap-2">
-                                    <i class="bi bi-graph-up-arrow text-warning"></i>
-                                    <span class="fw-semibold text-dark">Profit (Margin)</span>
+                                    <i class="bi bi-arrow-left-right text-primary"></i>
+                                    <span class="fw-semibold text-dark">Cash Flow Difference</span>
                                 </div>
                             </td>
-                            <td class="text-end font-monospace text-muted">₹{{ dataset_b.net_profit|floatformat:0 }}</td>
-                            <td class="text-end font-monospace fw-bold text-dark">₹{{ dataset_a.net_profit|floatformat:0 }}</td>
+                            <td class="text-end font-monospace text-muted">₹{{ dataset_b.cash_flow_diff|floatformat:0 }}</td>
+                            <td class="text-end font-monospace fw-bold {% if dataset_a.cash_flow_diff >= 0 %}text-primary{% else %}text-danger{% endif %}">
+                                {% if dataset_a.cash_flow_diff > 0 %}+{% endif %}₹{{ dataset_a.cash_flow_diff|floatformat:0 }}
+                            </td>
                             <td class="text-end">
-                                {% if pct_profit >= 0 %}
-                                <span class="delta-indicator-up font-monospace">▲ +{{ pct_profit }}%</span>
+                                {% if pct_cash_flow >= 0 %}
+                                <span class="delta-indicator-up font-monospace">▲ +{{ pct_cash_flow }}%</span>
                                 {% else %}
-                                <span class="delta-indicator-down font-monospace">▼ {{ pct_profit }}%</span>
+                                <span class="delta-indicator-down font-monospace">▼ {{ pct_cash_flow }}%</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="bi bi-award-fill text-warning"></i>
+                                    <span class="fw-semibold text-dark">New Finance Margin</span>
+                                </div>
+                            </td>
+                            <td class="text-end font-monospace text-muted">₹{{ dataset_b.monthly_finance_margin|floatformat:0 }}</td>
+                            <td class="text-end font-monospace fw-bold text-dark">₹{{ dataset_a.monthly_finance_margin|floatformat:0 }}</td>
+                            <td class="text-end">
+                                {% if pct_finance_margin >= 0 %}
+                                <span class="delta-indicator-up font-monospace">▲ +{{ pct_finance_margin }}%</span>
+                                {% else %}
+                                <span class="delta-indicator-down font-monospace">▼ {{ pct_finance_margin }}%</span>
                                 {% endif %}
                             </td>
                         </tr>
@@ -635,15 +658,13 @@
         <table class="table table-hover align-middle mb-0">
             <thead class="table-light small text-muted">
                 <tr>
-                    <th style="min-width: 140px;">Month</th>
+                    <th style="min-width: 140px;">Month and Year</th>
                     <th class="text-center">Customers Added</th>
-                    <th class="text-end">Phone Financing (₹)</th>
-                    <th class="text-end">Shop Payouts (₹)</th>
-                    <th class="text-end">Collections (₹)</th>
-                    <th class="text-end">Net Profit (₹)</th>
-                    <th class="text-center">Profit Margin</th>
-                    <th class="text-end">MoM Growth</th>
-                    <th class="text-center">Status</th>
+                    <th class="text-end">Total Financed / Shop Payouts (₹)</th>
+                    <th class="text-end">Total Customer Collections (₹)</th>
+                    <th class="text-end">Cash Flow Difference (₹)</th>
+                    <th class="text-end">New Finance Margin (₹)</th>
+                    <th class="text-center">Cash Flow Status</th>
                 </tr>
             </thead>
             <tbody>
@@ -652,38 +673,28 @@
                     <td>
                         <div class="d-flex align-items-center gap-2">
                             <i class="bi bi-calendar-check {% if row.is_selected %}text-primary{% else %}text-muted{% endif %}"></i>
-                            <span class="fw-bold text-dark">{{ row.month_name }}</span>
+                            <span class="fw-bold text-dark">{{ row.month_name }} {{ sel_year }}</span>
                             {% if row.is_selected %}
-                            <span class="badge bg-primary rounded-pill small" style="font-size: 0.65rem;">Active Period</span>
+                            <span class="badge bg-primary rounded-pill small" style="font-size: 0.65rem;">Active Month</span>
                             {% endif %}
                         </div>
                     </td>
                     <td class="text-center font-monospace">{{ row.customers }}</td>
-                    <td class="text-end font-monospace">₹{{ row.financed|floatformat:2 }}</td>
                     <td class="text-end font-monospace text-muted">₹{{ row.payouts|floatformat:2 }}</td>
                     <td class="text-end font-monospace text-success fw-bold">₹{{ row.collections|floatformat:2 }}</td>
-                    <td class="text-end font-monospace fw-bold {% if row.net_profit >= 0 %}text-success{% else %}text-danger{% endif %}">
-                        ₹{{ row.net_profit|floatformat:2 }}
+                    <td class="text-end font-monospace fw-bold {% if row.cash_flow_diff >= 0 %}text-primary{% else %}text-danger{% endif %}">
+                        {% if row.cash_flow_diff > 0 %}+{% endif %}₹{{ row.cash_flow_diff|floatformat:2 }}
+                    </td>
+                    <td class="text-end font-monospace fw-bold text-dark">
+                        ₹{{ row.finance_margin|floatformat:2 }}
                     </td>
                     <td class="text-center">
-                        <span class="badge bg-light text-dark border">{{ row.margin_pct }}%</span>
-                    </td>
-                    <td class="text-end font-monospace">
-                        {% if row.month_num == 1 %}
-                        <span class="text-muted small">—</span>
-                        {% elif row.mom_growth_pct >= 0 %}
-                        <span class="delta-indicator-up">▲ +{{ row.mom_growth_pct }}%</span>
+                        {% if row.cash_flow_diff > 0 %}
+                        <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-arrow-up-right me-1"></i>Positive Flow</span>
+                        {% elif row.cash_flow_diff < 0 %}
+                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-arrow-down-right me-1"></i>Net Outflow</span>
                         {% else %}
-                        <span class="delta-indicator-down">▼ {{ row.mom_growth_pct }}%</span>
-                        {% endif %}
-                    </td>
-                    <td class="text-center">
-                        {% if row.net_profit > 0 %}
-                        <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-graph-up me-1"></i>Profitable</span>
-                        {% elif row.net_profit < 0 %}
-                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-graph-down me-1"></i>Deficit</span>
-                        {% else %}
-                        <span class="badge bg-secondary-subtle text-secondary"><i class="bi bi-dash me-1"></i>Neutral</span>
+                        <span class="badge bg-secondary-subtle text-secondary"><i class="bi bi-dash me-1"></i>Balanced</span>
                         {% endif %}
                     </td>
                 </tr>
@@ -691,16 +702,14 @@
             </tbody>
             <tfoot class="table-light fw-bold">
                 <tr>
-                    <td>Annual Total / Avg</td>
+                    <td>Annual Total (Year {{ sel_year }})</td>
                     <td class="text-center font-monospace">{{ year_totals.customers }}</td>
-                    <td class="text-end font-monospace">₹{{ year_totals.financed|floatformat:2 }}</td>
                     <td class="text-end font-monospace">₹{{ year_totals.payouts|floatformat:2 }}</td>
                     <td class="text-end font-monospace text-success">₹{{ year_totals.collections|floatformat:2 }}</td>
-                    <td class="text-end font-monospace {% if year_totals.profit >= 0 %}text-success{% else %}text-danger{% endif %}">
-                        ₹{{ year_totals.profit|floatformat:2 }}
+                    <td class="text-end font-monospace {% if year_totals.cash_flow_diff >= 0 %}text-primary{% else %}text-danger{% endif %}">
+                        {% if year_totals.cash_flow_diff > 0 %}+{% endif %}₹{{ year_totals.cash_flow_diff|floatformat:2 }}
                     </td>
-                    <td class="text-center"><span class="badge bg-dark text-white">{{ year_totals.margin_pct }}%</span></td>
-                    <td class="text-end font-monospace text-muted">—</td>
+                    <td class="text-end font-monospace text-dark">₹{{ year_totals.finance_margin|floatformat:2 }}</td>
                     <td class="text-center"><span class="badge bg-success text-white">Full Year</span></td>
                 </tr>
             </tfoot>
@@ -792,7 +801,7 @@ document.addEventListener("DOMContentLoaded", function() {
                         barPercentage: 0.8,
                     },
                     {
-                        label: 'Profit (₹)',
+                        label: 'Cash Flow Diff (₹)',
                         data: shopProfit,
                         backgroundColor: 'rgba(245, 158, 11, 0.85)',
                         borderColor: colorProfit,
@@ -866,7 +875,7 @@ document.addEventListener("DOMContentLoaded", function() {
                         barPercentage: 0.8,
                     },
                     {
-                        label: 'Profit (₹)',
+                        label: 'Cash Flow Diff (₹)',
                         data: trendProfit,
                         backgroundColor: 'rgba(245, 158, 11, 0.85)',
                         borderColor: colorProfit,

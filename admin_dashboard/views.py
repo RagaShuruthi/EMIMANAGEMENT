@@ -91,12 +91,12 @@ def get_shop_customer_emi_stats(shop, today=None):
     }
 
 
-def prepare_customer_management_dataset(customers_qs, request, today=None, exclude_completed=True, completed_only=False):
+def prepare_customer_management_dataset(customers_qs, request, today=None, exclude_completed=True, completed_only=False, exclude_loss=True, loss_only=False):
     """
     Prepares, classifies, filters, and sorts customer rows consistently for both
     HTML templates and Excel / PDF exports.
-    Automatically excludes completed EMI customers from active customer lists,
-    and supports completed_only=True for the Completed List module.
+    Automatically excludes completed EMI customers and Loss customers from active customer lists,
+    and supports completed_only=True and loss_only=True.
     """
     if today is None:
         today = timezone.localdate()
@@ -105,10 +105,29 @@ def prepare_customer_management_dataset(customers_qs, request, today=None, exclu
         exclude_completed = False
     if request.GET.get("completed_only") == "1":
         completed_only = True
+    if request.GET.get("loss_only") == "1":
+        loss_only = True
 
     all_rows = []
     for c in customers_qs:
+        # Filter by Loss classification
+        if loss_only:
+            if not getattr(c, "is_loss", False):
+                continue
+        elif exclude_loss:
+            if getattr(c, "is_loss", False):
+                continue
+
         app = c.applications.first()
+
+        # In Admin Dashboard Customer List, after the application is APPROVED only it has to be added in the customer list
+        if not (completed_only or loss_only):
+            if not app or app.status not in [
+                FinanceApplication.Status.APPROVED,
+                FinanceApplication.Status.PAID,
+                FinanceApplication.Status.PARTIALLY_PAID,
+            ]:
+                continue
         if app:
             app.generate_default_schedule_if_missing()
             next_sched = app.next_unpaid_schedule
@@ -138,11 +157,22 @@ def prepare_customer_management_dataset(customers_qs, request, today=None, exclu
 
         # Filter by completion status
         if completed_only:
-            if not is_completed:
+            if not is_completed or getattr(c, "is_loss", False):
                 continue
         elif exclude_completed:
             if is_completed:
                 continue
+
+        # Completed Date determination and persistence
+        comp_date = c.completed_date or (app.completed_date if app else None)
+        if is_completed and not comp_date:
+            last_pay = app.customer_emi_payments.order_by("-payment_date", "-created_at").first() if app else None
+            comp_date = last_pay.payment_date if last_pay else (c.updated_at.date() if c.updated_at else today)
+            c.completed_date = comp_date
+            c.save(update_fields=["completed_date"])
+            if app and not app.completed_date:
+                app.completed_date = comp_date
+                app.save(update_fields=["completed_date"])
 
         # Row highlighting & badge styling: clean white rows, distinctive color badges (Red, Yellow, Purple)
         if due_status == "DUE_TODAY":
@@ -185,8 +215,10 @@ def prepare_customer_management_dataset(customers_qs, request, today=None, exclu
             "mobile_price": price,
             "down_payment": down,
             "monthly_emi": monthly_emi,
+            "duration_months": app.emi_duration if app else 0,
             "amount_paid": paid,
             "remaining_balance": rem,
+            "original_loss": down - rem,
             "next_due_date": next_due,
             "next_due_date_iso": next_due.strftime('%Y-%m-%d') if next_due else "",
             "next_due_date_display": next_due.strftime('%d %b %Y') if next_due else "—",
@@ -196,6 +228,12 @@ def prepare_customer_management_dataset(customers_qs, request, today=None, exclu
             "badge_class": badge_class,
             "row_class": row_class,
             "is_completed": is_completed,
+            "completed_date": comp_date,
+            "completed_date_display": comp_date.strftime("%d-%m-%Y") if comp_date else "—",
+            "is_loss": getattr(c, "is_loss", False),
+            "loss_date": getattr(c, "loss_date", None),
+            "loss_date_display": c.loss_date.strftime("%d-%m-%Y") if getattr(c, "loss_date", None) else "—",
+            "loss_reason": getattr(c, "loss_reason", ""),
             "update_status": c.latest_update_status or "—",
             "latest_update_at": c.latest_update_at,
             "latest_update_by": c.latest_update_by,
@@ -234,6 +272,10 @@ def prepare_customer_management_dataset(customers_qs, request, today=None, exclu
         filtered_rows.sort(key=lambda r: r["amount_paid"], reverse=True)
     elif sort_param == "paid_asc":
         filtered_rows.sort(key=lambda r: r["amount_paid"])
+    elif sort_param == "loss_desc":
+        filtered_rows.sort(key=lambda r: r["original_loss"], reverse=True)
+    elif sort_param == "loss_asc":
+        filtered_rows.sort(key=lambda r: r["original_loss"])
 
     return {
         "all_rows": filtered_rows,
@@ -256,7 +298,12 @@ def get_shop_financials(shop, start_date=None, end_date=None):
     - Remaining Due = Total Payable - Amount Paid
     Optional start_date and end_date filter by application / payment obligation date.
     """
-    app_filter = Q(shop=shop)
+    approved_statuses = [
+        FinanceApplication.Status.APPROVED,
+        FinanceApplication.Status.PAID,
+        FinanceApplication.Status.PARTIALLY_PAID,
+    ]
+    app_filter = Q(shop=shop, status__in=approved_statuses)
     if start_date:
         app_filter &= (Q(application_date__gte=start_date) | Q(created_at__date__gte=start_date))
     if end_date:
@@ -349,8 +396,15 @@ def admin_dashboard_view(request):
     total_customers = Customer.objects.count()
     total_applications = FinanceApplication.objects.count()
 
-    # Financial Aggregates (Money Admin Owes to Shops)
-    total_payable_agg = FinanceApplication.objects.aggregate(
+    # Financial Aggregates (Money Admin Owes to Shops for Approved Applications)
+    approved_statuses = [
+        FinanceApplication.Status.APPROVED,
+        FinanceApplication.Status.PAID,
+        FinanceApplication.Status.PARTIALLY_PAID,
+    ]
+    total_payable_agg = FinanceApplication.objects.filter(
+        status__in=approved_statuses
+    ).aggregate(
         total=Sum("financier_request_amount")
     )["total"] or Decimal("0.00")
 
@@ -425,7 +479,13 @@ def admin_all_customers_view(request):
     search_query = request.GET.get("q", "").strip()
     shop_filter = request.GET.get("shop_id", "").strip()
 
-    customers_qs = Customer.objects.select_related("shop").prefetch_related(
+    customers_qs = Customer.objects.filter(
+        applications__status__in=[
+            FinanceApplication.Status.APPROVED,
+            FinanceApplication.Status.PAID,
+            FinanceApplication.Status.PARTIALLY_PAID,
+        ]
+    ).distinct().select_related("shop").prefetch_related(
         "applications", "applications__emi_schedules", "applications__customer_emi_payments", "update_history"
     ).order_by("-created_at")
 
@@ -527,6 +587,345 @@ def admin_customer_detail_view(request, pk):
         "update_history": update_history,
     }
     return render(request, "admin_dashboard/customer_detail.html", context)
+
+
+@require_POST
+@login_required
+@admin_required
+def admin_customer_delete_view(request, pk):
+    """
+    Permanently deletes a customer and all their associated records from the database.
+    URL: /admin-dashboard/customers/<int:pk>/delete/
+    """
+    customer = get_object_or_404(Customer, pk=pk)
+    cust_name = customer.name
+    with transaction.atomic():
+        customer.delete()
+
+    messages.success(request, f"Customer '{cust_name}' has been permanently deleted from the database.")
+    next_url = request.POST.get("next") or request.META.get("HTTP_REFERER")
+    if next_url and ("customers/" + str(pk)) not in next_url:
+        return redirect(next_url)
+    return redirect("admin_all_customers")
+
+
+@require_POST
+@login_required
+@admin_required
+def admin_customer_move_to_loss_view(request, pk):
+    """
+    Moves an active customer to the Loss list.
+    Preserves all records, payment history, audit notes, and EMI information.
+    Prevents duplicates if customer is already in Loss list.
+    URL: /admin-dashboard/customers/<int:pk>/move-to-loss/
+    """
+    customer = get_object_or_404(Customer, pk=pk)
+    reason = request.POST.get("reason", "").strip()
+    next_url = request.POST.get("next") or request.META.get("HTTP_REFERER") or reverse("admin_all_customers")
+
+    if customer.is_loss:
+        messages.info(request, f"Customer '{customer.name}' is already in the Loss list.")
+        return redirect(next_url)
+
+    customer.is_loss = True
+    customer.loss_date = timezone.localdate()
+    customer.loss_reason = reason or "Moved to Loss list by Administrator"
+    customer.save(update_fields=["is_loss", "loss_date", "loss_reason", "updated_at"])
+
+    # Log audit note in update history
+    CustomerUpdateHistory.objects.create(
+        customer=customer,
+        user=request.user,
+        notes=f"Customer moved to Loss list by Administrator {request.user.username}." + (f" Reason: {reason}" if reason else "")
+    )
+
+    messages.success(request, f"Customer '{customer.name}' has been successfully moved to the Loss list.")
+    return redirect(next_url)
+
+
+@require_POST
+@login_required
+@admin_required
+def admin_customer_restore_from_loss_view(request, pk):
+    """
+    Restores a customer from Loss list back to the active customer list.
+    URL: /admin-dashboard/customers/<int:pk>/restore-from-loss/
+    """
+    customer = get_object_or_404(Customer, pk=pk)
+    next_url = request.POST.get("next") or request.META.get("HTTP_REFERER") or reverse("admin_loss_customers")
+
+    customer.is_loss = False
+    customer.loss_date = None
+    customer.save(update_fields=["is_loss", "loss_date", "updated_at"])
+
+    CustomerUpdateHistory.objects.create(
+        customer=customer,
+        user=request.user,
+        notes=f"Customer restored from Loss list to Active customers by Administrator {request.user.username}."
+    )
+
+    messages.success(request, f"Customer '{customer.name}' has been restored back to the active customer directory.")
+    return redirect(next_url)
+
+
+@login_required
+@admin_required
+def admin_loss_customers_view(request):
+    """
+    Dedicated view for customers moved to Loss list.
+    Displays only customers marked as Loss with complete details:
+    Customer Name, Phone Number, Shop Name, Phone Model, Total Amount,
+    Amount Paid, Amount Due, EMI Details, Loss Date.
+    URL: /admin-dashboard/loss-customers/
+    """
+    search_query = request.GET.get("q", "").strip()
+    shop_filter = request.GET.get("shop_id", "").strip()
+
+    customers_qs = Customer.objects.filter(is_loss=True).select_related("shop").prefetch_related(
+        "applications", "applications__emi_schedules", "applications__customer_emi_payments", "update_history"
+    ).order_by("-loss_date", "-created_at")
+
+    if search_query:
+        customers_qs = customers_qs.filter(
+            Q(name__icontains=search_query) |
+            Q(primary_mobile__icontains=search_query) |
+            Q(secondary_mobile__icontains=search_query) |
+            Q(home_address__icontains=search_query) |
+            Q(work_address__icontains=search_query) |
+            Q(applications__mobile_model__icontains=search_query) |
+            Q(shop__name__icontains=search_query)
+        ).distinct()
+
+    if shop_filter:
+        customers_qs = customers_qs.filter(shop_id=shop_filter)
+
+    dataset = prepare_customer_management_dataset(customers_qs, request, loss_only=True)
+    all_rows = dataset["all_rows"]
+
+    # Statistics for loss customers
+    total_loss_count = len(all_rows)
+    total_loss_due = sum((r["remaining_balance"] for r in all_rows), Decimal("0.00"))
+    total_loss_paid = sum((r["amount_paid"] for r in all_rows), Decimal("0.00"))
+    total_original_loss = sum((r["original_loss"] for r in all_rows), Decimal("0.00"))
+    total_loss_volume = total_original_loss
+
+    paginator = Paginator(all_rows, 50)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
+    all_shops = Shop.objects.all().order_by("name")
+
+    context = {
+        "active_page": "loss_customers",
+        "customers": page_obj,
+        "all_shops": all_shops,
+        "search_query": search_query,
+        "shop_filter": shop_filter,
+        "total_loss_count": total_loss_count,
+        "total_loss_due": total_loss_due,
+        "total_loss_paid": total_loss_paid,
+        "total_loss_volume": total_loss_volume,
+        "total_original_loss": total_original_loss,
+        "sort_param": dataset["sort_param"],
+    }
+    return render(request, "admin_dashboard/loss_customers.html", context)
+
+
+@require_POST
+@login_required
+@admin_required
+def admin_update_installment_view(request, pk):
+    """
+    Updates an individual EMI installment schedule:
+    - Amount Due (editable)
+    - Amount Paid (editable)
+    - Update note (editable input field under Update column)
+    Validates numeric amounts, non-negative, and updates database immediately.
+    URL: /admin-dashboard/installments/<int:pk>/update/
+    """
+    schedule = get_object_or_404(CustomerEMISchedule.objects.select_related("customer", "application"), pk=pk)
+    app = schedule.application
+    customer = schedule.customer
+
+    amount_str = request.POST.get("amount", "").replace(",", "").strip()
+    amount_paid_str = request.POST.get("amount_paid", "").replace(",", "").strip()
+    update_note = request.POST.get("update_note", "").strip()
+    next_url = request.POST.get("next") or request.META.get("HTTP_REFERER") or reverse("admin_customer_detail", kwargs={"pk": customer.pk})
+
+    try:
+        new_amount = Decimal(amount_str) if amount_str else schedule.amount
+        new_amount_paid = Decimal(amount_paid_str) if amount_paid_str else schedule.amount_paid
+
+        if new_amount < Decimal("0.00"):
+            messages.error(request, "Amount Due cannot be negative.")
+            return redirect(next_url)
+        if new_amount_paid < Decimal("0.00"):
+            messages.error(request, "Amount Paid cannot be negative.")
+            return redirect(next_url)
+    except Exception:
+        messages.error(request, "Invalid numeric amounts provided.")
+        return redirect(next_url)
+
+    old_amount = schedule.amount
+    old_paid = schedule.amount_paid
+    old_note = schedule.update_note
+
+    schedule.amount = new_amount
+    schedule.amount_paid = new_amount_paid
+    schedule.update_note = update_note
+    schedule.is_paid = (schedule.amount_paid >= schedule.amount and schedule.amount > 0)
+    if schedule.is_paid:
+        schedule.status = CustomerEMISchedule.InstallmentStatus.PAID
+        if not schedule.paid_date:
+            schedule.paid_date = timezone.localdate()
+    elif schedule.amount_paid > Decimal("0.00"):
+        schedule.status = CustomerEMISchedule.InstallmentStatus.PARTIAL
+        schedule.paid_date = None
+    else:
+        schedule.status = CustomerEMISchedule.InstallmentStatus.PENDING
+        schedule.paid_date = None
+
+    schedule.save()
+
+    # Recheck if application is completed or completion is reversed
+    rem_balance = app.customer_remaining_balance
+    if rem_balance <= Decimal("0.00") or not app.emi_schedules.filter(is_paid=False).exists():
+        today_date = timezone.localdate()
+        if not app.completed_date:
+            app.completed_date = today_date
+            app.save(update_fields=["completed_date"])
+        if not customer.completed_date:
+            customer.completed_date = today_date
+            customer.save(update_fields=["completed_date"])
+    else:
+        if customer.completed_date and rem_balance > Decimal("0.00"):
+            customer.completed_date = None
+            customer.save(update_fields=["completed_date"])
+        if app.completed_date and rem_balance > Decimal("0.00"):
+            app.completed_date = None
+            app.save(update_fields=["completed_date"])
+
+    # Log audit entry preserving all history
+    changes = []
+    if old_amount != new_amount:
+        changes.append(f"Amount Due: ₹{old_amount} → ₹{new_amount}")
+    if old_paid != new_paid:
+        changes.append(f"Amount Paid: ₹{old_paid} → ₹{new_amount_paid}")
+    if old_note != update_note and update_note:
+        changes.append(f"Update: '{update_note}'")
+
+    if changes:
+        CustomerUpdateHistory.objects.create(
+            customer=customer,
+            user=request.user,
+            notes=f"Inst #{schedule.installment_number} updated: " + ", ".join(changes)
+        )
+
+    if request.headers.get("x-requested-with") == "XMLHttpRequest" or request.POST.get("format") == "json":
+        return JsonResponse({
+            "success": True,
+            "installment_id": schedule.id,
+            "amount": str(schedule.amount),
+            "amount_paid": str(schedule.amount_paid),
+            "remaining": str(schedule.remaining_amount),
+            "status": schedule.status,
+            "is_paid": schedule.is_paid,
+            "update_note": schedule.update_note,
+            "customer_total_paid": str(app.total_customer_paid),
+            "customer_remaining_balance": str(app.customer_remaining_balance),
+            "message": f"Installment #{schedule.installment_number} updated successfully."
+        })
+
+    messages.success(request, f"Installment #{schedule.installment_number} updated successfully.")
+    return redirect(next_url)
+
+
+@require_POST
+@login_required
+@admin_required
+def admin_customer_edit_financials_view(request, pk):
+    """
+    Directly updates the customer's overall Amount Paid and Amount Due.
+    Validates non-negative amounts, distributes across installment schedules,
+    and updates database immediately.
+    URL: /admin-dashboard/customers/<int:pk>/edit-financials/
+    """
+    customer = get_object_or_404(Customer, pk=pk)
+    app = customer.applications.first()
+    next_url = request.POST.get("next") or reverse("admin_customer_detail", kwargs={"pk": customer.pk})
+
+    if not app:
+        messages.error(request, "Customer does not have an active finance application.")
+        return redirect(next_url)
+
+    amount_paid_str = request.POST.get("amount_paid", "").replace(",", "").strip()
+    amount_due_str = request.POST.get("amount_due", "").replace(",", "").strip()
+
+    try:
+        new_paid = Decimal(amount_paid_str)
+        new_due = Decimal(amount_due_str)
+        if new_paid < Decimal("0.00") or new_due < Decimal("0.00"):
+            messages.error(request, "Amounts cannot be negative.")
+            return redirect(next_url)
+    except Exception:
+        messages.error(request, "Please enter valid numeric amounts.")
+        return redirect(next_url)
+
+    total_payable = app.get_total_emi_amount
+    if (new_paid + new_due) > (total_payable * Decimal("1.10")):
+        messages.error(request, f"Amount Paid (₹{new_paid:,.2f}) + Amount Due (₹{new_due:,.2f}) exceeds total payable amount (₹{total_payable:,.2f}).")
+        return redirect(next_url)
+
+    with transaction.atomic():
+        schedules = list(app.emi_schedules.order_by("installment_number"))
+        rem_paid = new_paid
+        for s in schedules:
+            if rem_paid >= s.amount:
+                s.amount_paid = s.amount
+                s.is_paid = True
+                s.status = CustomerEMISchedule.InstallmentStatus.PAID
+                if not s.paid_date:
+                    s.paid_date = timezone.localdate()
+                rem_paid -= s.amount
+            elif rem_paid > Decimal("0.00"):
+                s.amount_paid = rem_paid
+                s.is_paid = False
+                s.status = CustomerEMISchedule.InstallmentStatus.PARTIAL
+                s.paid_date = None
+                rem_paid = Decimal("0.00")
+            else:
+                s.amount_paid = Decimal("0.00")
+                s.is_paid = False
+                s.status = CustomerEMISchedule.InstallmentStatus.PENDING
+                s.paid_date = None
+            s.save()
+
+        # Update completed_date
+        if new_due <= Decimal("0.00") or not app.emi_schedules.filter(is_paid=False).exists():
+            today_date = timezone.localdate()
+            if not customer.completed_date:
+                customer.completed_date = today_date
+                customer.save(update_fields=["completed_date"])
+            if not app.completed_date:
+                app.completed_date = today_date
+                app.save(update_fields=["completed_date"])
+        else:
+            if customer.completed_date:
+                customer.completed_date = None
+                customer.save(update_fields=["completed_date"])
+            if app.completed_date:
+                app.completed_date = None
+                app.save(update_fields=["completed_date"])
+
+        CustomerUpdateHistory.objects.create(
+            customer=customer,
+            user=request.user,
+            notes=f"Financial balances updated by Administrator: Amount Paid = ₹{new_paid:,.2f}, Amount Due = ₹{new_due:,.2f}."
+        )
+
+    messages.success(request, f"Financial balances for '{customer.name}' updated successfully (Paid: ₹{new_paid:,.2f}, Due: ₹{new_due:,.2f}).")
+    return redirect(next_url)
+
 
 
 @login_required
@@ -689,6 +1088,7 @@ def admin_application_approval_view(request, pk):
     old_status = application.status
     if decision == "APPROVED":
         application.status = FinanceApplication.Status.APPROVED
+        application.generate_default_schedule_if_missing()
         action_str = "approved"
     elif decision in ("REJECTED", "DECLINED"):
         application.status = FinanceApplication.Status.REJECTED
@@ -871,7 +1271,13 @@ def admin_customers_export_view(request, export_format):
     search_query = request.GET.get("q", "").strip()
     shop_filter = request.GET.get("shop_id", "").strip()
 
-    customers_qs = Customer.objects.select_related("shop").prefetch_related(
+    customers_qs = Customer.objects.filter(
+        applications__status__in=[
+            FinanceApplication.Status.APPROVED,
+            FinanceApplication.Status.PAID,
+            FinanceApplication.Status.PARTIALLY_PAID,
+        ]
+    ).distinct().select_related("shop").prefetch_related(
         "applications", "applications__emi_schedules", "applications__customer_emi_payments", "update_history"
     ).order_by("-created_at")
 
@@ -928,7 +1334,13 @@ def admin_completed_customers_view(request):
     search_query = request.GET.get("q", "").strip()
     shop_filter = request.GET.get("shop_id", "").strip()
 
-    customers_qs = Customer.objects.select_related("shop").prefetch_related(
+    customers_qs = Customer.objects.filter(
+        applications__status__in=[
+            FinanceApplication.Status.APPROVED,
+            FinanceApplication.Status.PAID,
+            FinanceApplication.Status.PARTIALLY_PAID,
+        ]
+    ).distinct().select_related("shop").prefetch_related(
         "applications", "applications__emi_schedules", "applications__customer_emi_payments", "update_history"
     ).order_by("-created_at")
 
@@ -985,7 +1397,13 @@ def admin_completed_customers_export_view(request, export_format):
     search_query = request.GET.get("q", "").strip()
     shop_filter = request.GET.get("shop_id", "").strip()
 
-    customers_qs = Customer.objects.select_related("shop").prefetch_related(
+    customers_qs = Customer.objects.filter(
+        applications__status__in=[
+            FinanceApplication.Status.APPROVED,
+            FinanceApplication.Status.PAID,
+            FinanceApplication.Status.PARTIALLY_PAID,
+        ]
+    ).distinct().select_related("shop").prefetch_related(
         "applications", "applications__emi_schedules", "applications__customer_emi_payments", "update_history"
     ).order_by("-created_at")
 
@@ -1342,14 +1760,12 @@ def admin_record_shop_payment_view(request):
             payment_screenshot=screenshot
         )
 
-        # If payment was made directly to shop by amount, reconcile any pending applications in FIFO order
+        # If payment was made directly to shop by amount, reconcile any approved applications in FIFO order
         if not application and shop:
             unpaid_apps = shop.applications.filter(
                 status__in=[
-                    FinanceApplication.Status.SUBMITTED,
                     FinanceApplication.Status.APPROVED,
                     FinanceApplication.Status.PARTIALLY_PAID,
-                    FinanceApplication.Status.READY
                 ]
             ).order_by("created_at")
             rem = amount
@@ -1425,10 +1841,15 @@ def get_analytics_dataset(year_val, month_val, shop_id_val):
         shop_id = "all"
 
     # Base QuerySets
+    approved_statuses = [
+        FinanceApplication.Status.APPROVED,
+        FinanceApplication.Status.PAID,
+        FinanceApplication.Status.PARTIALLY_PAID,
+    ]
     cust_qs = Customer.objects.all()
     payout_qs = FinancierPayment.objects.all()
     coll_qs = CustomerEMIPayment.objects.all()
-    app_qs = FinanceApplication.objects.all()
+    app_qs = FinanceApplication.objects.filter(status__in=approved_statuses)
 
     # Shop filtering
     if selected_shop:
@@ -1438,22 +1859,54 @@ def get_analytics_dataset(year_val, month_val, shop_id_val):
         app_qs = app_qs.filter(shop=selected_shop)
 
     # Date filtering
+    # Customer acquisitions based on created_at
     cust_qs = cust_qs.filter(created_at__year=year)
+    # Shop disbursements based on actual payout transaction date
     payout_qs = payout_qs.filter(payment_date__year=year)
+    # Customer collections based on actual payment date
     coll_qs = coll_qs.filter(payment_date__year=year)
-    app_qs = app_qs.filter(created_at__year=year)
+    # Customer financing date for New Finance Margin
+    app_qs = app_qs.filter(
+        Q(application_date__year=year) | (Q(application_date__isnull=True) & Q(created_at__year=year))
+    )
 
     if month != "all":
         cust_qs = cust_qs.filter(created_at__month=month)
         payout_qs = payout_qs.filter(payment_date__month=month)
         coll_qs = coll_qs.filter(payment_date__month=month)
-        app_qs = app_qs.filter(created_at__month=month)
+        app_qs = app_qs.filter(
+            Q(application_date__month=month) | (Q(application_date__isnull=True) & Q(created_at__month=month))
+        )
 
     total_customers = cust_qs.count()
+    # 1. Total Financed This Month = Total amount paid out to shops during selected month
     total_payouts = payout_qs.aggregate(s=Sum("amount_received"))["s"] or Decimal("0.00")
+    # 2. Total Collected This Month = Total customer payments actually received during selected month
     total_collections = coll_qs.aggregate(s=Sum("amount"))["s"] or Decimal("0.00")
+    # 3. Cash Flow Difference = Customer Collections minus Shop Payouts
+    cash_flow_diff = total_collections - total_payouts
     total_financed = app_qs.aggregate(s=Sum("financier_request_amount"))["s"] or Decimal("0.00")
-    net_profit = total_collections - total_payouts
+    net_profit = cash_flow_diff
+
+    # 4. Monthly Finance Margin = Sum of finance margins for customers financed during that month
+    # Finance Margin = Phone Price - Amount Paid to Shop (mobile_price - financier_request_amount)
+    monthly_finance_margin = Decimal("0.00")
+    for app in app_qs:
+        app_margin = (app.mobile_price or Decimal("0.00")) - (app.financier_request_amount or Decimal("0.00"))
+        if app_margin <= Decimal("0.00") and app.down_payment:
+            app_margin = app.down_payment
+        monthly_finance_margin += max(Decimal("0.00"), app_margin)
+
+    # Total Finance Margin across all financed customers
+    all_time_app_qs = FinanceApplication.objects.filter(status__in=approved_statuses)
+    if selected_shop:
+        all_time_app_qs = all_time_app_qs.filter(shop=selected_shop)
+    total_finance_margin = Decimal("0.00")
+    for app in all_time_app_qs:
+        app_margin = (app.mobile_price or Decimal("0.00")) - (app.financier_request_amount or Decimal("0.00"))
+        if app_margin <= Decimal("0.00") and app.down_payment:
+            app_margin = app.down_payment
+        total_finance_margin += max(Decimal("0.00"), app_margin)
 
     # Generate Chart Data (01 to 30/31 if specific month, Jan to Dec if all)
     if month != "all":
@@ -1502,6 +1955,9 @@ def get_analytics_dataset(year_val, month_val, shop_id_val):
         "total_payouts": total_payouts,
         "total_collections": total_collections,
         "total_financed": total_financed,
+        "cash_flow_diff": cash_flow_diff,
+        "monthly_finance_margin": monthly_finance_margin,
+        "total_finance_margin": total_finance_margin,
         "net_profit": net_profit,
         "chart_labels": chart_labels,
         "chart_customers": chart_customers,
@@ -1583,13 +2039,17 @@ def admin_reports_view(request):
     pct_customers = calc_pct(dataset_a["total_customers"], dataset_b["total_customers"])
     pct_payouts = calc_pct(dataset_a["total_payouts"], dataset_b["total_payouts"])
     pct_collections = calc_pct(dataset_a["total_collections"], dataset_b["total_collections"])
-    pct_profit = calc_pct(dataset_a["net_profit"], dataset_b["net_profit"])
+    pct_cash_flow = calc_pct(dataset_a["cash_flow_diff"], dataset_b["cash_flow_diff"])
+    pct_finance_margin = calc_pct(dataset_a["monthly_finance_margin"], dataset_b["monthly_finance_margin"])
+    pct_profit = pct_cash_flow
 
     # Comparison Deltas
     diff_customers = dataset_a["total_customers"] - dataset_b["total_customers"]
     diff_payouts = dataset_a["total_payouts"] - dataset_b["total_payouts"]
     diff_collections = dataset_a["total_collections"] - dataset_b["total_collections"]
-    diff_profit = dataset_a["net_profit"] - dataset_b["net_profit"]
+    diff_cash_flow = dataset_a["cash_flow_diff"] - dataset_b["cash_flow_diff"]
+    diff_finance_margin = dataset_a["monthly_finance_margin"] - dataset_b["monthly_finance_margin"]
+    diff_profit = diff_cash_flow
 
     # Available filter choices
     available_years = [current_year - 2, current_year - 1, current_year, current_year + 1]
@@ -1613,11 +2073,21 @@ def admin_reports_view(request):
         })
 
     # Shop Performance Ranking for Selected Month
+    approved_statuses = [
+        FinanceApplication.Status.APPROVED,
+        FinanceApplication.Status.PAID,
+        FinanceApplication.Status.PARTIALLY_PAID,
+    ]
     all_shops_qs = Shop.objects.all()
     shop_rankings = []
     for s in all_shops_qs:
         s_cust = Customer.objects.filter(shop=s, created_at__year=sel_year, created_at__month=sel_month).count()
-        s_sales = FinanceApplication.objects.filter(shop=s, created_at__year=sel_year, created_at__month=sel_month).aggregate(
+        s_sales = FinanceApplication.objects.filter(
+            shop=s,
+            status__in=approved_statuses,
+            created_at__year=sel_year,
+            created_at__month=sel_month
+        ).aggregate(
             tot=Sum("financier_request_amount")
         )["tot"] or Decimal("0.00")
         s_payout = FinancierPayment.objects.filter(
@@ -1687,7 +2157,10 @@ def admin_reports_view(request):
     base_cust = Customer.objects.filter(created_at__year=sel_year)
     base_payout = FinancierPayment.objects.filter(payment_date__year=sel_year)
     base_coll = CustomerEMIPayment.objects.filter(payment_date__year=sel_year)
-    base_app = FinanceApplication.objects.filter(created_at__year=sel_year)
+    base_app = FinanceApplication.objects.filter(
+        created_at__year=sel_year,
+        status__in=approved_statuses,
+    )
 
     if shop_a != "all":
         base_cust = base_cust.filter(shop_id=shop_a)
@@ -1700,33 +2173,46 @@ def admin_reports_view(request):
     tot_year_financed = Decimal("0.00")
     tot_year_payouts = Decimal("0.00")
     tot_year_collections = Decimal("0.00")
-    tot_year_profit = Decimal("0.00")
+    tot_year_cash_flow = Decimal("0.00")
+    tot_year_margin = Decimal("0.00")
 
     for m in range(1, 13):
         m_cust = base_cust.filter(created_at__month=m).count()
         m_fin = base_app.filter(created_at__month=m).aggregate(s=Sum("financier_request_amount"))["s"] or Decimal("0.00")
         m_payout = base_payout.filter(payment_date__month=m).aggregate(s=Sum("amount_received"))["s"] or Decimal("0.00")
         m_coll = base_coll.filter(payment_date__month=m).aggregate(s=Sum("amount"))["s"] or Decimal("0.00")
-        m_profit = m_coll - m_payout
+        m_cash_flow = m_coll - m_payout
+
+        # New Finance Margin for customers financed in month m
+        m_apps = base_app.filter(
+            Q(application_date__month=m) | (Q(application_date__isnull=True) & Q(created_at__month=m))
+        )
+        m_margin = Decimal("0.00")
+        for app in m_apps:
+            margin = (app.mobile_price or Decimal("0.00")) - (app.financier_request_amount or Decimal("0.00"))
+            if margin <= Decimal("0.00") and app.down_payment:
+                margin = app.down_payment
+            m_margin += max(Decimal("0.00"), margin)
 
         tot_year_customers += m_cust
         tot_year_financed += m_fin
         tot_year_payouts += m_payout
         tot_year_collections += m_coll
-        tot_year_profit += m_profit
+        tot_year_cash_flow += m_cash_flow
+        tot_year_margin += m_margin
 
         # Month over month delta
         if prev_net_profit is not None and prev_net_profit != 0:
-            mom_growth_pct = round(((float(m_profit) - float(prev_net_profit)) / abs(float(prev_net_profit))) * 100.0, 1)
-        elif prev_net_profit == 0 and m_profit > 0:
+            mom_growth_pct = round(((float(m_cash_flow) - float(prev_net_profit)) / abs(float(prev_net_profit))) * 100.0, 1)
+        elif prev_net_profit == 0 and m_cash_flow > 0:
             mom_growth_pct = 100.0
         else:
             mom_growth_pct = 0.0
 
-        prev_net_profit = m_profit
+        prev_net_profit = m_cash_flow
 
         # Margin %
-        margin_pct = round((float(m_profit) / float(m_coll) * 100.0), 1) if m_coll > 0 else 0.0
+        margin_pct = round((float(m_cash_flow) / float(m_coll) * 100.0), 1) if m_coll > 0 else 0.0
 
         monthly_matrix.append({
             "month_num": m,
@@ -1736,7 +2222,9 @@ def admin_reports_view(request):
             "financed": m_fin,
             "payouts": m_payout,
             "collections": m_coll,
-            "net_profit": m_profit,
+            "cash_flow_diff": m_cash_flow,
+            "net_profit": m_cash_flow,
+            "finance_margin": m_margin,
             "margin_pct": margin_pct,
             "mom_growth_pct": mom_growth_pct,
             "is_selected": (m == sel_month),
@@ -1747,8 +2235,10 @@ def admin_reports_view(request):
         "financed": tot_year_financed,
         "payouts": tot_year_payouts,
         "collections": tot_year_collections,
-        "profit": tot_year_profit,
-        "margin_pct": round((float(tot_year_profit) / float(tot_year_collections) * 100.0), 1) if tot_year_collections > 0 else 0.0,
+        "cash_flow_diff": tot_year_cash_flow,
+        "profit": tot_year_cash_flow,
+        "finance_margin": tot_year_margin,
+        "margin_pct": round((float(tot_year_cash_flow) / float(tot_year_collections) * 100.0), 1) if tot_year_collections > 0 else 0.0,
     }
 
     # High-level system stats
@@ -1841,11 +2331,16 @@ def admin_reports_view(request):
         "pct_customers": pct_customers,
         "pct_payouts": pct_payouts,
         "pct_collections": pct_collections,
+        "pct_cash_flow": pct_cash_flow,
+        "pct_finance_margin": pct_finance_margin,
         "pct_profit": pct_profit,
         "diff_customers": diff_customers,
         "diff_payouts": diff_payouts,
         "diff_collections": diff_collections,
+        "diff_cash_flow": diff_cash_flow,
+        "diff_finance_margin": diff_finance_margin,
         "diff_profit": diff_profit,
+        "total_finance_margin": dataset_a["total_finance_margin"],
         "shop_rankings": shop_rankings,
         "best_shop": best_shop,
         "insights": insights,

@@ -1,973 +1,261 @@
 {% extends "base.html" %}
 
-{% block title %}Follow-up Portal Dashboard — EMI Management System{% endblock %}
+{% block title %}Follow-up Portal — Dashboard{% endblock %}
 
 {% block content %}
-<!-- Portal Header -->
-<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
-    <div>
-        <div class="badge bg-primary-subtle text-primary mb-1">
-            <i class="bi bi-shield-lock me-1"></i>Follow-up Employee Portal
-        </div>
-        <h2 class="fw-bold text-dark mb-0">Welcome, {{ request.user.get_full_name|default:request.user.username }}</h2>
-        <p class="text-muted small mb-0">Scoped jurisdiction: Manage customers, pending follow-ups, and collection tasks</p>
-    </div>
-    <div>
-        <span class="badge bg-success-subtle text-success fs-6 px-3 py-2 border border-success-subtle">
-            <i class="bi bi-shop me-1"></i>{{ total_assigned_shops }} Assigned Shop{{ total_assigned_shops|pluralize }}
-        </span>
-    </div>
-</div>
-
-<!-- Scoped Metric Cards -->
-<div class="row g-3 mb-4">
-    <!-- Assigned Shops Count -->
-    <div class="col-6 col-md-4 col-xl">
-        <div class="stat-card border-primary-subtle h-100">
-            <div class="stat-label text-primary">Assigned Shops</div>
-            <div class="stat-value text-primary">{{ total_assigned_shops }}</div>
-            <small class="text-muted">Authorized retail shops</small>
-        </div>
-    </div>
-
-    <!-- Total Customers -->
-    <div class="col-6 col-md-4 col-xl">
-        <div class="stat-card border-info-subtle h-100">
-            <div class="stat-label text-info-emphasis">Customers</div>
-            <div class="stat-value text-info-emphasis">{{ total_customers }}</div>
-            <small class="text-muted">Under your care</small>
-        </div>
-    </div>
-
-    <!-- Pending Follow-ups -->
-    <div class="col-6 col-md-4 col-xl">
-        <a href="?tab=pending{% if shop_filter %}&shop_id={{ shop_filter }}{% endif %}" class="text-decoration-none d-block h-100">
-            <div class="stat-card border-warning-subtle h-100 shadow-sm" style="cursor: pointer;">
-                <div class="stat-label text-warning-emphasis">Pending Follow-ups</div>
-                <div class="stat-value text-warning-emphasis">{{ total_pending }}</div>
-                <small class="text-muted">Click to view pending list →</small>
+<div class="container-fluid px-0">
+    <!-- 1. Welcome Section -->
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2 pb-3 border-bottom">
+        <div>
+            <div class="small text-muted text-uppercase fw-semibold" style="letter-spacing: 0.05em; font-size: 0.72rem;">
+                Collections &amp; Follow-up Portal
             </div>
-        </a>
-    </div>
-
-    <!-- Upcoming Tasks -->
-    <div class="col-6 col-md-6 col-xl">
-        <div class="stat-card border-danger-subtle h-100">
-            <div class="stat-label text-danger">Upcoming Tasks</div>
-            <div class="stat-value text-danger">{{ total_upcoming }}</div>
-            <small class="text-muted">Scheduled due dates</small>
-        </div>
-    </div>
-
-    <!-- Completed Follow-ups -->
-    <div class="col-12 col-md-6 col-xl">
-        <div class="stat-card border-success-subtle h-100">
-            <div class="stat-label text-success">Completed</div>
-            <div class="stat-value text-success">{{ total_completed }}</div>
-            <small class="text-muted">Resolved activities</small>
-        </div>
-    </div>
-</div>
-
-<!-- Assigned Retail Shops Summary Filter Pills (Top 5 in Front + View All) -->
-<div class="card rounded-3 shadow-sm mb-4">
-    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <div class="d-flex align-items-center gap-2">
-            <h6 class="fw-bold mb-0 text-dark">
-                <i class="bi bi-shop text-primary me-2"></i>Your Authorized Retail Shops ({{ total_assigned_shops }})
-            </h6>
-            <span class="badge bg-light text-muted border small">Top 5 by Customers</span>
+            <h4 class="fw-bold text-dark mb-0">Welcome back, {{ request.user.get_full_name|default:request.user.username }}</h4>
+            <span class="small text-muted">Daily operations summary &bull; {{ today|date:"l, F d, Y" }}</span>
         </div>
         <div class="d-flex align-items-center gap-2">
-            {% if total_assigned_shops > 5 %}
-            <button type="button" class="btn btn-sm btn-outline-primary fw-semibold" data-bs-toggle="modal" data-bs-target="#allAssignedShopsModal">
-                <i class="bi bi-grid-3x3-gap-fill me-1"></i>View All ({{ total_assigned_shops }}) Shops
-            </button>
-            {% endif %}
-            {% if shop_filter %}
-            <a href="{% url 'followup_dashboard' %}?tab={{ tab_view }}" class="btn btn-sm btn-link text-danger text-decoration-none p-0 ms-1">
-                <i class="bi bi-x-circle me-1"></i>Clear Shop Filter
+            <a href="{% url 'followup_shops_list' %}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-shop me-1 text-primary"></i>Assigned Shops ({{ total_assigned_shops }})
             </a>
-            {% endif %}
+            <a href="{% url 'followup_tasks' %}" class="btn btn-sm btn-primary">
+                <i class="bi bi-list-check me-1"></i>All Tasks &amp; Customers
+            </a>
         </div>
     </div>
-    <div class="card-body p-3">
-        {% if assigned_shops %}
-        <div class="d-flex flex-wrap gap-2 align-items-center">
-            {% for shop in top_5_shops %}
-            <a href="?shop_id={{ shop.pk }}&tab={{ tab_view }}" class="btn btn-sm {% if shop_filter == shop.pk|stringformat:'s' %}btn-primary shadow-sm{% else %}btn-outline-secondary{% endif %} d-flex align-items-center gap-2">
-                <i class="bi bi-shop"></i>
-                <span class="fw-semibold">{{ shop.name }}</span>
-                {% if shop.phone %}<span class="badge bg-light text-dark font-monospace">{{ shop.phone }}</span>{% endif %}
+
+    <!-- 2 - 8. Summary Metrics Cards (Clean, Minimal Fintech Style) -->
+    <div class="row g-3 mb-4">
+        <!-- Metric 1: Assigned Shops -->
+        <div class="col-6 col-md-4 col-xl-2">
+            <a href="{% url 'followup_shops_list' %}" class="text-decoration-none">
+                <div class="card h-100 border p-3 hover-shadow-sm transition-all" style="border-color: #e2e8f0;">
+                    <div class="small text-muted text-uppercase fw-semibold" style="font-size: 0.7rem;">Assigned Shops</div>
+                    <div class="fs-4 fw-bold text-dark my-1">{{ total_assigned_shops }}</div>
+                    <div class="small text-primary" style="font-size: 0.72rem;">View all shops &rarr;</div>
+                </div>
             </a>
-            {% endfor %}
-
-            {# If currently selected shop is not in top 5, render it here as active #}
-            {% if shop_filter and shop_filter not in top_5_shop_ids %}
-                {% for s in all_assigned_shops %}
-                    {% if s.pk|stringformat:'s' == shop_filter %}
-                    <a href="?shop_id={{ s.pk }}&tab={{ tab_view }}" class="btn btn-sm btn-primary shadow-sm d-flex align-items-center gap-2">
-                        <i class="bi bi-shop"></i>
-                        <span class="fw-semibold">{{ s.name }}</span>
-                        {% if s.phone %}<span class="badge bg-light text-dark font-monospace">{{ s.phone }}</span>{% endif %}
-                        <span class="badge bg-white text-primary">Selected</span>
-                    </a>
-                    {% endif %}
-                {% endfor %}
-            {% endif %}
-
-            {% if total_assigned_shops > 5 %}
-            <button type="button" class="btn btn-sm btn-light border text-primary fw-semibold" data-bs-toggle="modal" data-bs-target="#allAssignedShopsModal">
-                +{{ total_assigned_shops|add:"-5" }} more shops...
-            </button>
-            {% endif %}
         </div>
-        {% else %}
-        <div class="text-center py-3 text-muted">
-            <i class="bi bi-exclamation-circle text-warning fs-3 d-block mb-2"></i>
-            No shops are currently assigned to your account. Please contact an administrator to assign retail shops.
+
+        <!-- Metric 2: Total Customers -->
+        <div class="col-6 col-md-4 col-xl-2">
+            <a href="{% url 'followup_tasks' %}" class="text-decoration-none">
+                <div class="card h-100 border p-3 hover-shadow-sm transition-all" style="border-color: #e2e8f0;">
+                    <div class="small text-muted text-uppercase fw-semibold" style="font-size: 0.7rem;">Total Customers</div>
+                    <div class="fs-4 fw-bold text-dark my-1">{{ total_customers }}</div>
+                    <div class="small text-muted" style="font-size: 0.72rem;">Across your shops</div>
+                </div>
+            </a>
         </div>
-        {% endif %}
+
+        <!-- Metric 3: Pending Follow-ups -->
+        <div class="col-6 col-md-4 col-xl-2">
+            <a href="{% url 'followup_pending' %}" class="text-decoration-none">
+                <div class="card h-100 border p-3 hover-shadow-sm transition-all" style="border-color: #e2e8f0;">
+                    <div class="small text-muted text-uppercase fw-semibold" style="font-size: 0.7rem;">Pending Follow-ups</div>
+                    <div class="fs-4 fw-bold text-dark my-1">{{ total_pending }}</div>
+                    <div class="small text-primary" style="font-size: 0.72rem;">Open follow-up queue &rarr;</div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Metric 4: Today's Due -->
+        <div class="col-6 col-md-4 col-xl-2">
+            <a href="{% url 'followup_tasks' %}?due_today=1" class="text-decoration-none">
+                <div class="card h-100 border p-3 hover-shadow-sm transition-all" style="border-color: #e2e8f0;">
+                    <div class="small text-muted text-uppercase fw-semibold" style="font-size: 0.7rem;">Today's Due</div>
+                    <div class="fs-4 fw-bold text-dark my-1">{{ today_due_count }}</div>
+                    <div class="small text-danger" style="font-size: 0.72rem;">Priority 1 tasks &rarr;</div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Metric 5: Upcoming Dues (7 Days) -->
+        <div class="col-6 col-md-4 col-xl-2">
+            <a href="{% url 'followup_tasks' %}?upcoming_due=1" class="text-decoration-none">
+                <div class="card h-100 border p-3 hover-shadow-sm transition-all" style="border-color: #e2e8f0;">
+                    <div class="small text-muted text-uppercase fw-semibold" style="font-size: 0.7rem;">Upcoming Dues</div>
+                    <div class="fs-4 fw-bold text-dark my-1">{{ upcoming_due_count }}</div>
+                    <div class="small text-muted" style="font-size: 0.72rem;">Next 7 days &rarr;</div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Metric 6: Pending Dues (Overdue) -->
+        <div class="col-6 col-md-4 col-xl-2">
+            <a href="{% url 'followup_tasks' %}?pending_due=1" class="text-decoration-none">
+                <div class="card h-100 border p-3 hover-shadow-sm transition-all" style="border-color: #e2e8f0;">
+                    <div class="small text-muted text-uppercase fw-semibold" style="font-size: 0.7rem;">Pending Dues</div>
+                    <div class="fs-4 fw-bold text-dark my-1">{{ pending_due_count }}</div>
+                    <div class="small text-secondary" style="font-size: 0.72rem;">Overdue payments &rarr;</div>
+                </div>
+            </a>
+        </div>
     </div>
-</div>
 
-<!-- Modal: View All Authorized Retail Shops -->
-<div class="modal fade" id="allAssignedShopsModal" tabindex="-1" aria-labelledby="allAssignedShopsModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
-        <div class="modal-content border-0 shadow">
-            <div class="modal-header bg-dark text-white">
-                <h6 class="modal-title fw-bold" id="allAssignedShopsModalLabel">
-                    <i class="bi bi-shop me-2"></i>All Authorized Retail Shops ({{ total_assigned_shops }})
+    <!-- 9. Top 5 Assigned Shops Section (Clean Card Layout) -->
+    <div class="card border rounded-3 mb-4 shadow-sm" style="border-color: #e2e8f0;">
+        <div class="card-header bg-white py-3 px-4 d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom" style="border-color: #eaecf0;">
+            <div>
+                <h6 class="fw-bold text-dark mb-0">
+                    <i class="bi bi-shop text-primary me-2"></i>Top 5 Assigned Retail Shops
                 </h6>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                <span class="small text-muted">Ranked by highest active customer volume</span>
             </div>
-            <div class="modal-body p-3">
-                <div class="mb-3">
-                    <div class="input-group">
-                        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-                        <input type="text" id="shopModalSearchInput" class="form-control" placeholder="Search shop by name, phone, or address..." onkeyup="filterModalShops()">
-                    </div>
-                </div>
-                <div class="list-group" id="allShopsModalList">
-                    {% for s in all_assigned_shops %}
-                    <a href="?shop_id={{ s.pk }}&tab={{ tab_view }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center p-3 shop-modal-row {% if shop_filter == s.pk|stringformat:'s' %}active{% endif %}">
-                        <div>
-                            <div class="fw-bold d-flex align-items-center gap-2">
-                                <i class="bi bi-shop"></i>
-                                <span>{{ s.name }}</span>
-                                {% if shop_filter == s.pk|stringformat:'s' %}
-                                <span class="badge bg-white text-dark">Active Filter</span>
-                                {% endif %}
-                            </div>
-                            <div class="small {% if shop_filter == s.pk|stringformat:'s' %}text-white-50{% else %}text-muted{% endif %} mt-1">
-                                {% if s.phone %}<span class="me-2"><i class="bi bi-telephone me-1"></i>{{ s.phone }}</span>{% endif %}
-                                {% if s.address %}<span class="text-truncate d-inline-block" style="max-width: 380px;"><i class="bi bi-geo-alt me-1"></i>{{ s.address }}</span>{% endif %}
-                            </div>
-                        </div>
-                        <span class="btn btn-sm {% if shop_filter == s.pk|stringformat:'s' %}btn-light text-dark{% else %}btn-outline-primary{% endif %}">
-                            Select Shop →
-                        </span>
-                    </a>
-                    {% endfor %}
-                </div>
-            </div>
-            <div class="modal-footer bg-light py-2">
-                {% if shop_filter %}
-                <a href="{% url 'followup_dashboard' %}?tab={{ tab_view }}" class="btn btn-outline-danger btn-sm">
-                    <i class="bi bi-x-circle me-1"></i>Clear Shop Filter
-                </a>
-                {% endif %}
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
-            </div>
+            <a href="{% url 'followup_shops_list' %}" class="btn btn-sm btn-outline-primary fw-semibold">
+                <i class="bi bi-grid-fill me-1"></i>View All ({{ total_assigned_shops }}) Assigned Shops &rarr;
+            </a>
         </div>
-    </div>
-</div>
-
-<!-- Navigation Tabs for Follow-up Dashboard -->
-<div class="card rounded-3 shadow-sm mb-4">
-    <div class="card-header bg-white border-bottom p-0">
-        <ul class="nav nav-tabs card-header-tabs mx-3 mt-2" id="dashboardTabs" role="tablist">
-            <li class="nav-item">
-                <a class="nav-link {% if tab_view == 'customers' or not tab_view %}active fw-bold{% endif %}" href="?tab=customers{% if shop_filter %}&shop_id={{ shop_filter }}{% endif %}">
-                    <i class="bi bi-people me-1"></i> Authorized Customers ({{ total_customers }})
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link {% if tab_view == 'pending' %}active fw-bold{% endif %}" href="?tab=pending{% if shop_filter %}&shop_id={{ shop_filter }}{% endif %}">
-                    <i class="bi bi-hourglass-split me-1 text-warning"></i> Pending Follow-ups ({{ total_pending }})
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link {% if tab_view == 'upcoming' %}active fw-bold{% endif %}" href="?tab=upcoming{% if shop_filter %}&shop_id={{ shop_filter }}{% endif %}">
-                    <i class="bi bi-calendar-event me-1 text-danger"></i> Upcoming Tasks ({{ total_upcoming }})
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link {% if tab_view == 'completed' %}active fw-bold{% endif %}" href="?tab=completed{% if shop_filter %}&shop_id={{ shop_filter }}{% endif %}">
-                    <i class="bi bi-check2-circle me-1 text-success"></i> Completed ({{ total_completed }})
-                </a>
-            </li>
-        </ul>
-    </div>
-
-    <div class="card-body p-0">
-        {% if tab_view == 'pending' %}
-            <!-- TAB 2: PENDING FOLLOW-UPS -->
+        <div class="card-body p-0">
+            {% if top_5_shops %}
             <div class="table-responsive">
-                {% if pending_followups %}
                 <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light">
+                    <thead class="bg-light text-uppercase small text-muted" style="font-size: 0.72rem;">
                         <tr>
-                            <th scope="col">Customer</th>
-                            <th scope="col">Shop</th>
-                            <th scope="col">Type</th>
-                            <th scope="col" style="min-width: 250px;">Notes / Commitment</th>
-                            <th scope="col">Scheduled Due Date</th>
-                            <th scope="col" class="text-end">Action</th>
+                            <th scope="col" class="ps-4">Rank</th>
+                            <th scope="col">Shop Name</th>
+                            <th scope="col">Contact Phone</th>
+                            <th scope="col">Address</th>
+                            <th scope="col" class="text-center">Assigned Customers</th>
+                            <th scope="col" class="text-end pe-4">Action</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for act in pending_followups %}
-                        <tr>
+                        {% for s in top_5_shops %}
+                        <tr style="border-bottom: 1px solid #f1f5f9;">
+                            <td class="ps-4 text-muted small fw-semibold font-monospace">#{{ forloop.counter }}</td>
                             <td>
-                                <a href="{% url 'followup_customer_detail' pk=act.customer.pk %}" class="fw-bold text-dark text-decoration-none">
-                                    {{ act.customer.name }}
+                                <a href="{% url 'followup_shop_detail' shop_id=s.pk %}" class="fw-bold text-dark text-decoration-none">
+                                    {{ s.name }}
                                 </a>
-                                <div class="small text-muted font-monospace">
-                                    <a href="tel:{{ act.customer.primary_mobile }}" class="text-decoration-none">
-                                        <i class="bi bi-telephone-fill me-1 text-success"></i>{{ act.customer.primary_mobile }}
-                                    </a>
-                                </div>
-
-                                <!-- Reschedule Due Date Modal for Follow-up Staff -->
-                                <div class="modal fade text-start" id="staffEditDueModal{{ customer.pk }}" tabindex="-1" aria-labelledby="staffEditDueModalLabel{{ customer.pk }}" aria-hidden="true">
-                                    <div class="modal-dialog modal-dialog-centered">
-                                        <div class="modal-content border-0 shadow">
-                                            <form method="post" action="{% url 'followup_edit_due_date' pk=customer.pk %}">
-                                                {% csrf_token %}
-                                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                                <div class="modal-header bg-dark text-white">
-                                                    <h6 class="modal-title fw-bold" id="staffEditDueModalLabel{{ customer.pk }}">
-                                                        <i class="bi bi-calendar-check me-2"></i>Reschedule Due Date: {{ customer.name }}
-                                                    </h6>
-                                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                                                </div>
-                                                <div class="modal-body p-4">
-                                                    <p class="small text-muted mb-3">
-                                                        Select the new agreed EMI due date for <strong>{{ customer.name }}</strong> ({{ customer.shop.name }}).
-                                                    </p>
-                                                    <div class="mb-3">
-                                                        <label class="form-label small fw-semibold text-secondary">New Due Date <span class="text-danger">*</span></label>
-                                                        <input type="date" name="due_date" class="form-control" value="{{ customer.next_due_date|date:'Y-m-d' }}" required>
-                                                    </div>
-                                                </div>
-                                                <div class="modal-footer bg-light">
-                                                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                                                    <button type="submit" class="btn btn-primary btn-sm fw-semibold">
-                                                        <i class="bi bi-check-circle me-1"></i> Update Due Date
-                                                    </button>
-                                                </div>
-                                            </form>
-                                        </div>
-                                    </div>
-                                </div>
+                                {% if s.owner_name %}<div class="text-muted small" style="font-size: 0.72rem;">Owner: {{ s.owner_name }}</div>{% endif %}
                             </td>
                             <td>
-                                <span class="badge bg-light text-primary border">
-                                    <i class="bi bi-shop me-1"></i>{{ act.shop.name }}
-                                </span>
-                            </td>
-                            <td>
-                                <span class="badge bg-warning-subtle text-warning-emphasis">
-                                    {{ act.get_activity_type_display }}
-                                </span>
-                            </td>
-                            <td>
-                                <div class="small text-dark">{{ act.notes }}</div>
-                                <div class="text-muted" style="font-size: 0.75rem;">Created {{ act.created_at|date:"M d, Y" }} by {{ act.employee.username }}</div>
-                            </td>
-                            <td>
-                                {% if act.next_followup_date %}
-                                    {% if act.next_followup_date < today %}
-                                        <span class="badge bg-danger text-white">
-                                            <i class="bi bi-exclamation-triangle-fill me-1"></i>Overdue: {{ act.next_followup_date|date:"M d, Y" }}
-                                        </span>
-                                    {% elif act.next_followup_date == today %}
-                                        <span class="badge bg-warning text-dark">
-                                            <i class="bi bi-clock-fill me-1"></i>Due Today ({{ act.next_followup_date|date:"M d" }})
-                                        </span>
-                                    {% else %}
-                                        <span class="badge bg-info-subtle text-info-emphasis">
-                                            <i class="bi bi-calendar-event me-1"></i>{{ act.next_followup_date|date:"M d, Y" }}
-                                        </span>
-                                    {% endif %}
-                                {% else %}
-                                    <span class="text-muted small">—</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-end text-nowrap">
-                                <form method="post" action="{% url 'followup_complete_activity' pk=act.pk %}" class="d-inline">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                    <button type="submit" class="btn btn-sm btn-success shadow-sm" title="Mark as Completed">
-                                        <i class="bi bi-check-lg me-1"></i> Mark Done
-                                    </button>
-                                </form>
-                                <a href="{% url 'followup_customer_detail' pk=act.customer.pk %}" class="btn btn-sm btn-outline-secondary">
-                                    <i class="bi bi-eye"></i>
+                                {% if s.phone %}
+                                <a href="tel:{{ s.phone }}" class="text-secondary text-decoration-none small">
+                                    <i class="bi bi-telephone me-1 text-muted"></i>{{ s.phone }}
                                 </a>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                {% else %}
-                <div class="text-center py-5 text-muted">
-                    <i class="bi bi-check-circle-fill display-4 text-success mb-2 d-block"></i>
-                    <h5 class="fw-semibold text-dark">No Pending Follow-ups</h5>
-                    <p class="small mb-0">All customer follow-up actions under your assigned shops are up to date!</p>
-                </div>
-                {% endif %}
-            </div>
-
-        {% elif tab_view == 'upcoming' %}
-            <!-- TAB 3: UPCOMING TASKS -->
-            <div class="table-responsive">
-                {% if upcoming_tasks %}
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th scope="col">Scheduled Date</th>
-                            <th scope="col">Customer</th>
-                            <th scope="col">Shop</th>
-                            <th scope="col">Action Required</th>
-                            <th scope="col" style="min-width: 250px;">Task Details / Instructions</th>
-                            <th scope="col" class="text-end">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for task in upcoming_tasks %}
-                        <tr>
-                            <td>
-                                {% if task.next_followup_date == today %}
-                                    <span class="badge bg-warning text-dark fs-6">
-                                        <i class="bi bi-bell-fill me-1"></i>Today ({{ task.next_followup_date|date:"M d" }})
-                                    </span>
-                                {% else %}
-                                    <span class="badge bg-primary-subtle text-primary fs-6">
-                                        <i class="bi bi-calendar-event me-1"></i>{{ task.next_followup_date|date:"M d, Y" }}
-                                    </span>
-                                {% endif %}
+                                {% else %}<span class="text-muted small">—</span>{% endif %}
                             </td>
                             <td>
-                                <a href="{% url 'followup_customer_detail' pk=task.customer.pk %}" class="fw-bold text-dark text-decoration-none">
-                                    {{ task.customer.name }}
-                                </a>
-                                <div class="small text-muted font-monospace">
-                                    <a href="tel:{{ task.customer.primary_mobile }}" class="text-decoration-none text-secondary">
-                                        {{ task.customer.primary_mobile }}
-                                    </a>
-                                </div>
-
-                                <!-- Reschedule Due Date Modal for Follow-up Staff -->
-                                <div class="modal fade text-start" id="staffEditDueModal{{ customer.pk }}" tabindex="-1" aria-labelledby="staffEditDueModalLabel{{ customer.pk }}" aria-hidden="true">
-                                    <div class="modal-dialog modal-dialog-centered">
-                                        <div class="modal-content border-0 shadow">
-                                            <form method="post" action="{% url 'followup_edit_due_date' pk=customer.pk %}">
-                                                {% csrf_token %}
-                                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                                <div class="modal-header bg-dark text-white">
-                                                    <h6 class="modal-title fw-bold" id="staffEditDueModalLabel{{ customer.pk }}">
-                                                        <i class="bi bi-calendar-check me-2"></i>Reschedule Due Date: {{ customer.name }}
-                                                    </h6>
-                                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                                                </div>
-                                                <div class="modal-body p-4">
-                                                    <p class="small text-muted mb-3">
-                                                        Select the new agreed EMI due date for <strong>{{ customer.name }}</strong> ({{ customer.shop.name }}).
-                                                    </p>
-                                                    <div class="mb-3">
-                                                        <label class="form-label small fw-semibold text-secondary">New Due Date <span class="text-danger">*</span></label>
-                                                        <input type="date" name="due_date" class="form-control" value="{{ customer.next_due_date|date:'Y-m-d' }}" required>
-                                                    </div>
-                                                </div>
-                                                <div class="modal-footer bg-light">
-                                                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                                                    <button type="submit" class="btn btn-primary btn-sm fw-semibold">
-                                                        <i class="bi bi-check-circle me-1"></i> Update Due Date
-                                                    </button>
-                                                </div>
-                                            </form>
-                                        </div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="badge bg-light text-primary border">
-                                    <i class="bi bi-shop me-1"></i>{{ task.shop.name }}
-                                </span>
-                            </td>
-                            <td>
-                                <span class="badge bg-secondary-subtle text-secondary">
-                                    {{ task.get_activity_type_display }}
-                                </span>
-                            </td>
-                            <td>{{ task.notes }}</td>
-                            <td class="text-end text-nowrap">
-                                <form method="post" action="{% url 'followup_complete_activity' pk=task.pk %}" class="d-inline">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                    <button type="submit" class="btn btn-sm btn-success shadow-sm" title="Mark as Completed">
-                                        <i class="bi bi-check-lg me-1"></i> Complete
-                                    </button>
-                                </form>
-                                <a href="{% url 'followup_customer_detail' pk=task.customer.pk %}" class="btn btn-sm btn-outline-primary">
-                                    <i class="bi bi-telephone-outbound me-1"></i> Contact
-                                </a>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                {% else %}
-                <div class="text-center py-5 text-muted">
-                    <i class="bi bi-calendar-check display-4 text-primary mb-2 d-block"></i>
-                    <h5 class="fw-semibold text-dark">No Upcoming Tasks Scheduled</h5>
-                    <p class="small mb-0">Schedule future follow-up dates when logging interactions with customers.</p>
-                </div>
-                {% endif %}
-            </div>
-
-        {% elif tab_view == 'completed' %}
-            <!-- TAB 4: COMPLETED FOLLOW-UPS -->
-            <div class="table-responsive">
-                {% if completed_followups %}
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th scope="col">Completed On</th>
-                            <th scope="col">Customer</th>
-                            <th scope="col">Shop</th>
-                            <th scope="col">Type</th>
-                            <th scope="col" style="min-width: 250px;">Resolution Notes</th>
-                            <th scope="col">Handled By</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for act in completed_followups %}
-                        <tr>
-                            <td class="text-muted small text-nowrap">
-                                <i class="bi bi-check-circle-fill text-success me-1"></i>{{ act.completed_at|default:act.created_at|date:"M d, Y H:i" }}
-                            </td>
-                            <td>
-                                <a href="{% url 'followup_customer_detail' pk=act.customer.pk %}" class="fw-bold text-dark text-decoration-none">
-                                    {{ act.customer.name }}
-                                </a>
-                            </td>
-                            <td>
-                                <span class="badge bg-light text-primary border">
-                                    <i class="bi bi-shop me-1"></i>{{ act.shop.name }}
-                                </span>
-                            </td>
-                            <td>
-                                <span class="badge bg-success-subtle text-success">
-                                    {{ act.get_activity_type_display }}
-                                </span>
-                            </td>
-                            <td>{{ act.notes }}</td>
-                            <td class="small text-muted">{{ act.employee.get_full_name|default:act.employee.username }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                {% else %}
-                <div class="text-center py-5 text-muted">
-                    <i class="bi bi-clipboard-x display-4 mb-2 d-block"></i>
-                    <h5 class="fw-semibold text-dark">No Completed Follow-ups Yet</h5>
-                    <p class="small mb-0">Follow-up activities marked completed will be logged here.</p>
-                </div>
-                {% endif %}
-            </div>
-
-        {% else %}
-            <!-- TAB 1: AUTHORIZED CUSTOMERS (DEFAULT) -->
-            <div class="p-3 bg-light border-bottom d-flex justify-content-between align-items-center flex-wrap gap-3">
-                <!-- Multi-Select Dues Filters (Can Click All Three Simultaneously) -->
-                <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <span class="small fw-bold text-muted text-uppercase me-1" style="font-size: 0.75rem; letter-spacing: 0.05em;">
-                        <i class="bi bi-funnel-fill text-primary me-1"></i>Dues Filter:
-                    </span>
-
-                    <!-- Filter 1: Today's Due (Toggle) -->
-                    <a href="?tab=customers{% if filter_due_today %}{% else %}&due_today=1{% endif %}{% if filter_upcoming_due %}&upcoming_due=1{% endif %}{% if filter_pending_due %}&pending_due=1{% endif %}{% if shop_filter %}&shop_id={{ shop_filter }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}" 
-                       class="btn btn-sm {% if filter_due_today %}btn-danger shadow-sm{% else %}btn-outline-danger{% endif %} fw-semibold d-inline-flex align-items-center gap-1"
-                       title="Toggle Today's Due Filter">
-                        <i class="bi bi-calendar2-event-fill"></i>
-                        <span>Today's Due</span>
-                        <span class="badge {% if filter_due_today %}bg-white text-danger{% else %}bg-danger text-white{% endif %} rounded-pill ms-1">
-                            {{ today_due_count }}
-                        </span>
-                        {% if filter_due_today %}<i class="bi bi-check2"></i>{% endif %}
-                    </a>
-
-                    <!-- Filter 2: Upcoming Due (Toggle) -->
-                    <a href="?tab=customers{% if filter_due_today %}&due_today=1{% endif %}{% if filter_upcoming_due %}{% else %}&upcoming_due=1{% endif %}{% if filter_pending_due %}&pending_due=1{% endif %}{% if shop_filter %}&shop_id={{ shop_filter }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}" 
-                       class="btn btn-sm {% if filter_upcoming_due %}btn-warning text-dark shadow-sm{% else %}btn-outline-warning text-dark{% endif %} fw-semibold d-inline-flex align-items-center gap-1"
-                       title="Toggle Upcoming Due Filter">
-                        <i class="bi bi-alarm-fill"></i>
-                        <span>Upcoming Due</span>
-                        <span class="badge {% if filter_upcoming_due %}bg-dark text-white{% else %}bg-warning text-dark border border-dark-subtle{% endif %} rounded-pill ms-1">
-                            {{ upcoming_due_count }}
-                        </span>
-                        {% if filter_upcoming_due %}<i class="bi bi-check2"></i>{% endif %}
-                    </a>
-
-                    <!-- Filter 3: Pending Dues (Toggle) -->
-                    <a href="?tab=customers{% if filter_due_today %}&due_today=1{% endif %}{% if filter_upcoming_due %}&upcoming_due=1{% endif %}{% if filter_pending_due %}{% else %}&pending_due=1{% endif %}{% if shop_filter %}&shop_id={{ shop_filter }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}" 
-                       class="btn btn-sm {% if filter_pending_due %}btn-purple text-white shadow-sm{% else %}btn-outline-secondary{% endif %} fw-semibold d-inline-flex align-items-center gap-1"
-                       style="{% if filter_pending_due %}background-color: #6b21a8; border-color: #6b21a8;{% else %}border-color: #6b21a8; color: #6b21a8;{% endif %}"
-                       title="Toggle Pending Due Filter">
-                        <i class="bi bi-hourglass-split"></i>
-                        <span>Pending Dues</span>
-                        <span class="badge {% if filter_pending_due %}bg-white text-dark{% else %}text-white{% endif %} rounded-pill ms-1" style="{% if not filter_pending_due %}background-color: #6b21a8;{% endif %}">
-                            {{ pending_due_count }}
-                        </span>
-                        {% if filter_pending_due %}<i class="bi bi-check2"></i>{% endif %}
-                    </a>
-
-                    <!-- All Customers / Reset Filters -->
-                    <a href="?tab=customers{% if shop_filter %}&shop_id={{ shop_filter }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}" 
-                       class="btn btn-sm {% if not has_dues_filter %}btn-secondary shadow-sm{% else %}btn-outline-secondary{% endif %} fw-semibold d-inline-flex align-items-center gap-1"
-                       title="Clear dues filters and view all customers">
-                        <i class="bi bi-people"></i>
-                        <span>All</span>
-                        <span class="badge {% if not has_dues_filter %}bg-white text-secondary{% else %}bg-secondary text-white{% endif %} rounded-pill ms-1">
-                            {{ all_count }}
-                        </span>
-                    </a>
-
-                    <!-- Direct Pending Follow-up Queue Button -->
-                    <a href="?tab=pending{% if shop_filter %}&shop_id={{ shop_filter }}{% endif %}" 
-                       class="btn btn-sm btn-outline-dark fw-semibold d-inline-flex align-items-center gap-1 ms-1">
-                        <i class="bi bi-clock-history text-warning"></i>
-                        <span>Pending Follow-ups</span>
-                        <span class="badge bg-warning text-dark rounded-pill ms-1">{{ total_pending }}</span>
-                    </a>
-                </div>
-
-                <!-- Customer Search Bar -->
-                <form method="get" class="d-flex gap-2">
-                    <input type="hidden" name="tab" value="customers">
-                    {% if filter_due_today %}<input type="hidden" name="due_today" value="1">{% endif %}
-                    {% if filter_upcoming_due %}<input type="hidden" name="upcoming_due" value="1">{% endif %}
-                    {% if filter_pending_due %}<input type="hidden" name="pending_due" value="1">{% endif %}
-                    {% if shop_filter %}<input type="hidden" name="shop_id" value="{{ shop_filter }}">{% endif %}
-                    <div class="input-group input-group-sm">
-                        <input type="text" name="q" class="form-control" placeholder="Search customer, phone, address..." value="{{ search_query }}">
-                        <button class="btn btn-primary" type="submit"><i class="bi bi-search"></i></button>
-                        {% if search_query %}
-                        <a href="{% url 'followup_dashboard' %}?tab=customers{% if filter_due_today %}&due_today=1{% endif %}{% if filter_upcoming_due %}&upcoming_due=1{% endif %}{% if filter_pending_due %}&pending_due=1{% endif %}{% if shop_filter %}&shop_id={{ shop_filter }}{% endif %}" class="btn btn-outline-secondary" title="Clear Search">
-                            <i class="bi bi-x"></i>
-                        </a>
-                        {% endif %}
-                    </div>
-                </form>
-            </div>
-
-            <div class="table-responsive">
-                {% if customers %}
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light text-uppercase small text-muted">
-                        <tr>
-                            <th scope="col" style="min-width: 180px;">Customer Name</th>
-                            <th scope="col" style="min-width: 160px;">Contact Numbers</th>
-                            <th scope="col">Shop</th>
-                            <th scope="col">Phone Model</th>
-                            <th scope="col" class="text-end">Monthly EMI</th>
-                            <th scope="col" class="text-center" style="min-width: 140px;">Pending Months</th>
-                            <th scope="col" style="min-width: 130px;">Next Due Date</th>
-                            <th scope="col">Follow-up Outcome</th>
-                            <th scope="col" class="text-end" style="min-width: 150px;">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for customer in customers %}
-                        <tr class="{% if customer.is_today_due %}table-danger-subtle border-start border-danger border-4{% elif customer.is_upcoming_due %}table-warning-subtle border-start border-warning border-4{% elif customer.is_pending_due %}border-start border-primary border-4{% elif customer.latest_activity.is_flagged %}table-warning{% endif %}">
-                            <td>
-                                <div class="d-flex align-items-center gap-1 mb-1 flex-wrap">
-                                    <a href="{% url 'followup_customer_detail' pk=customer.pk %}" class="fw-bold text-decoration-none text-dark fs-6">
-                                        {{ customer.name }}
-                                    </a>
-                                    {% if customer.calling_priority == 1 %}
-                                        <span class="badge bg-danger text-white ms-1" style="font-size: 0.68rem;">1st: Today's Due</span>
-                                    {% elif customer.calling_priority == 2 %}
-                                        <span class="badge bg-warning text-dark border border-dark-subtle ms-1" style="font-size: 0.68rem;">2nd: Upcoming</span>
-                                    {% elif customer.calling_priority == 3 %}
-                                        <span class="badge text-white ms-1" style="background-color: #6b21a8; font-size: 0.68rem;">3rd: Overdue</span>
-                                    {% endif %}
-                                </div>
-                                <div class="small text-muted font-monospace">Customer #{{ customer.pk }}</div>
-                            </td>
-                            <td>
-                                {% if customer.primary_mobile %}
-                                <div class="d-flex align-items-center gap-1">
-                                    <a href="tel:{{ customer.primary_mobile }}" class="fw-bold text-dark text-decoration-none small text-nowrap d-inline-flex align-items-center" title="Call Primary Mobile">
-                                        <span class="badge bg-success-subtle text-success border border-success-subtle me-1"><i class="bi bi-telephone-fill"></i></span>
-                                        <span class="font-monospace">{{ customer.primary_mobile }}</span>
-                                    </a>
-                                </div>
-                                {% endif %}
-                                {% if customer.secondary_mobile %}
-                                <div class="d-flex align-items-center gap-1 {% if customer.primary_mobile %}mt-1{% endif %}">
-                                    <a href="tel:{{ customer.secondary_mobile }}" class="text-secondary text-decoration-none small text-nowrap d-inline-flex align-items-center" title="Call Secondary / Alternate Phone">
-                                        <span class="badge bg-light text-secondary border me-1"><i class="bi bi-telephone-plus"></i></span>
-                                        <span class="font-monospace">{{ customer.secondary_mobile }}</span>
-                                    </a>
-                                </div>
-                                {% elif not customer.primary_mobile %}
-                                <span class="text-muted small">—</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <span class="badge bg-light text-primary border">
-                                    <i class="bi bi-shop me-1"></i>{{ customer.shop.name }}
-                                </span>
-                            </td>
-                            <td>
-                                <div class="fw-semibold text-dark small">
-                                    <i class="bi bi-phone text-secondary me-1"></i>{{ customer.mobile_model }}
-                                </div>
-                            </td>
-                            <td class="text-end">
-                                <span class="fw-bold text-danger">₹{{ customer.monthly_emi|floatformat:2 }}</span>
+                                <span class="small text-muted text-truncate d-inline-block" style="max-width: 280px;">{{ s.address|default:"—" }}</span>
                             </td>
                             <td class="text-center">
-                                {% if customer.pending_months_count > 1 %}
-                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle fw-bold py-1 px-2">
-                                        <i class="bi bi-exclamation-octagon-fill me-1"></i>{{ customer.pending_months_count }} Months Pending
-                                    </span>
-                                {% elif customer.pending_months_count == 1 %}
-                                    {% if customer.is_today_due %}
-                                    <span class="badge bg-danger text-white fw-bold py-1 px-2">
-                                        <i class="bi bi-bell-fill me-1"></i>1 Mo (Due Today)
-                                    </span>
-                                    {% else %}
-                                    <span class="badge bg-warning text-dark border border-dark-subtle fw-bold py-1 px-2">
-                                        <i class="bi bi-exclamation-triangle-fill me-1"></i>1 Month Pending
-                                    </span>
-                                    {% endif %}
-                                {% else %}
-                                    <span class="badge bg-success-subtle text-success border border-success-subtle py-1 px-2">
-                                        <i class="bi bi-check-circle me-1"></i>0 Mo (On Track)
-                                    </span>
-                                {% endif %}
+                                <span class="badge bg-light text-dark border px-2 py-1">{{ s.customers.count }} Customers</span>
                             </td>
-                            <td>
-                                {% if customer.next_due_date %}
-                                    <div class="d-flex align-items-center gap-1">
-                                        {% if customer.is_today_due %}
-                                            <span class="badge bg-danger text-white">
-                                                <i class="bi bi-bell-fill me-1"></i>Today ({{ customer.next_due_date|date:"M d" }})
-                                            </span>
-                                        {% elif customer.is_upcoming_due %}
-                                            <span class="badge bg-warning text-dark border border-dark-subtle">
-                                                <i class="bi bi-alarm-fill me-1"></i>Upcoming ({{ customer.next_due_date|date:"M d" }})
-                                            </span>
-                                        {% else %}
-                                            <span class="fw-semibold text-dark small">
-                                                {{ customer.next_due_date|date:"M d, Y" }}
-                                            </span>
-                                        {% endif %}
-                                        <button type="button" class="btn btn-sm btn-link text-muted p-0 ms-1" data-bs-toggle="modal" data-bs-target="#staffEditDueModal{{ customer.pk }}" title="Reschedule Next Due Date">
-                                            <i class="bi bi-pencil-square"></i>
-                                        </button>
-                                    </div>
-                                {% else %}
-                                    <span class="text-muted small">—</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% if customer.latest_activity.is_flagged or customer.latest_activity.outcome == 'NEED_TWO_DAYS' %}
-                                    <span class="badge bg-warning text-dark border border-warning shadow-sm">
-                                        <i class="bi bi-flag-fill text-danger me-1"></i>Need Time (Call Again)
-                                    </span>
-                                    {% if customer.latest_activity.next_followup_date %}
-                                    <div class="small text-danger fw-semibold mt-1" style="font-size: 0.72rem;">
-                                        <i class="bi bi-clock-history me-1"></i>Call on: {{ customer.latest_activity.next_followup_date|date:"M d, Y" }}
-                                    </div>
-                                    {% endif %}
-                                {% elif customer.latest_activity.outcome == 'PAID' %}
-                                    <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
-                                        <i class="bi bi-check-circle-fill me-1"></i>Paid
-                                    </span>
-                                {% elif customer.latest_activity.outcome == 'NOT_PAID' %}
-                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
-                                        <i class="bi bi-x-circle-fill me-1"></i>Not Paid
-                                    </span>
-                                {% else %}
-                                    <span class="badge bg-secondary-subtle text-secondary px-2 py-1">
-                                        Pending Follow-up
-                                    </span>
-                                {% endif %}
-                            </td>
-                            <td class="text-end text-nowrap">
-                                <!-- Quick Update Button -->
-                                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#quickUpdateModal{{ customer.pk }}">
-                                    <i class="bi bi-pencil-square me-1"></i>Update
-                                </button>
-
-                                <!-- Customer Detail Link -->
-                                <a href="{% url 'followup_customer_detail' pk=customer.pk %}" class="btn btn-sm btn-light border" title="View Customer Dossier">
-                                    <i class="bi bi-eye"></i>
+                            <td class="text-end pe-4">
+                                <a href="{% url 'followup_shop_detail' shop_id=s.pk %}" class="btn btn-sm btn-outline-secondary py-1 px-2.5">
+                                    View Shop Customers &rarr;
                                 </a>
-
-                                <!-- Quick Update Modal for each customer -->
-                                <div class="modal fade text-start" id="quickUpdateModal{{ customer.pk }}" tabindex="-1" aria-labelledby="modalLabel{{ customer.pk }}" aria-hidden="true">
-                                    <div class="modal-dialog modal-dialog-centered">
-                                        <div class="modal-content border-0 shadow">
-                                            <form method="post" action="{% url 'followup_quick_update' pk=customer.pk %}">
-                                                {% csrf_token %}
-                                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                                <div class="modal-header bg-primary text-white">
-                                                    <h6 class="modal-title fw-bold" id="modalLabel{{ customer.pk }}">
-                                                        <i class="bi bi-clipboard2-check me-2"></i>Log Status Update: {{ customer.name }}
-                                                    </h6>
-                                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                                                </div>
-                                                <div class="modal-body p-4">
-                                                    <!-- Due Overview Banner -->
-                                                    <div class="bg-light p-3 rounded-3 border mb-3 small">
-                                                        <div class="d-flex justify-content-between mb-1">
-                                                            <span class="text-muted">Shop:</span>
-                                                            <span class="fw-semibold text-dark">{{ customer.shop.name }}</span>
-                                                        </div>
-                                                        <div class="d-flex justify-content-between mb-1">
-                                                            <span class="text-muted">Device:</span>
-                                                            <span class="fw-semibold text-dark">{{ customer.mobile_model }}</span>
-                                                        </div>
-                                                        <div class="d-flex justify-content-between mb-1">
-                                                            <span class="text-muted">Monthly EMI:</span>
-                                                            <span class="fw-bold text-danger">₹{{ customer.monthly_emi|floatformat:2 }}</span>
-                                                        </div>
-                                                        <div class="d-flex justify-content-between">
-                                                            <span class="text-muted">Pending Months:</span>
-                                                            <span class="fw-semibold text-dark">{{ customer.pending_months_text }}</span>
-                                                        </div>
-                                                    </div>
-
-                                                    <!-- 3 Specific Status Update Options -->
-                                                    <label class="form-label fw-bold text-dark small mb-2">
-                                                        Select Customer Follow-up Outcome <span class="text-danger">*</span>
-                                                    </label>
-                                                    <div class="d-flex flex-column gap-2 mb-3">
-                                                        <label class="p-3 border rounded-3 d-flex align-items-center gap-2 cursor-pointer bg-light-subtle hover-shadow">
-                                                            <input class="form-check-input mt-0" type="radio" name="outcome" value="PAID" {% if customer.latest_activity.outcome == 'PAID' %}checked{% endif %} required>
-                                                            <div>
-                                                                <span class="fw-bold text-success"><i class="bi bi-check-circle-fill me-1"></i>Paid</span>
-                                                                <div class="text-muted small">Customer has successfully completed payment for this cycle.</div>
-                                                            </div>
-                                                        </label>
-
-                                                        <label class="p-3 border rounded-3 d-flex align-items-center gap-2 cursor-pointer bg-light-subtle hover-shadow">
-                                                            <input class="form-check-input mt-0" type="radio" name="outcome" value="NOT_PAID" {% if customer.latest_activity.outcome == 'NOT_PAID' or not customer.latest_activity %}checked{% endif %} required>
-                                                            <div>
-                                                                <span class="fw-bold text-danger"><i class="bi bi-x-circle-fill me-1"></i>Not Paid</span>
-                                                                <div class="text-muted small">Customer has not paid; remains in pending follow-up queue.</div>
-                                                            </div>
-                                                        </label>
-
-                                                        <!-- Time Requested / Calendar Callback Option -->
-                                                        <div class="p-3 border border-warning rounded-3 bg-warning-subtle">
-                                                            <label class="d-flex align-items-center gap-2 cursor-pointer mb-2">
-                                                                <input class="form-check-input mt-0" type="radio" name="outcome" value="NEED_TWO_DAYS" {% if customer.latest_activity.outcome == 'NEED_TWO_DAYS' %}checked{% endif %} required id="radioNeedDays{{ customer.pk }}">
-                                                                <div>
-                                                                    <span class="fw-bold text-dark"><i class="bi bi-calendar-check-fill text-warning me-1"></i>Need Time / Promised Callback Date</span>
-                                                                    <span class="badge bg-danger text-white ms-1">Flag for Callback</span>
-                                                                    <div class="text-dark small mt-1">Customer requested days of time. Pick the exact callback date from calendar.</div>
-                                                                </div>
-                                                            </label>
-
-                                                            <div class="ms-4 mt-2 p-2 bg-white rounded border">
-                                                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                                                    <label class="form-label small fw-semibold text-dark mb-0">
-                                                                        <i class="bi bi-calendar-event me-1 text-primary"></i>Pick Agreed Callback Date:
-                                                                    </label>
-                                                                    <span class="badge bg-light text-dark border small" id="daysNeededLabel{{ customer.pk }}">In 2 days</span>
-                                                                </div>
-                                                                <div class="input-group input-group-sm mb-2">
-                                                                    <span class="input-group-text bg-light"><i class="bi bi-calendar-date"></i></span>
-                                                                    <input type="date" name="promised_date" id="promisedDateInput{{ customer.pk }}" class="form-control" value="{{ customer.promised_date_initial|date:'Y-m-d' }}" min="{{ today|date:'Y-m-d' }}" onchange="updateCallbackDateDisplay('{{ customer.pk }}', '{{ today|date:'Y-m-d' }}')">
-                                                                </div>
-                                                                <div class="d-flex flex-wrap gap-1 align-items-center">
-                                                                    <span class="small text-muted me-1" style="font-size: 0.75rem;">Quick Select:</span>
-                                                                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size: 0.75rem;" onclick="setQuickCallbackDate('{{ customer.pk }}', 1, '{{ today|date:'Y-m-d' }}')">+1 Day</button>
-                                                                    <button type="button" class="btn btn-sm btn-outline-warning text-dark py-0 px-2 fw-semibold" style="font-size: 0.75rem;" onclick="setQuickCallbackDate('{{ customer.pk }}', 2, '{{ today|date:'Y-m-d' }}')">+2 Days</button>
-                                                                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size: 0.75rem;" onclick="setQuickCallbackDate('{{ customer.pk }}', 3, '{{ today|date:'Y-m-d' }}')">+3 Days</button>
-                                                                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size: 0.75rem;" onclick="setQuickCallbackDate('{{ customer.pk }}', 5, '{{ today|date:'Y-m-d' }}')">+5 Days</button>
-                                                                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size: 0.75rem;" onclick="setQuickCallbackDate('{{ customer.pk }}', 7, '{{ today|date:'Y-m-d' }}')">+1 Week</button>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <!-- Follow-up Notes -->
-                                                    <div class="mb-2">
-                                                        <label class="form-label fw-semibold text-dark small" for="notes{{ customer.pk }}">
-                                                            Call Remarks / Notes (Optional)
-                                                        </label>
-                                                        <textarea name="notes" id="notes{{ customer.pk }}" rows="2" class="form-control" placeholder="Customer response, reason, promised payment mode..."></textarea>
-                                                    </div>
-                                                </div>
-                                                <div class="modal-footer bg-light">
-                                                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                                                    <button type="submit" class="btn btn-primary btn-sm fw-semibold">
-                                                        <i class="bi bi-check-circle me-1"></i> Save Update
-                                                    </button>
-                                                </div>
-                                            </form>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Reschedule Due Date Modal for Follow-up Staff -->
-                                <div class="modal fade text-start" id="staffEditDueModal{{ customer.pk }}" tabindex="-1" aria-labelledby="staffEditDueModalLabel{{ customer.pk }}" aria-hidden="true">
-                                    <div class="modal-dialog modal-dialog-centered">
-                                        <div class="modal-content border-0 shadow">
-                                            <form method="post" action="{% url 'followup_edit_due_date' pk=customer.pk %}">
-                                                {% csrf_token %}
-                                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                                <div class="modal-header bg-dark text-white">
-                                                    <h6 class="modal-title fw-bold" id="staffEditDueModalLabel{{ customer.pk }}">
-                                                        <i class="bi bi-calendar-check me-2"></i>Reschedule Due Date: {{ customer.name }}
-                                                    </h6>
-                                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                                                </div>
-                                                <div class="modal-body p-4">
-                                                    <p class="small text-muted mb-3">
-                                                        Select the new agreed EMI due date for <strong>{{ customer.name }}</strong> ({{ customer.shop.name }}).
-                                                    </p>
-                                                    <div class="mb-3">
-                                                        <label class="form-label small fw-semibold text-secondary">New Due Date <span class="text-danger">*</span></label>
-                                                        <input type="date" name="due_date" class="form-control" value="{{ customer.next_due_date|date:'Y-m-d' }}" required>
-                                                    </div>
-                                                </div>
-                                                <div class="modal-footer bg-light">
-                                                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                                                    <button type="submit" class="btn btn-primary btn-sm fw-semibold">
-                                                        <i class="bi bi-check-circle me-1"></i> Update Due Date
-                                                    </button>
-                                                </div>
-                                            </form>
-                                        </div>
-                                    </div>
-                                </div>
                             </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
-                {% else %}
-                <div class="text-center py-5 text-muted">
-                    <i class="bi bi-person-x display-5 d-block mb-2"></i>
-                    <h6 class="fw-semibold">No Customers Found</h6>
-                    <p class="small mb-0">
-                        {% if search_query or shop_filter or due_filter != 'all' %}
-                        No customers matched your filter criteria.
-                        {% else %}
-                        No customer records are present under your assigned shops yet.
-                        {% endif %}
-                    </p>
-                </div>
-                {% endif %}
             </div>
-
-            <!-- Pagination -->
-            {% if customers.has_other_pages %}
-            <div class="card-footer bg-white border-top py-3 d-flex justify-content-between align-items-center">
-                <span class="text-muted small">
-                    Showing Page {{ customers.number }} of {{ customers.paginator.num_pages }}
-                </span>
-                <ul class="pagination pagination-sm mb-0">
-                    {% if customers.has_previous %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ customers.previous_page_number }}&tab=customers{% if filter_due_today %}&due_today=1{% endif %}{% if filter_upcoming_due %}&upcoming_due=1{% endif %}{% if filter_pending_due %}&pending_due=1{% endif %}{% if due_filter %}&due_filter={{ due_filter }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}{% if shop_filter %}&shop_id={{ shop_filter }}{% endif %}">Previous</a>
-                    </li>
-                    {% else %}
-                    <li class="page-item disabled"><span class="page-link">Previous</span></li>
-                    {% endif %}
-
-                    {% for p in customers.paginator.page_range %}
-                        {% if p == customers.number %}
-                        <li class="page-item active"><span class="page-link">{{ p }}</span></li>
-                        {% elif p > customers.number|add:"-3" and p < customers.number|add:"3" %}
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ p }}&tab=customers{% if filter_due_today %}&due_today=1{% endif %}{% if filter_upcoming_due %}&upcoming_due=1{% endif %}{% if filter_pending_due %}&pending_due=1{% endif %}{% if due_filter %}&due_filter={{ due_filter }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}{% if shop_filter %}&shop_id={{ shop_filter }}{% endif %}">{{ p }}</a>
-                        </li>
-                        {% endif %}
-                    {% endfor %}
-
-                    {% if customers.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ customers.next_page_number }}&tab=customers{% if filter_due_today %}&due_today=1{% endif %}{% if filter_upcoming_due %}&upcoming_due=1{% endif %}{% if filter_pending_due %}&pending_due=1{% endif %}{% if due_filter %}&due_filter={{ due_filter }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}{% if shop_filter %}&shop_id={{ shop_filter }}{% endif %}">Next</a>
-                    </li>
-                    {% else %}
-                    <li class="page-item disabled"><span class="page-link">Next</span></li>
-                    {% endif %}
-                </ul>
+            {% else %}
+            <div class="text-center py-4 text-muted small">
+                No retail shops assigned to your account yet.
             </div>
             {% endif %}
-        {% endif %}
+        </div>
+    </div>
+
+    <!-- 10. Daily Task Priority Section -->
+    <div class="card border rounded-3 mb-4 shadow-sm" style="border-color: #e2e8f0;">
+        <div class="card-header bg-white py-3 px-4 d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom" style="border-color: #eaecf0;">
+            <div>
+                <h6 class="fw-bold text-dark mb-0">
+                    <i class="bi bi-check2-circle text-primary me-2"></i>Daily Task Priority Queue
+                </h6>
+                <span class="small text-muted">Prioritized calling order: Today's Due &rarr; Upcoming Dues (7 Days) &rarr; Pending Dues</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <a href="{% url 'followup_tasks' %}?due_today=1" class="btn btn-sm btn-outline-danger py-1 px-2">
+                    Today's Due ({{ today_due_count }})
+                </a>
+                <a href="{% url 'followup_tasks' %}?upcoming_due=1" class="btn btn-sm btn-outline-warning text-dark py-1 px-2">
+                    Upcoming ({{ upcoming_due_count }})
+                </a>
+                <a href="{% url 'followup_tasks' %}?pending_due=1" class="btn btn-sm btn-outline-secondary py-1 px-2">
+                    Pending Dues ({{ pending_due_count }})
+                </a>
+                <a href="{% url 'followup_tasks' %}" class="btn btn-sm btn-primary py-1 px-2.5">
+                    View All Tasks &rarr;
+                </a>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            {% if priority_tasks %}
+                {% with customers=priority_tasks %}
+                    {% include "followups/portal/_customer_table.html" %}
+                {% endwith %}
+                <div class="card-footer bg-white border-top py-2 px-4 text-center">
+                    <a href="{% url 'followup_tasks' %}" class="text-decoration-none small fw-semibold text-primary">
+                        Explore all {{ total_customers }} customer payment records and advanced filters &rarr;
+                    </a>
+                </div>
+            {% else %}
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-check-circle display-6 text-success d-block mb-2"></i>
+                <h6 class="fw-bold text-dark">All Tasks Cleared</h6>
+                <p class="small mb-0">No urgent due or pending tasks awaiting follow-up today.</p>
+            </div>
+            {% endif %}
+        </div>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-function filterModalShops() {
-    const input = document.getElementById('shopModalSearchInput');
-    const query = (input ? input.value : '').toLowerCase().trim();
-    const rows = document.querySelectorAll('#allShopsModalList .shop-modal-row');
-    rows.forEach(function(row) {
-        const text = (row.innerText || row.textContent).toLowerCase();
-        row.style.display = (!query || text.indexOf(query) !== -1) ? '' : 'none';
-    });
-}
-
-function updateCallbackDateDisplay(pk, todayStr) {
-    const input = document.getElementById('promisedDateInput' + pk);
-    const label = document.getElementById('daysNeededLabel' + pk);
-    const radio = document.getElementById('radioNeedDays' + pk);
-    if (radio) radio.checked = true;
-    if (!input || !label) return;
-
-    if (input.value) {
-        const selected = new Date(input.value + 'T00:00:00');
-        const today = new Date(todayStr + 'T00:00:00');
-        const diffMs = selected - today;
-        const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-        if (diffDays <= 0) {
-            label.textContent = 'Today';
-        } else if (diffDays === 1) {
-            label.textContent = 'In 1 day';
+function handleModalOutcomeChange(pk) {
+    const radioNeed = document.getElementById('outcomeRadioNeedTime' + pk);
+    const box = document.getElementById('callbackCalendarBox' + pk);
+    if (radioNeed && box) {
+        if (radioNeed.checked) {
+            box.classList.remove('d-none');
         } else {
-            label.textContent = 'In ' + diffDays + ' days';
+            box.classList.add('d-none');
         }
     }
 }
 
-function setQuickCallbackDate(pk, daysToAdd, todayStr) {
+function updateCallbackDaysHelper(pk, todayStr) {
     const input = document.getElementById('promisedDateInput' + pk);
-    const radio = document.getElementById('radioNeedDays' + pk);
-    if (radio) radio.checked = true;
-    if (!input) return;
+    const helper = document.getElementById('callbackHelperText' + pk);
+    const label = document.getElementById('callbackDaysLabel' + pk);
+    if (!input || !input.value) return;
 
-    const base = new Date(todayStr + 'T00:00:00');
-    base.setDate(base.getDate() + daysToAdd);
-    const yyyy = base.getFullYear();
-    const mm = String(base.getMonth() + 1).padStart(2, '0');
-    const dd = String(base.getDate()).padStart(2, '0');
-    input.value = yyyy + '-' + mm + '-' + dd;
-    updateCallbackDateDisplay(pk, todayStr);
+    const selected = new Date(input.value + 'T00:00:00');
+    const today = new Date(todayStr + 'T00:00:00');
+    const diffMs = selected - today;
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+    let msg = '';
+    if (diffDays <= 0) {
+        msg = 'Follow-up scheduled for today';
+    } else if (diffDays === 1) {
+        msg = 'Follow-up scheduled in 1 day';
+    } else {
+        msg = 'Follow-up scheduled in ' + diffDays + ' days';
+    }
+    if (helper) helper.textContent = msg + ' (' + input.value + ')';
+    if (label) label.textContent = msg;
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.status-update-form').forEach(function(form) {
+        form.addEventListener('submit', function() {
+            const btn = form.querySelector('.submit-btn');
+            if (btn) {
+                const text = btn.querySelector('.btn-text');
+                const spinner = btn.querySelector('.btn-spinner');
+                if (text) text.textContent = 'Saving...';
+                if (spinner) spinner.classList.remove('d-none');
+                btn.disabled = true;
+            }
+        });
+    });
+});
 </script>
 {% endblock %}

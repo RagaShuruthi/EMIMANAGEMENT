@@ -192,12 +192,53 @@
                                     <i class="bi {% if emp.is_active %}bi-person-dash{% else %}bi-person-check{% endif %}"></i>
                                 </button>
                             </form>
+                            <button type="button" class="btn btn-sm btn-outline-danger" title="Permanently Delete Follow-up Person" data-bs-toggle="modal" data-bs-target="#deleteFollowupModal{{ emp.pk }}">
+                                <i class="bi bi-trash"></i>
+                            </button>
                         </div>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
+
+        {% for emp in employees %}
+        <!-- Permanent Delete Follow-up Person Modal for #{{ emp.pk }} -->
+        <div class="modal fade" id="deleteFollowupModal{{ emp.pk }}" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header bg-danger text-white py-3">
+                        <h5 class="modal-title fw-bold">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>Permanently Delete Follow-up Person
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-4 text-start">
+                        <div class="text-center mb-3">
+                            <div class="d-inline-flex p-3 rounded-circle bg-danger-subtle text-danger mb-2">
+                                <i class="bi bi-person-x-fill fs-2"></i>
+                            </div>
+                            <h5 class="fw-bold text-dark mb-1">Delete "{{ emp.get_full_name|default:emp.username }}"?</h5>
+                            <span class="badge bg-secondary-subtle text-secondary font-monospace">Username: @{{ emp.username }}</span>
+                        </div>
+                        <div class="alert alert-danger border-danger-subtle small mb-0">
+                            <div class="fw-bold mb-1"><i class="bi bi-shield-exclamation me-1"></i> Irreversible Action:</div>
+                            This will <strong>permanently delete</strong> this follow-up person's account from the database, revoking their portal access and removing all shop assignments. This cannot be undone.
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light py-2">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                        <form method="post" action="{% url 'admin_followup_delete' pk=emp.pk %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-danger btn-sm">
+                                <i class="bi bi-trash-fill me-1"></i> Permanently Delete
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
         {% else %}
         <div class="text-center py-5">
             <i class="bi bi-person-x display-4 text-muted mb-3 d-block"></i>

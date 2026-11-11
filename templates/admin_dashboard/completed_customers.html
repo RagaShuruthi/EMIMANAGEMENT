@@ -158,7 +158,7 @@
                     <th scope="col" class="text-end">Monthly EMI</th>
                     <th scope="col" class="text-end">Amount Paid</th>
                     <th scope="col" class="text-end">Remaining Balance</th>
-                    <th scope="col" class="text-center">Status</th>
+                    <th scope="col" class="text-center">Completed Date</th>
                     <th scope="col" style="min-width: 200px;">Update Status / Notes</th>
                     <th scope="col" class="text-end">Action</th>
                 </tr>
@@ -223,11 +223,15 @@
                         ₹0.00
                     </td>
 
-                    <!-- Status -->
+                    <!-- Completed Date -->
                     <td class="text-center">
-                        <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
-                            <i class="bi bi-patch-check-fill me-1"></i>Completed
+                        {% if row.completed_date %}
+                        <span class="badge bg-light text-dark border font-monospace px-2 py-1">
+                            <i class="bi bi-calendar-check text-success me-1"></i>{{ row.completed_date|date:"d-m-Y" }}
                         </span>
+                        {% else %}
+                        <span class="badge bg-light text-muted border font-monospace px-2 py-1">—</span>
+                        {% endif %}
                     </td>
 
                     <!-- Update Status Note -->
@@ -244,14 +248,58 @@
 
                     <!-- Action -->
                     <td class="text-end">
-                        <a href="{% url 'admin_customer_detail' pk=row.customer_id %}" class="btn btn-sm btn-outline-primary" title="View Customer Dossier & Payment Ledger">
-                            <i class="bi bi-eye me-1"></i> View
-                        </a>
+                        <div class="btn-group">
+                            <a href="{% url 'admin_customer_detail' pk=row.customer_id %}" class="btn btn-sm btn-outline-primary" title="View Customer Dossier & Payment Ledger">
+                                <i class="bi bi-eye me-1"></i> View
+                            </a>
+                            <button type="button" class="btn btn-sm btn-outline-danger" title="Permanently Delete Customer" data-bs-toggle="modal" data-bs-target="#completedDeleteModal{{ row.customer_id }}">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
+
+        {% for row in customers %}
+        <!-- Permanent Delete Customer Modal for #{{ row.customer_id }} -->
+        <div class="modal fade" id="completedDeleteModal{{ row.customer_id }}" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header bg-danger text-white py-3">
+                        <h5 class="modal-title fw-bold">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>Permanently Delete Customer
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-4 text-start">
+                        <div class="text-center mb-3">
+                            <div class="d-inline-flex p-3 rounded-circle bg-danger-subtle text-danger mb-2">
+                                <i class="bi bi-person-x-fill fs-2"></i>
+                            </div>
+                            <h5 class="fw-bold text-dark mb-1">Delete "{{ row.customer_name }}"?</h5>
+                            <span class="badge bg-secondary-subtle text-secondary font-monospace">Customer ID #{{ row.customer_id }} &bull; {{ row.shop_name }}</span>
+                        </div>
+                        <div class="alert alert-danger border-danger-subtle small mb-0">
+                            <div class="fw-bold mb-1"><i class="bi bi-shield-exclamation me-1"></i> Irreversible Action:</div>
+                            This will <strong>permanently delete</strong> this customer from the database, including all application files, EMI schedules, payment transaction receipts, and notes. This cannot be undone.
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light py-2">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                        <form method="post" action="{% url 'admin_customer_delete' pk=row.customer_id %}" class="d-inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button type="submit" class="btn btn-danger btn-sm">
+                                <i class="bi bi-trash-fill me-1"></i> Permanently Delete
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
         {% else %}
         <div class="text-center py-5">
             <i class="bi bi-check2-all text-muted display-4 mb-3 d-block"></i>

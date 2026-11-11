@@ -146,12 +146,11 @@ def add_shop_view(request):
                 with transaction.atomic():
                     shop = form.save(commit=False)
 
-                    # Inline creation of shop owner login account & password
-                    create_credentials = form.cleaned_data.get("create_credentials")
+                    # Direct creation of shop owner login account & password
                     login_username = form.cleaned_data.get("login_username", "").strip()
                     login_password = form.cleaned_data.get("login_password", "")
 
-                    if (create_credentials or login_username) and login_password:
+                    if login_username and login_password:
                         owner_user = User.objects.create_user(
                             username=login_username,
                             password=login_password,
@@ -271,18 +270,28 @@ def edit_shop_view(request, pk):
                 with transaction.atomic():
                     shop = form.save(commit=False)
 
-                    # Inline creation of shop owner account if shop didn't have one
-                    create_credentials = form.cleaned_data.get("create_credentials")
+                    # Direct update/creation of shop owner login account & password
                     login_username = form.cleaned_data.get("login_username", "").strip()
                     login_password = form.cleaned_data.get("login_password", "")
 
-                    if (create_credentials or login_username) and login_password:
+                    if shop.owner_account:
+                        owner_user = shop.owner_account
+                        if login_username and owner_user.username != login_username:
+                            owner_user.username = login_username
+                        if login_password and (login_password != shop.assigned_password or not owner_user.has_usable_password()):
+                            owner_user.set_password(login_password)
+                            shop.assigned_password = login_password
+                        if shop.email:
+                            owner_user.email = shop.email
+                        owner_user.is_active = shop.is_active
+                        owner_user.save()
+                    elif login_username and login_password:
                         owner_user = User.objects.create_user(
                             username=login_username,
                             password=login_password,
                             email=shop.email or "",
                             role=User.Role.SHOP_OWNER,
-                            is_active=True,
+                            is_active=shop.is_active,
                             is_staff=False,
                             is_superuser=False,
                         )
@@ -390,6 +399,11 @@ def shop_status_view(request, pk):
     shop.is_active = not shop.is_active
     shop.save(update_fields=["is_active", "updated_at"])
 
+    # Synchronize owner account active status so deactivated shop cannot login
+    if shop.owner_account:
+        shop.owner_account.is_active = shop.is_active
+        shop.owner_account.save(update_fields=["is_active"])
+
     status_str = "activated" if shop.is_active else "deactivated"
     messages.success(request, f"Shop '{shop.name}' was successfully {status_str}.")
 
@@ -398,3 +412,24 @@ def shop_status_view(request, pk):
     if next_url:
         return redirect(next_url)
     return redirect("shop_detail", pk=shop.pk)
+
+
+@login_required
+@admin_required
+@require_POST
+def delete_shop_view(request, pk):
+    """
+    Permanently deletes a retail shop and all associated data from the database.
+    URL: /admin-dashboard/shops/<int:pk>/delete/
+    """
+    shop = get_object_or_404(Shop, pk=pk)
+    shop_name = shop.name
+    with transaction.atomic():
+        owner_account = shop.owner_account
+        if owner_account and not owner_account.is_superuser and owner_account.role == User.Role.SHOP_OWNER:
+            owner_account.delete()
+        shop.delete()
+
+    messages.success(request, f"Shop '{shop_name}' has been permanently deleted from the database.")
+    return redirect("shop_list")
+

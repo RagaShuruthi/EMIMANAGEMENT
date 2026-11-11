@@ -11,6 +11,9 @@
         </p>
     </div>
     <div class="d-flex gap-2">
+        <a href="{% url 'shop_reports' %}" class="btn btn-outline-primary shadow-sm px-3 py-2 fw-semibold">
+            <i class="bi bi-bar-chart-line-fill me-1"></i> Reports & Analytics
+        </a>
         <a href="{% url 'shop_customer_add' %}" class="btn btn-primary shadow-sm px-3 py-2 fw-semibold">
             <i class="bi bi-plus-lg me-1"></i> + Add New Customer
         </a>
@@ -186,6 +189,7 @@
                     <th scope="col">Mobile Model</th>
                     <th scope="col">Device Price</th>
                     <th scope="col">Down Payment</th>
+                    <th scope="col">Monthly EMI</th>
                     <th scope="col">Financier Request</th>
                     <th scope="col">Status</th>
                     <th scope="col">Date</th>
@@ -207,6 +211,7 @@
                     <td>{{ app.mobile_model }}</td>
                     <td>₹{{ app.mobile_price|floatformat:2 }}</td>
                     <td>₹{{ app.down_payment|floatformat:2 }}</td>
+                    <td class="fw-bold text-primary">₹{{ app.monthly_emi|floatformat:2 }} <small class="text-muted fw-normal">×{{ app.emi_duration }}m</small></td>
                     <td class="fw-bold text-dark">₹{{ app.financier_request_amount|floatformat:2 }}</td>
                     <td>
                         {% if app.status == 'APPROVED' %}
