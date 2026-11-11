@@ -111,6 +111,35 @@ class CustomerUpdateHistory(models.Model):
     notes = models.TextField(
         help_text="Update note message."
     )
+    section = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="Section where the update occurred (e.g. EMI Installments, Customer Profile)."
+    )
+    field_name = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="Specific field updated (e.g. Amount Paid, Amount Due, EMI Due Date, Status)."
+    )
+    previous_value = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Value prior to modification."
+    )
+    new_value = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="New updated value."
+    )
+    description = models.TextField(
+        blank=True,
+        default="",
+        help_text="Detailed description of the modification."
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         help_text="Date and time when this note was logged."

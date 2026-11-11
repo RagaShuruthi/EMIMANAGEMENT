@@ -499,4 +499,236 @@ class CustomerManagementUpgradeTests(TestCase):
         self.assertContains(res, "-21000.00")
         self.assertNotContains(res, "Total Device Value")
 
+    def test_20_customer_status_editable_and_audited(self):
+        """
+        Requirement 2:
+        - Customer Status is editable directly via dropdown of valid existing options.
+        - Saved in DB and persists on refresh.
+        - Automatically recorded in Customer Update Audit with previous status, new status, updated by, date/time.
+        """
+        cust = Customer.objects.create(shop=self.shop_a, name="Status Test Customer", primary_mobile="9876500091")
+        app = FinanceApplication.objects.create(
+            shop=self.shop_a,
+            customer=cust,
+            mobile_price=Decimal("15000.00"),
+            monthly_emi=Decimal("5000.00"),
+            emi_duration=3,
+            status=FinanceApplication.Status.APPROVED
+        )
+        self.client.login(username="admin_user", password="AdminPassword123!")
+
+        # 1. Edit customer application status
+        post_res = self.client.post(
+            reverse("admin_customer_change_status", kwargs={"pk": cust.pk}),
+            {"status": FinanceApplication.Status.PAID}
+        )
+        self.assertEqual(post_res.status_code, 302)
+        app.refresh_from_db()
+        self.assertEqual(app.status, FinanceApplication.Status.PAID)
+
+        # Check Customer Update Audit
+        audit = CustomerUpdateHistory.objects.filter(customer=cust, field_name="Customer Status").first()
+        self.assertIsNotNone(audit)
+        self.assertEqual(audit.section, "Customer Details")
+        self.assertEqual(audit.previous_value, "Financier Approved")
+        self.assertEqual(audit.new_value, "Financier Paid")
+        self.assertEqual(audit.user, self.admin)
+
+        # 2. Edit installment status
+        sched = app.emi_schedules.first()
+        inst_res = self.client.post(
+            reverse("admin_update_installment", kwargs={"pk": sched.pk}),
+            {
+                "amount": str(sched.amount),
+                "amount_paid": str(sched.amount_paid),
+                "due_date": sched.due_date.strftime("%Y-%m-%d"),
+                "status": "PAID",
+                "update_note": "Marked Paid by Admin"
+            }
+        )
+        self.assertEqual(inst_res.status_code, 302)
+        sched.refresh_from_db()
+        self.assertEqual(sched.status, CustomerEMISchedule.InstallmentStatus.PAID)
+        self.assertTrue(sched.is_paid)
+
+        # Check installment status audit
+        inst_audit = CustomerUpdateHistory.objects.filter(customer=cust, field_name="EMI Status").first()
+        self.assertIsNotNone(inst_audit)
+        self.assertEqual(inst_audit.section, "EMI Installments")
+        self.assertEqual(inst_audit.previous_value, "Pending")
+        self.assertEqual(inst_audit.new_value, "Paid")
+
+    def test_21_amount_paid_synchronization_across_all_sections(self):
+        """
+        Requirement 3:
+        - When admin updates Amount Paid on an installment, the updated amount automatically reflects
+          across: Customers List, Customer Details summary cards, Due/Paid lists, and Finance views.
+        - Amount Due is recalculated automatically.
+        - Actual payment transaction records are never deleted/overwritten.
+        """
+        cust = Customer.objects.create(shop=self.shop_a, name="Sync Test Customer", primary_mobile="9876500092")
+        app = FinanceApplication.objects.create(
+            shop=self.shop_a,
+            customer=cust,
+            mobile_price=Decimal("24000.00"),
+            monthly_emi=Decimal("8000.00"),
+            emi_duration=3,
+            status=FinanceApplication.Status.APPROVED
+        )
+        self.client.login(username="admin_user", password="AdminPassword123!")
+
+        # Initial state: 0 paid, 24,000 remaining
+        self.assertEqual(app.total_customer_paid, Decimal("0.00"))
+        self.assertEqual(app.customer_remaining_balance, Decimal("24000.00"))
+
+        sched1 = app.emi_schedules.order_by("installment_number")[0]
+        sched2 = app.emi_schedules.order_by("installment_number")[1]
+
+        # Admin updates installment #1 Amount Paid to 8,000.00
+        res1 = self.client.post(
+            reverse("admin_update_installment", kwargs={"pk": sched1.pk}),
+            {
+                "amount": str(sched1.amount),
+                "amount_paid": "8000.00",
+                "due_date": sched1.due_date.strftime("%Y-%m-%d"),
+                "status": "PAID"
+            }
+        )
+        self.assertEqual(res1.status_code, 302)
+        app.refresh_from_db()
+
+        # Check centralized model calculation
+        self.assertEqual(app.total_customer_paid, Decimal("8000.00"))
+        self.assertEqual(app.customer_remaining_balance, Decimal("16000.00"))
+
+        # Verify in Customer Detail page
+        detail_res = self.client.get(reverse("admin_customer_detail", kwargs={"pk": cust.pk}))
+        self.assertContains(detail_res, "8000.00")
+        self.assertContains(detail_res, "16000.00")
+
+        # Verify in All Customers directory
+        customers_res = self.client.get(reverse("admin_all_customers") + f"?q={cust.primary_mobile}")
+        self.assertContains(customers_res, "8000.00")
+        self.assertContains(customers_res, "16000.00")
+
+        # Admin updates installment #2 and #3 to fully pay
+        sched3 = app.emi_schedules.order_by("installment_number")[2]
+        self.client.post(reverse("admin_update_installment", kwargs={"pk": sched2.pk}), {"amount": "8000.00", "amount_paid": "8000.00", "due_date": sched2.due_date.strftime("%Y-%m-%d"), "status": "PAID"})
+        self.client.post(reverse("admin_update_installment", kwargs={"pk": sched3.pk}), {"amount": "8000.00", "amount_paid": "8000.00", "due_date": sched3.due_date.strftime("%Y-%m-%d"), "status": "PAID"})
+
+        app.refresh_from_db()
+        cust.refresh_from_db()
+        self.assertEqual(app.total_customer_paid, Decimal("24000.00"))
+        self.assertEqual(app.customer_remaining_balance, Decimal("0.00"))
+        self.assertIsNotNone(cust.completed_date)
+
+        # Verify in Completed Customers page
+        completed_res = self.client.get(reverse("admin_completed_customers"))
+        self.assertContains(completed_res, "Sync Test Customer")
+
+    def test_22_emi_due_date_editable_and_reclassifies(self):
+        """
+        Requirement 4:
+        - EMI Due Date field is editable using a date picker on each installment.
+        - Saved in DB and immediately recalculates due status (Due Today, Upcoming, Pending Due).
+        - Preserves previous due date in audit history.
+        """
+        cust = Customer.objects.create(shop=self.shop_a, name="Due Date Customer", primary_mobile="9876500093")
+        app = FinanceApplication.objects.create(
+            shop=self.shop_a,
+            customer=cust,
+            mobile_price=Decimal("18000.00"),
+            monthly_emi=Decimal("6000.00"),
+            emi_duration=3,
+            status=FinanceApplication.Status.APPROVED
+        )
+        self.client.login(username="admin_user", password="AdminPassword123!")
+
+        sched = app.emi_schedules.first()
+        old_due = sched.due_date
+        new_due = self.today  # Reschedule to today
+
+        res = self.client.post(
+            reverse("admin_update_installment", kwargs={"pk": sched.pk}),
+            {
+                "amount": str(sched.amount),
+                "amount_paid": str(sched.amount_paid),
+                "due_date": new_due.strftime("%Y-%m-%d"),
+                "status": sched.status
+            }
+        )
+        self.assertEqual(res.status_code, 302)
+        sched.refresh_from_db()
+        self.assertEqual(sched.due_date, new_due)
+
+        # Check due classification is now DUE_TODAY
+        app.refresh_from_db()
+        self.assertEqual(app.next_unpaid_due_date, self.today)
+        self.assertEqual(app.due_classification(today=self.today), "DUE_TODAY")
+
+        # Check Audit entry
+        audit = CustomerUpdateHistory.objects.filter(customer=cust, field_name="EMI Due Date").first()
+        self.assertIsNotNone(audit)
+        self.assertEqual(audit.previous_value, old_due.strftime("%d-%m-%Y"))
+        self.assertEqual(audit.new_value, new_due.strftime("%d-%m-%Y"))
+
+    def test_23_automatic_emi_update_audit_history_all_fields(self):
+        """
+        Requirement 5:
+        - Automatic audit entry generation for Amount Paid, Amount Due, EMI Due Date, EMI Status, Update Column.
+        - Previous and new values accurately captured.
+        - Failed updates do not create audit entries.
+        """
+        cust = Customer.objects.create(shop=self.shop_a, name="Audit Multi Test", primary_mobile="9876500094")
+        app = FinanceApplication.objects.create(
+            shop=self.shop_a,
+            customer=cust,
+            mobile_price=Decimal("12000.00"),
+            monthly_emi=Decimal("4000.00"),
+            emi_duration=3,
+            status=FinanceApplication.Status.APPROVED
+        )
+        self.client.login(username="admin_user", password="AdminPassword123!")
+        sched = app.emi_schedules.first()
+
+        initial_audit_count = CustomerUpdateHistory.objects.filter(customer=cust).count()
+
+        # Update multiple fields at once
+        new_date = self.today + timedelta(days=5)
+        res = self.client.post(
+            reverse("admin_update_installment", kwargs={"pk": sched.pk}),
+            {
+                "amount": "4500.00",
+                "amount_paid": "2000.00",
+                "due_date": new_date.strftime("%Y-%m-%d"),
+                "status": "PARTIAL",
+                "update_note": "Payment promised by Friday"
+            }
+        )
+        self.assertEqual(res.status_code, 302)
+
+        # Verify audit records created for every modified field
+        audits = CustomerUpdateHistory.objects.filter(customer=cust)
+        field_names = [a.field_name for a in audits]
+        self.assertIn("Amount Due", field_names)
+        self.assertIn("Amount Paid", field_names)
+        self.assertIn("EMI Due Date", field_names)
+        self.assertIn("EMI Status", field_names)
+        self.assertIn("Update Column", field_names)
+
+        # Test that invalid / failed update does NOT create audit entries
+        count_before_fail = audits.count()
+        fail_res = self.client.post(
+            reverse("admin_update_installment", kwargs={"pk": sched.pk}),
+            {
+                "amount": "-500.00",  # Invalid negative
+                "amount_paid": "0.00",
+                "due_date": new_date.strftime("%Y-%m-%d"),
+            }
+        )
+        self.assertEqual(fail_res.status_code, 302)
+        count_after_fail = CustomerUpdateHistory.objects.filter(customer=cust).count()
+        self.assertEqual(count_before_fail, count_after_fail)
+
+
 

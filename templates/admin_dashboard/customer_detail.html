@@ -40,6 +40,11 @@
                     {% elif app_details.0.due_status == 'OVERDUE' %}
                     <span class="badge" style="background-color: #7c3aed; color: #ffffff;">Pending Due</span>
                     {% endif %}
+                    {% if app_details.0.app %}
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 rounded-pill" data-bs-toggle="modal" data-bs-target="#detailEditCustomerStatusModal" title="Change Customer Status" style="font-size: 0.72rem;">
+                        <i class="bi bi-pencil-fill me-1"></i>Edit Status
+                    </button>
+                    {% endif %}
                 </div>
                 <div class="text-muted small mt-1">
                     Registered through partner store:
@@ -321,11 +326,11 @@
                         <thead class="table-light small text-muted text-uppercase" style="letter-spacing: 0.03em;">
                             <tr>
                                 <th style="width: 70px;">Inst #</th>
-                                <th style="width: 110px;">Due Date</th>
+                                <th style="width: 140px;">Due Date</th>
                                 <th style="min-width: 130px;" class="text-end">Amount Due (₹)</th>
                                 <th style="min-width: 130px;" class="text-end">Amount Paid (₹)</th>
                                 <th style="width: 110px;" class="text-end">Remaining</th>
-                                <th style="width: 90px;" class="text-center">Status</th>
+                                <th style="width: 110px;" class="text-center">Status</th>
                                 <th style="width: 110px;">Settled Date</th>
                                 <th style="min-width: 180px;">Update</th>
                                 <th style="width: 80px;" class="text-end">Action</th>
@@ -341,7 +346,14 @@
 
                             <tr class="small">
                                 <td class="fw-bold">#{{ sched.installment_number }}</td>
-                                <td class="fw-semibold text-nowrap">{{ sched.due_date|date:"M d, Y" }}</td>
+
+                                <!-- Due Date (Editable Date Picker) -->
+                                <td>
+                                    <input type="date" name="due_date" form="formSched{{ sched.pk }}"
+                                           value="{{ sched.due_date|date:'Y-m-d' }}"
+                                           class="form-control form-control-sm font-monospace text-nowrap"
+                                           style="min-width: 125px;" title="Edit EMI Due Date" required>
+                                </td>
 
                                 <!-- Amount Due (Editable) -->
                                 <td>
@@ -368,15 +380,15 @@
                                     ₹{{ sched.remaining_amount|floatformat:2 }}
                                 </td>
 
-                                <!-- Status -->
-                                <td class="text-center">
-                                    {% if sched.is_paid %}
-                                        <span class="badge bg-success-subtle text-success border border-success-subtle">Paid</span>
-                                    {% elif sched.amount_paid > 0 %}
-                                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Partial</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary-subtle text-secondary">Pending</span>
-                                    {% endif %}
+                                <!-- Status (Editable Dropdown) -->
+                                <td>
+                                    <select name="status" form="formSched{{ sched.pk }}"
+                                            class="form-select form-select-sm fw-semibold {% if sched.status == 'PAID' or sched.is_paid %}text-success border-success-subtle{% elif sched.status == 'PARTIAL' %}text-warning-emphasis border-warning-subtle{% else %}text-secondary{% endif %}"
+                                            style="min-width: 95px;" title="Change Installment Status">
+                                        <option value="PENDING" {% if sched.status == 'PENDING' and not sched.is_paid %}selected{% endif %}>Pending</option>
+                                        <option value="PARTIAL" {% if sched.status == 'PARTIAL' %}selected{% endif %}>Partial</option>
+                                        <option value="PAID" {% if sched.status == 'PAID' or sched.is_paid %}selected{% endif %}>Paid</option>
+                                    </select>
                                 </td>
 
                                 <!-- Settled Date -->
@@ -391,7 +403,7 @@
 
                                 <!-- Save / Update Action -->
                                 <td class="text-end text-nowrap">
-                                    <button type="submit" form="formSched{{ sched.pk }}" class="btn btn-sm btn-primary py-1 px-2" title="Save Amount Due, Amount Paid & Update Note">
+                                    <button type="submit" form="formSched{{ sched.pk }}" class="btn btn-sm btn-primary py-1 px-2" title="Save Due Date, Amount Due, Amount Paid, Status & Update Note">
                                         <i class="bi bi-check-lg me-1"></i>Save
                                     </button>
                                 </td>
@@ -414,7 +426,7 @@
                     <h6 class="fw-bold mb-0 text-dark">
                         <i class="bi bi-chat-left-text me-1 text-primary"></i> 3. Customer Update Audit Notes
                     </h6>
-                    <span class="text-muted small">Follow-up communication notes and promises logged by authorized staff. History is permanently preserved.</span>
+                    <span class="text-muted small">Follow-up communication notes and automated modification history. All changes and historical audit entries are permanently preserved.</span>
                 </div>
                 <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#detailUpdateStatusModal">
                     <i class="bi bi-pencil-square me-1"></i> Add Update Note
@@ -423,26 +435,48 @@
 
             <div class="card-body p-3">
                 {% if update_history %}
-                <div class="table-responsive bg-light rounded border p-2" style="max-height: 240px; overflow-y: auto;">
+                <div class="table-responsive bg-light rounded border p-2" style="max-height: 280px; overflow-y: auto;">
                     <table class="table table-sm table-hover align-middle mb-0">
                         <thead>
                             <tr class="text-muted small border-bottom">
-                                <th>Date & Time</th>
-                                <th>Updated By</th>
-                                <th>Follow-up / Conversation Note</th>
+                                <th style="width: 150px;">Date & Time</th>
+                                <th style="width: 110px;">Updated By</th>
+                                <th style="width: 140px;">Section / Field</th>
+                                <th>Modification Details / Note</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for h in update_history %}
                             <tr class="small {% if forloop.first %}table-primary-subtle{% endif %}">
-                                <td class="text-muted font-monospace" style="white-space: nowrap;">
-                                    {{ h.created_at|date:"M d, Y H:i" }}
+                                <td class="text-muted font-monospace text-nowrap">
+                                    {{ h.created_at|date:"d-m-Y" }} {{ h.created_at|date:"h:i A" }}
                                     {% if forloop.first %}
                                     <span class="badge bg-primary text-white ms-1" style="font-size: 0.65rem;">Latest</span>
                                     {% endif %}
                                 </td>
-                                <td class="fw-semibold text-dark">{{ h.user.username|default:"System" }}</td>
-                                <td class="text-dark">{{ h.notes }}</td>
+                                <td class="fw-semibold text-dark">{{ h.user.username|default:"Admin" }}</td>
+                                <td>
+                                    {% if h.field_name %}
+                                        <span class="badge bg-secondary-subtle text-secondary font-monospace" style="font-size: 0.72rem;">{{ h.section|default:"EMI Installments" }}</span>
+                                        <div class="fw-semibold text-dark small mt-0.5">{{ h.field_name }}</div>
+                                    {% else %}
+                                        <span class="badge bg-light text-muted border font-monospace" style="font-size: 0.72rem;">Follow-up Note</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if h.field_name %}
+                                        <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                                            <span class="text-muted small">Previous Value:</span>
+                                            <span class="badge bg-light text-dark border font-monospace">{{ h.previous_value }}</span>
+                                            <i class="bi bi-arrow-right text-muted small"></i>
+                                            <span class="text-muted small">New Value:</span>
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle font-monospace fw-bold">{{ h.new_value }}</span>
+                                        </div>
+                                        <div class="text-muted small">{{ h.description|default:h.notes }}</div>
+                                    {% else %}
+                                        <div class="text-dark">{{ h.notes }}</div>
+                                    {% endif %}
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -450,7 +484,7 @@
                 </div>
                 {% else %}
                 <div class="alert alert-light border small text-muted mb-0">
-                    <i class="bi bi-info-circle me-1"></i> No follow-up update notes recorded yet. Click "Add Update Note" to log customer notes.
+                    <i class="bi bi-info-circle me-1"></i> No follow-up update notes or audit history recorded yet. Click "Add Update Note" to log customer notes.
                 </div>
                 {% endif %}
             </div>
@@ -519,6 +553,46 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-primary btn-sm">Save Note</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Edit Customer Status -->
+<div class="modal fade" id="detailEditCustomerStatusModal" tabindex="-1" aria-labelledby="detailEditCustomerStatusModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="{% url 'admin_customer_change_status' pk=customer.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold" id="detailEditCustomerStatusModalLabel">
+                        <i class="bi bi-tag me-2 text-primary"></i>Change Customer Status
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-secondary">Customer Application Status <span class="text-danger">*</span></label>
+                        <select name="status" class="form-select" required>
+                            <option value="APPROVED" {% if app_details.0.app.status == 'APPROVED' %}selected{% endif %}>Financier Approved</option>
+                            <option value="PAID" {% if app_details.0.app.status == 'PAID' %}selected{% endif %}>Financier Paid</option>
+                            <option value="PARTIALLY_PAID" {% if app_details.0.app.status == 'PARTIALLY_PAID' %}selected{% endif %}>Partially Paid</option>
+                            <option value="UNDER_REVIEW" {% if app_details.0.app.status == 'UNDER_REVIEW' %}selected{% endif %}>Under Financier Review</option>
+                            <option value="SUBMITTED" {% if app_details.0.app.status == 'SUBMITTED' %}selected{% endif %}>Submitted to Financier</option>
+                            <option value="REJECTED" {% if app_details.0.app.status == 'REJECTED' %}selected{% endif %}>Financier Rejected</option>
+                            <option value="READY" {% if app_details.0.app.status == 'READY' %}selected{% endif %}>Ready to Submit</option>
+                            <option value="DRAFT" {% if app_details.0.app.status == 'DRAFT' %}selected{% endif %}>Draft</option>
+                        </select>
+                        <div class="form-text small text-muted">
+                            Changes will be saved immediately to the database and logged in the Customer Update Audit.
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Update Status</button>
                 </div>
             </form>
         </div>

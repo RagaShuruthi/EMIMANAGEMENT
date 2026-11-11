@@ -17,6 +17,7 @@ urlpatterns = [
     # All Customers & Customer Management
     path("customers/", views.admin_all_customers_view, name="admin_all_customers"),
     path("customers/<int:pk>/", views.admin_customer_detail_view, name="admin_customer_detail"),
+    path("customers/<int:pk>/change-status/", views.admin_customer_change_application_status_view, name="admin_customer_change_status"),
     path("customers/<int:pk>/update-status/", views.admin_customer_update_status_view, name="admin_customer_update_status"),
     path("customers/<int:pk>/edit-due-date/", views.admin_customer_edit_due_date_view, name="admin_customer_edit_due_date"),
     path("customers/<int:pk>/record-payment/", views.admin_customer_record_payment_view, name="admin_customer_record_payment"),

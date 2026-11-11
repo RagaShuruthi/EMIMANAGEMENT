@@ -409,13 +409,19 @@ class FinanceApplication(models.Model):
 
     @property
     def total_customer_paid(self):
-        """Sum of all customer EMI payments received."""
-        total = self.customer_emi_payments.aggregate(total=models.Sum("amount"))["total"]
-        return total or Decimal("0.00")
+        """
+        Sum of all customer EMI payments received.
+        Synchronizes both actual payment transactions and installment schedule allocations.
+        """
+        sched_paid = self.emi_schedules.aggregate(total=models.Sum("amount_paid"))["total"] or Decimal("0.00")
+        actual_paid = self.customer_emi_payments.aggregate(total=models.Sum("amount"))["total"] or Decimal("0.00")
+        return max(actual_paid, sched_paid)
 
     @property
     def customer_remaining_balance(self):
         """Remaining EMI balance: Total EMI Amount - Total Customer Paid."""
+        if self.emi_schedules.exists() and not self.emi_schedules.filter(is_paid=False).exists():
+            return Decimal("0.00")
         total_emi = self.get_total_emi_amount
         return max(Decimal("0.00"), total_emi - self.total_customer_paid)
 

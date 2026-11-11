@@ -739,8 +739,11 @@ def admin_update_installment_view(request, pk):
     Updates an individual EMI installment schedule:
     - Amount Due (editable)
     - Amount Paid (editable)
+    - EMI Due Date (editable with datepicker)
+    - EMI Status (editable dropdown: PENDING, PARTIAL, PAID)
     - Update note (editable input field under Update column)
     Validates numeric amounts, non-negative, and updates database immediately.
+    Logs individual audit history entries for every modified field in Customer Update Audit.
     URL: /admin-dashboard/installments/<int:pk>/update/
     """
     schedule = get_object_or_404(CustomerEMISchedule.objects.select_related("customer", "application"), pk=pk)
@@ -749,6 +752,8 @@ def admin_update_installment_view(request, pk):
 
     amount_str = request.POST.get("amount", "").replace(",", "").strip()
     amount_paid_str = request.POST.get("amount_paid", "").replace(",", "").strip()
+    due_date_str = request.POST.get("due_date", "").strip()
+    status_str = request.POST.get("status", "").strip().upper()
     update_note = request.POST.get("update_note", "").strip()
     next_url = request.POST.get("next") or request.META.get("HTTP_REFERER") or reverse("admin_customer_detail", kwargs={"pk": customer.pk})
 
@@ -768,21 +773,60 @@ def admin_update_installment_view(request, pk):
 
     old_amount = schedule.amount
     old_paid = schedule.amount_paid
+    old_due_date = schedule.due_date
+    old_status = schedule.status
     old_note = schedule.update_note
+
+    # Parse and validate new due date
+    new_due_date = old_due_date
+    if due_date_str:
+        try:
+            from datetime import datetime
+            new_due_date = datetime.strptime(due_date_str, "%Y-%m-%d").date()
+        except Exception:
+            messages.error(request, "Invalid due date format. Please use YYYY-MM-DD.")
+            return redirect(next_url)
+
+    # Determine status & is_paid
+    valid_statuses = [
+        CustomerEMISchedule.InstallmentStatus.PENDING,
+        CustomerEMISchedule.InstallmentStatus.PARTIAL,
+        CustomerEMISchedule.InstallmentStatus.PAID,
+    ]
+    if status_str in valid_statuses:
+        new_status = status_str
+        if new_status == CustomerEMISchedule.InstallmentStatus.PAID:
+            is_paid = True
+            if new_amount_paid < new_amount and new_amount > Decimal("0.00"):
+                new_amount_paid = new_amount
+        elif new_status == CustomerEMISchedule.InstallmentStatus.PENDING:
+            is_paid = False
+            if new_amount_paid >= new_amount and new_amount > Decimal("0.00"):
+                new_amount_paid = Decimal("0.00")
+        else: # PARTIAL
+            is_paid = False
+    else:
+        # Auto-compute status from amounts
+        if new_amount_paid >= new_amount and new_amount > Decimal("0.00"):
+            new_status = CustomerEMISchedule.InstallmentStatus.PAID
+            is_paid = True
+        elif new_amount_paid > Decimal("0.00"):
+            new_status = CustomerEMISchedule.InstallmentStatus.PARTIAL
+            is_paid = False
+        else:
+            new_status = CustomerEMISchedule.InstallmentStatus.PENDING
+            is_paid = False
 
     schedule.amount = new_amount
     schedule.amount_paid = new_amount_paid
+    schedule.due_date = new_due_date
+    schedule.status = new_status
+    schedule.is_paid = is_paid
     schedule.update_note = update_note
-    schedule.is_paid = (schedule.amount_paid >= schedule.amount and schedule.amount > 0)
-    if schedule.is_paid:
-        schedule.status = CustomerEMISchedule.InstallmentStatus.PAID
+    if is_paid:
         if not schedule.paid_date:
             schedule.paid_date = timezone.localdate()
-    elif schedule.amount_paid > Decimal("0.00"):
-        schedule.status = CustomerEMISchedule.InstallmentStatus.PARTIAL
-        schedule.paid_date = None
     else:
-        schedule.status = CustomerEMISchedule.InstallmentStatus.PENDING
         schedule.paid_date = None
 
     schedule.save()
@@ -805,20 +849,67 @@ def admin_update_installment_view(request, pk):
             app.completed_date = None
             app.save(update_fields=["completed_date"])
 
-    # Log audit entry preserving all history
-    changes = []
-    if old_amount != new_amount:
-        changes.append(f"Amount Due: ₹{old_amount} → ₹{new_amount}")
-    if old_paid != new_paid:
-        changes.append(f"Amount Paid: ₹{old_paid} → ₹{new_amount_paid}")
-    if old_note != update_note and update_note:
-        changes.append(f"Update: '{update_note}'")
-
-    if changes:
+    # Log individual audit entries preserving full historical audit trail
+    if old_paid != new_amount_paid:
         CustomerUpdateHistory.objects.create(
             customer=customer,
             user=request.user,
-            notes=f"Inst #{schedule.installment_number} updated: " + ", ".join(changes)
+            section="EMI Installments",
+            field_name="Amount Paid",
+            previous_value=f"₹{old_paid:,.2f}",
+            new_value=f"₹{new_amount_paid:,.2f}",
+            description=f"Installment #{schedule.installment_number} Amount Paid updated",
+            notes=f"EMI Installment Updated — Field: Amount Paid, Previous Value: ₹{old_paid:,.2f}, New Value: ₹{new_amount_paid:,.2f} (Inst #{schedule.installment_number})"
+        )
+
+    if old_amount != new_amount:
+        CustomerUpdateHistory.objects.create(
+            customer=customer,
+            user=request.user,
+            section="EMI Installments",
+            field_name="Amount Due",
+            previous_value=f"₹{old_amount:,.2f}",
+            new_value=f"₹{new_amount:,.2f}",
+            description=f"Installment #{schedule.installment_number} Amount Due updated",
+            notes=f"EMI Installment Updated — Field: Amount Due, Previous Value: ₹{old_amount:,.2f}, New Value: ₹{new_amount:,.2f} (Inst #{schedule.installment_number})"
+        )
+
+    if old_due_date != new_due_date:
+        CustomerUpdateHistory.objects.create(
+            customer=customer,
+            user=request.user,
+            section="EMI Installments",
+            field_name="EMI Due Date",
+            previous_value=old_due_date.strftime("%d-%m-%Y"),
+            new_value=new_due_date.strftime("%d-%m-%Y"),
+            description=f"Installment #{schedule.installment_number} Due Date rescheduled",
+            notes=f"EMI Installment Updated — Field: EMI Due Date, Previous Value: {old_due_date.strftime('%d-%m-%Y')}, New Value: {new_due_date.strftime('%d-%m-%Y')} (Inst #{schedule.installment_number})"
+        )
+
+    if old_status != new_status:
+        old_status_display = dict(CustomerEMISchedule.InstallmentStatus.choices).get(old_status, old_status)
+        new_status_display = dict(CustomerEMISchedule.InstallmentStatus.choices).get(new_status, new_status)
+        CustomerUpdateHistory.objects.create(
+            customer=customer,
+            user=request.user,
+            section="EMI Installments",
+            field_name="EMI Status",
+            previous_value=old_status_display,
+            new_value=new_status_display,
+            description=f"Installment #{schedule.installment_number} Status changed from {old_status_display} to {new_status_display}",
+            notes=f"EMI Installment Updated — Field: EMI Status, Previous Value: {old_status_display}, New Value: {new_status_display} (Inst #{schedule.installment_number})"
+        )
+
+    if old_note != update_note and update_note:
+        CustomerUpdateHistory.objects.create(
+            customer=customer,
+            user=request.user,
+            section="EMI Installments",
+            field_name="Update Column",
+            previous_value=old_note or "—",
+            new_value=update_note,
+            description=f"Installment #{schedule.installment_number} custom note updated",
+            notes=f"EMI Installment Updated — Field: Update Column, Previous Value: '{old_note or ''}', New Value: '{update_note}' (Inst #{schedule.installment_number})"
         )
 
     if request.headers.get("x-requested-with") == "XMLHttpRequest" or request.POST.get("format") == "json":
@@ -827,6 +918,8 @@ def admin_update_installment_view(request, pk):
             "installment_id": schedule.id,
             "amount": str(schedule.amount),
             "amount_paid": str(schedule.amount_paid),
+            "due_date": schedule.due_date.strftime("%Y-%m-%d"),
+            "due_date_display": schedule.due_date.strftime("%b %d, %Y"),
             "remaining": str(schedule.remaining_amount),
             "status": schedule.status,
             "is_paid": schedule.is_paid,
@@ -837,6 +930,53 @@ def admin_update_installment_view(request, pk):
         })
 
     messages.success(request, f"Installment #{schedule.installment_number} updated successfully.")
+    return redirect(next_url)
+
+
+@require_POST
+@login_required
+@admin_required
+def admin_customer_change_application_status_view(request, pk):
+    """
+    Directly updates the customer's application status (e.g. APPROVED, PAID, PARTIALLY_PAID, etc.).
+    Records modification in Customer Update Audit with previous value, new value, admin user, and timestamp.
+    URL: /admin-dashboard/customers/<int:pk>/change-status/
+    """
+    customer = get_object_or_404(Customer, pk=pk)
+    app = customer.applications.first()
+    next_url = request.POST.get("next") or request.META.get("HTTP_REFERER") or reverse("admin_customer_detail", kwargs={"pk": customer.pk})
+
+    if not app:
+        messages.error(request, "No active application found for this customer.")
+        return redirect(next_url)
+
+    new_status = request.POST.get("status", "").strip()
+    valid_statuses = [choice[0] for choice in FinanceApplication.Status.choices]
+    if new_status not in valid_statuses:
+        messages.error(request, f"Invalid status '{new_status}' provided.")
+        return redirect(next_url)
+
+    old_status = app.status
+    if old_status != new_status:
+        app.status = new_status
+        app.save(update_fields=["status", "updated_at"])
+
+        old_display = dict(FinanceApplication.Status.choices).get(old_status, old_status)
+        new_display = dict(FinanceApplication.Status.choices).get(new_status, new_status)
+        CustomerUpdateHistory.objects.create(
+            customer=customer,
+            user=request.user,
+            section="Customer Details",
+            field_name="Customer Status",
+            previous_value=old_display,
+            new_value=new_display,
+            description=f"Customer Status changed from {old_display} to {new_display}",
+            notes=f"Customer Status Updated — Field: Customer Status, Previous Value: {old_display}, New Value: {new_display}"
+        )
+        messages.success(request, f"Customer status updated to '{new_display}'.")
+    else:
+        messages.info(request, "Status remained unchanged.")
+
     return redirect(next_url)
 
 
