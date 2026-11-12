@@ -490,14 +490,19 @@ class CustomerManagementUpgradeTests(TestCase):
         # cust1: total EMI 30,000, paid 10,000 -> remaining 20,000. original_loss: 5,000 - 20,000 = -15,000
         # cust2: total EMI 20,000, paid 6,000 -> remaining 14,000. original_loss: 8,000 - 14,000 = -6,000
         # total_original_loss: -15,000 + (-6,000) = -21,000
+        # total_outstanding_finance: (30,000 - 5,000) + (20,000 - 8,000) = 25,000 + 12,000 = 37,000
         self.assertEqual(res.context["total_original_loss"], Decimal("-21000.00"))
+        self.assertEqual(res.context["total_outstanding_finance"], Decimal("37000.00"))
 
         # Check HTML content
         self.assertContains(res, "Original Loss")
+        self.assertContains(res, "Total Outstanding Finance Amount")
+        self.assertContains(res, "37000.00")
         self.assertContains(res, "-15000.00")
         self.assertContains(res, "-6000.00")
         self.assertContains(res, "-21000.00")
         self.assertNotContains(res, "Total Device Value")
+        self.assertNotContains(res, "Total Amount Due")
 
     def test_20_customer_status_editable_and_audited(self):
         """

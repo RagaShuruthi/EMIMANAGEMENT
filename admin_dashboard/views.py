@@ -707,6 +707,10 @@ def admin_loss_customers_view(request):
     total_loss_due = sum((r["remaining_balance"] for r in all_rows), Decimal("0.00"))
     total_loss_paid = sum((r["amount_paid"] for r in all_rows), Decimal("0.00"))
     total_original_loss = sum((r["original_loss"] for r in all_rows), Decimal("0.00"))
+    total_outstanding_finance = sum(
+        (r["mobile_price"] - r["down_payment"] for r in all_rows),
+        Decimal("0.00")
+    )
     total_loss_volume = total_original_loss
 
     paginator = Paginator(all_rows, 50)
@@ -726,6 +730,7 @@ def admin_loss_customers_view(request):
         "total_loss_paid": total_loss_paid,
         "total_loss_volume": total_loss_volume,
         "total_original_loss": total_original_loss,
+        "total_outstanding_finance": total_outstanding_finance,
         "sort_param": dataset["sort_param"],
     }
     return render(request, "admin_dashboard/loss_customers.html", context)
