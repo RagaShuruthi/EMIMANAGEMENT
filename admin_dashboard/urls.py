@@ -21,6 +21,7 @@ urlpatterns = [
     path("customers/<int:pk>/update-status/", views.admin_customer_update_status_view, name="admin_customer_update_status"),
     path("customers/<int:pk>/edit-due-date/", views.admin_customer_edit_due_date_view, name="admin_customer_edit_due_date"),
     path("customers/<int:pk>/record-payment/", views.admin_customer_record_payment_view, name="admin_customer_record_payment"),
+    path("customer-payments/<int:pk>/edit/", views.admin_edit_customer_payment_view, name="admin_edit_customer_payment"),
     path("customers/<int:pk>/move-to-loss/", views.admin_customer_move_to_loss_view, name="admin_customer_move_to_loss"),
     path("customers/<int:pk>/restore-from-loss/", views.admin_customer_restore_from_loss_view, name="admin_customer_restore_from_loss"),
     path("customers/<int:pk>/edit-financials/", views.admin_customer_edit_financials_view, name="admin_customer_edit_financials"),

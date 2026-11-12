@@ -735,5 +735,190 @@ class CustomerManagementUpgradeTests(TestCase):
         count_after_fail = CustomerUpdateHistory.objects.filter(customer=cust).count()
         self.assertEqual(count_before_fail, count_after_fail)
 
+    def test_24_partial_payment_move_due_to_next_month_yes_and_no(self):
+        """
+        Tests Partial Payment carry-forward popup options:
+        - Yes, Move to Next Month: carries remaining unpaid amount to next month,
+          preserves original payment & PARTIAL status, avoids double-counting, prevents duplicate carry-forward.
+        - No, Keep Current Due: retains remaining amount on current installment and PARTIAL status.
+        """
+        cust = Customer.objects.create(shop=self.shop_a, name="Partial Carry Customer", primary_mobile="9876500095")
+        app = FinanceApplication.objects.create(
+            shop=self.shop_a,
+            customer=cust,
+            mobile_price=Decimal("15000.00"),
+            monthly_emi=Decimal("5000.00"),
+            emi_duration=3,
+            status=FinanceApplication.Status.APPROVED
+        )
+        self.client.login(username="admin_user", password="AdminPassword123!")
+
+        sched1, sched2, sched3 = list(app.emi_schedules.order_by("installment_number"))
+
+        # 1. Option: No, Keep Current Due (Inst #1: paid 2000, due stays 5000, status PARTIAL)
+        res_no = self.client.post(
+            reverse("admin_update_installment", kwargs={"pk": sched1.pk}),
+            {
+                "amount": "5000.00",
+                "amount_paid": "2000.00",
+                "due_date": sched1.due_date.strftime("%Y-%m-%d"),
+                "status": "PARTIAL",
+                "carry_forward": "no"
+            }
+        )
+        self.assertEqual(res_no.status_code, 302)
+        sched1.refresh_from_db()
+        sched2.refresh_from_db()
+        self.assertEqual(sched1.amount, Decimal("5000.00"))
+        self.assertEqual(sched1.amount_paid, Decimal("2000.00"))
+        self.assertEqual(sched1.remaining_amount, Decimal("3000.00"))
+        self.assertEqual(sched1.status, CustomerEMISchedule.InstallmentStatus.PARTIAL)
+        self.assertEqual(sched2.amount, Decimal("5000.00"))
+        self.assertEqual(app.customer_remaining_balance, Decimal("13000.00"))
+
+        # 2. Option: Yes, Move to Next Month (Inst #1 remaining 3000 moved to Inst #2 -> Inst #2 becomes 8000)
+        res_yes = self.client.post(
+            reverse("admin_update_installment", kwargs={"pk": sched1.pk}),
+            {
+                "amount": "5000.00",
+                "amount_paid": "2000.00",
+                "due_date": sched1.due_date.strftime("%Y-%m-%d"),
+                "status": "PARTIAL",
+                "carry_forward": "yes"
+            }
+        )
+        self.assertEqual(res_yes.status_code, 302)
+        sched1.refresh_from_db()
+        sched2.refresh_from_db()
+        app.refresh_from_db()
+
+        self.assertEqual(sched1.amount_paid, Decimal("2000.00"))
+        self.assertEqual(sched1.amount, Decimal("2000.00"))
+        self.assertEqual(sched1.remaining_amount, Decimal("0.00"))
+        self.assertEqual(sched1.status, CustomerEMISchedule.InstallmentStatus.PARTIAL)
+        self.assertEqual(sched2.amount, Decimal("8000.00"))
+        # Total outstanding balance must NOT count the 3000 twice (15000 - 2000 = 13000)
+        self.assertEqual(app.customer_remaining_balance, Decimal("13000.00"))
+        # Next unpaid schedule should advance to Inst #2
+        self.assertEqual(app.next_unpaid_schedule.pk, sched2.pk)
+
+        # Audit entry recorded
+        cf_audit = CustomerUpdateHistory.objects.filter(customer=cust, field_name="Partial Due Carry-Forward").first()
+        self.assertIsNotNone(cf_audit)
+
+        # 3. Duplicate click protection: submitting again with carry_forward='yes' when remaining=0 does nothing
+        res_dup = self.client.post(
+            reverse("admin_update_installment", kwargs={"pk": sched1.pk}),
+            {
+                "amount": str(sched1.amount),
+                "amount_paid": str(sched1.amount_paid),
+                "due_date": sched1.due_date.strftime("%Y-%m-%d"),
+                "status": "PARTIAL",
+                "carry_forward": "yes"
+            }
+        )
+        self.assertEqual(res_dup.status_code, 302)
+        sched2.refresh_from_db()
+        self.assertEqual(sched2.amount, Decimal("8000.00"))
+        self.assertEqual(CustomerUpdateHistory.objects.filter(customer=cust, field_name="Partial Due Carry-Forward").count(), 1)
+
+    def test_25_admin_payment_permanent_and_editable(self):
+        """
+        Tests:
+        - Recording payment via Pay button saves permanently and updates EMI schedules.
+        - Editing recorded payment later updates payment record, recalculates schedules & summaries,
+          and logs audit history with previous and new values.
+        """
+        cust = Customer.objects.create(shop=self.shop_a, name="Editable Pay Customer", primary_mobile="9876500096")
+        app = FinanceApplication.objects.create(
+            shop=self.shop_a,
+            customer=cust,
+            mobile_price=Decimal("15000.00"),
+            monthly_emi=Decimal("5000.00"),
+            emi_duration=3,
+            status=FinanceApplication.Status.APPROVED
+        )
+        self.client.login(username="admin_user", password="AdminPassword123!")
+
+        # 1. Record payment via Pay endpoint
+        pay_res = self.client.post(
+            reverse("admin_customer_record_payment", kwargs={"pk": cust.pk}),
+            {
+                "amount": "5000.00",
+                "payment_date": self.today.strftime("%Y-%m-%d"),
+                "payment_mode": "UPI",
+                "transaction_reference": "UTR-1001",
+                "remarks": "First EMI via Pay"
+            }
+        )
+        self.assertEqual(pay_res.status_code, 302)
+
+        payment = CustomerEMIPayment.objects.filter(customer=cust).first()
+        self.assertIsNotNone(payment)
+        self.assertEqual(payment.amount, Decimal("5000.00"))
+
+        sched1, sched2, sched3 = list(app.emi_schedules.order_by("installment_number"))
+        self.assertEqual(sched1.amount_paid, Decimal("5000.00"))
+        self.assertTrue(sched1.is_paid)
+        self.assertEqual(app.total_customer_paid, Decimal("5000.00"))
+        self.assertEqual(app.customer_remaining_balance, Decimal("10000.00"))
+
+        # 2. Edit the recorded payment from 5000.00 -> 7000.00
+        edit_res = self.client.post(
+            reverse("admin_edit_customer_payment", kwargs={"pk": payment.pk}),
+            {
+                "amount": "7000.00",
+                "payment_date": self.today.strftime("%Y-%m-%d"),
+                "payment_mode": "CASH",
+                "transaction_reference": "CASH-1001",
+                "remarks": "Adjusted to 7000"
+            }
+        )
+        self.assertEqual(edit_res.status_code, 302)
+        payment.refresh_from_db()
+        sched1.refresh_from_db()
+        sched2.refresh_from_db()
+
+        self.assertEqual(payment.amount, Decimal("7000.00"))
+        self.assertEqual(payment.payment_mode, "CASH")
+        self.assertEqual(sched1.amount_paid, Decimal("5000.00"))
+        self.assertEqual(sched2.amount_paid, Decimal("2000.00"))
+        self.assertEqual(sched2.status, CustomerEMISchedule.InstallmentStatus.PARTIAL)
+        self.assertEqual(app.total_customer_paid, Decimal("7000.00"))
+        self.assertEqual(app.customer_remaining_balance, Decimal("8000.00"))
+
+        # 3. Edit the recorded payment downwards from 7000.00 -> 4000.00
+        edit_down_res = self.client.post(
+            reverse("admin_edit_customer_payment", kwargs={"pk": payment.pk}),
+            {
+                "amount": "4000.00",
+                "payment_date": self.today.strftime("%Y-%m-%d"),
+                "payment_mode": "CASH",
+                "transaction_reference": "CASH-1001",
+                "remarks": "Corrected to 4000"
+            }
+        )
+        self.assertEqual(edit_down_res.status_code, 302)
+        sched1.refresh_from_db()
+        sched2.refresh_from_db()
+        self.assertEqual(sched2.amount_paid, Decimal("0.00"))
+        self.assertEqual(sched2.status, CustomerEMISchedule.InstallmentStatus.PENDING)
+        self.assertEqual(sched1.amount_paid, Decimal("4000.00"))
+        self.assertEqual(sched1.status, CustomerEMISchedule.InstallmentStatus.PARTIAL)
+        self.assertFalse(sched1.is_paid)
+        self.assertEqual(app.total_customer_paid, Decimal("4000.00"))
+        self.assertEqual(app.customer_remaining_balance, Decimal("11000.00"))
+
+        # Verify audit history recorded
+        pay_audits = CustomerUpdateHistory.objects.filter(customer=cust, field_name="Payment Amount")
+        self.assertEqual(pay_audits.count(), 2)
+        # Verify Customer Detail renders popup & payment edit modal
+        detail_res = self.client.get(reverse("admin_customer_detail", kwargs={"pk": cust.pk}))
+        self.assertContains(detail_res, "Do you want to move the remaining due amount to the next month?")
+        self.assertContains(detail_res, "Yes, Move to Next Month")
+        self.assertContains(detail_res, "No, Keep Current Due")
+        self.assertContains(detail_res, f"editCustomerPaymentModal{payment.pk}")
+
+
 
 

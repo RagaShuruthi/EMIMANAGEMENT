@@ -760,6 +760,7 @@ def admin_update_installment_view(request, pk):
     due_date_str = request.POST.get("due_date", "").strip()
     status_str = request.POST.get("status", "").strip().upper()
     update_note = request.POST.get("update_note", "").strip()
+    carry_forward = request.POST.get("carry_forward", "").strip().lower()
     next_url = request.POST.get("next") or request.META.get("HTTP_REFERER") or reverse("admin_customer_detail", kwargs={"pk": customer.pk})
 
     try:
@@ -822,37 +823,103 @@ def admin_update_installment_view(request, pk):
             new_status = CustomerEMISchedule.InstallmentStatus.PENDING
             is_paid = False
 
-    schedule.amount = new_amount
-    schedule.amount_paid = new_amount_paid
-    schedule.due_date = new_due_date
-    schedule.status = new_status
-    schedule.is_paid = is_paid
-    schedule.update_note = update_note
-    if is_paid:
-        if not schedule.paid_date:
-            schedule.paid_date = timezone.localdate()
-    else:
-        schedule.paid_date = None
+    with transaction.atomic():
+        schedule.amount = new_amount
+        schedule.amount_paid = new_amount_paid
+        schedule.due_date = new_due_date
+        schedule.status = new_status
+        schedule.is_paid = is_paid
+        schedule.update_note = update_note
+        if is_paid:
+            if not schedule.paid_date:
+                schedule.paid_date = timezone.localdate()
+        else:
+            schedule.paid_date = None
 
-    schedule.save()
+        schedule.save()
 
-    # Recheck if application is completed or completion is reversed
-    rem_balance = app.customer_remaining_balance
-    if rem_balance <= Decimal("0.00") or not app.emi_schedules.filter(is_paid=False).exists():
-        today_date = timezone.localdate()
-        if not app.completed_date:
-            app.completed_date = today_date
-            app.save(update_fields=["completed_date"])
-        if not customer.completed_date:
-            customer.completed_date = today_date
-            customer.save(update_fields=["completed_date"])
-    else:
-        if customer.completed_date and rem_balance > Decimal("0.00"):
-            customer.completed_date = None
-            customer.save(update_fields=["completed_date"])
-        if app.completed_date and rem_balance > Decimal("0.00"):
-            app.completed_date = None
-            app.save(update_fields=["completed_date"])
+        # Handle Partial Payment Carry-Forward to Next Month if requested
+        carried_forward_amount = Decimal("0.00")
+        carried_to_inst_num = None
+        if new_status == CustomerEMISchedule.InstallmentStatus.PARTIAL and carry_forward == "yes":
+            unpaid = max(Decimal("0.00"), new_amount - new_amount_paid)
+            if unpaid > Decimal("0.00"):
+                next_sched = (
+                    app.emi_schedules
+                    .filter(installment_number__gt=schedule.installment_number)
+                    .order_by("installment_number")
+                    .first()
+                )
+                if next_sched:
+                    next_sched.amount = (next_sched.amount or Decimal("0.00")) + unpaid
+                    if next_sched.is_paid and next_sched.amount_paid < next_sched.amount:
+                        next_sched.is_paid = False
+                        next_sched.paid_date = None
+                        next_sched.status = (
+                            CustomerEMISchedule.InstallmentStatus.PARTIAL
+                            if next_sched.amount_paid > Decimal("0.00")
+                            else CustomerEMISchedule.InstallmentStatus.PENDING
+                        )
+                    next_sched.save()
+                else:
+                    # Current is the final installment: create a new next-month installment
+                    from datetime import date as dt_date
+                    m = schedule.due_date.month + 1
+                    y = schedule.due_date.year
+                    if m > 12:
+                        m = 1
+                        y += 1
+                    last_day = calendar.monthrange(y, m)[1]
+                    next_due_dt = dt_date(y, m, min(schedule.due_date.day, last_day))
+                    next_sched = CustomerEMISchedule.objects.create(
+                        application=app,
+                        customer=customer,
+                        installment_number=schedule.installment_number + 1,
+                        due_date=next_due_dt,
+                        amount=unpaid,
+                        amount_paid=Decimal("0.00"),
+                        is_paid=False,
+                        status=CustomerEMISchedule.InstallmentStatus.PENDING,
+                    )
+
+                # Reduce current installment due amount to the paid amount so remaining is 0.00
+                # (prevents double-counting in total outstanding balance while preserving payment & PARTIAL status)
+                schedule.amount = new_amount_paid
+                schedule.save(update_fields=["amount", "updated_at"])
+                new_amount = new_amount_paid
+                carried_forward_amount = unpaid
+                carried_to_inst_num = next_sched.installment_number
+
+                CustomerUpdateHistory.objects.create(
+                    customer=customer,
+                    user=request.user,
+                    section="EMI Installments",
+                    field_name="Partial Due Carry-Forward",
+                    previous_value=f"Inst #{schedule.installment_number} Remaining: ₹{unpaid:,.2f}",
+                    new_value=f"Inst #{next_sched.installment_number} Due: ₹{next_sched.amount:,.2f}",
+                    description=f"Moved remaining unpaid ₹{unpaid:,.2f} from Inst #{schedule.installment_number} to Inst #{next_sched.installment_number}",
+                    notes=f"Partial Payment Carry-Forward — Moved ₹{unpaid:,.2f} from Inst #{schedule.installment_number} to Inst #{next_sched.installment_number} (New Due: ₹{next_sched.amount:,.2f})"
+                )
+
+        # Recheck if application is completed or completion is reversed
+        rem_balance = app.customer_remaining_balance
+        from django.db.models import F as models_F
+        has_unpaid_scheds = app.emi_schedules.filter(is_paid=False, amount__gt=models_F("amount_paid")).exists()
+        if rem_balance <= Decimal("0.00") or not has_unpaid_scheds:
+            today_date = timezone.localdate()
+            if not app.completed_date:
+                app.completed_date = today_date
+                app.save(update_fields=["completed_date"])
+            if not customer.completed_date:
+                customer.completed_date = today_date
+                customer.save(update_fields=["completed_date"])
+        else:
+            if customer.completed_date and rem_balance > Decimal("0.00"):
+                customer.completed_date = None
+                customer.save(update_fields=["completed_date"])
+            if app.completed_date and rem_balance > Decimal("0.00"):
+                app.completed_date = None
+                app.save(update_fields=["completed_date"])
 
     # Log individual audit entries preserving full historical audit trail
     if old_paid != new_amount_paid:
@@ -867,7 +934,7 @@ def admin_update_installment_view(request, pk):
             notes=f"EMI Installment Updated — Field: Amount Paid, Previous Value: ₹{old_paid:,.2f}, New Value: ₹{new_amount_paid:,.2f} (Inst #{schedule.installment_number})"
         )
 
-    if old_amount != new_amount:
+    if old_amount != new_amount and carried_forward_amount == Decimal("0.00"):
         CustomerUpdateHistory.objects.create(
             customer=customer,
             user=request.user,
@@ -1712,7 +1779,7 @@ def admin_customer_record_payment_view(request, pk):
         messages.error(request, "Customer does not have an active finance application.")
         return redirect(next_url)
 
-    app.record_customer_payment(
+    payment = app.record_customer_payment(
         amount=amt,
         payment_date=payment_date,
         payment_mode=payment_mode,
@@ -1721,7 +1788,196 @@ def admin_customer_record_payment_view(request, pk):
         remarks=remarks
     )
 
+    if payment:
+        CustomerUpdateHistory.objects.create(
+            customer=customer,
+            user=request.user,
+            section="Customer Payments",
+            field_name="Payment Recorded",
+            previous_value="—",
+            new_value=f"₹{amt:,.2f}",
+            description=f"EMI Payment #{payment.id} of ₹{amt:,.2f} ({payment_mode}) logged by {request.user.username}",
+            notes=f"Payment Recorded — ₹{amt:,.2f} ({payment_mode}) [Payment #{payment.id}]"
+        )
+
     messages.success(request, f"Payment of ₹{amt:,.2f} recorded for '{customer.name}'.")
+    return redirect(next_url)
+
+
+@require_POST
+@login_required
+@admin_required
+def admin_edit_customer_payment_view(request, pk):
+    """
+    Edits a previously recorded CustomerEMIPayment transaction.
+    Synchronizes the amount delta across the customer's EMI installment schedules,
+    recalculates completion status, and logs detailed audit history.
+    URL: /admin-dashboard/customer-payments/<int:pk>/edit/
+    """
+    payment = get_object_or_404(CustomerEMIPayment.objects.select_related("customer", "application"), pk=pk)
+    app = payment.application
+    customer = payment.customer
+    next_url = request.POST.get("next") or request.META.get("HTTP_REFERER") or reverse("admin_customer_detail", kwargs={"pk": customer.pk})
+
+    amount_str = request.POST.get("amount", "").replace(",", "").strip()
+    payment_date_str = request.POST.get("payment_date", "").strip()
+    payment_mode = request.POST.get("payment_mode", payment.payment_mode).strip()
+    transaction_reference = request.POST.get("transaction_reference", "").strip()
+    remarks = request.POST.get("remarks", "").strip()
+
+    try:
+        new_amount = Decimal(amount_str)
+        if new_amount <= Decimal("0.00"):
+            messages.error(request, "Payment amount must be greater than zero.")
+            return redirect(next_url)
+    except Exception:
+        messages.error(request, "Invalid payment amount provided.")
+        return redirect(next_url)
+
+    new_date = payment.payment_date
+    if payment_date_str:
+        try:
+            from datetime import datetime
+            new_date = datetime.strptime(payment_date_str, "%Y-%m-%d").date()
+        except Exception:
+            messages.error(request, "Invalid payment date format.")
+            return redirect(next_url)
+
+    old_amount = payment.amount
+    old_date = payment.payment_date
+    old_mode = payment.payment_mode
+    old_ref = payment.transaction_reference or ""
+    old_remarks = payment.remarks or ""
+
+    with transaction.atomic():
+        payment.amount = new_amount
+        payment.payment_date = new_date
+        payment.payment_mode = payment_mode
+        payment.transaction_reference = transaction_reference
+        payment.remarks = remarks
+        payment.save()
+
+        # Synchronize amount delta with EMI schedules
+        delta = new_amount - old_amount
+        if delta > Decimal("0.00"):
+            remaining_to_add = delta
+            for sched in app.emi_schedules.filter(is_paid=False).order_by("installment_number"):
+                if remaining_to_add <= Decimal("0.00"):
+                    break
+                needed = sched.amount - sched.amount_paid
+                if needed <= Decimal("0.00"):
+                    continue
+                if remaining_to_add >= needed:
+                    sched.amount_paid = sched.amount
+                    sched.is_paid = True
+                    sched.paid_date = new_date
+                    sched.status = CustomerEMISchedule.InstallmentStatus.PAID
+                    remaining_to_add -= needed
+                else:
+                    sched.amount_paid += remaining_to_add
+                    sched.status = CustomerEMISchedule.InstallmentStatus.PARTIAL
+                    remaining_to_add = Decimal("0.00")
+                sched.save(update_fields=["amount_paid", "is_paid", "paid_date", "status", "updated_at"])
+        elif delta < Decimal("0.00"):
+            remaining_to_deduct = abs(delta)
+            for sched in app.emi_schedules.filter(amount_paid__gt=Decimal("0.00")).order_by("-installment_number"):
+                if remaining_to_deduct <= Decimal("0.00"):
+                    break
+                if sched.amount_paid >= remaining_to_deduct:
+                    sched.amount_paid -= remaining_to_deduct
+                    remaining_to_deduct = Decimal("0.00")
+                else:
+                    remaining_to_deduct -= sched.amount_paid
+                    sched.amount_paid = Decimal("0.00")
+                sched.is_paid = (sched.amount_paid >= sched.amount and sched.amount > Decimal("0.00"))
+                if sched.is_paid:
+                    sched.status = CustomerEMISchedule.InstallmentStatus.PAID
+                elif sched.amount_paid > Decimal("0.00"):
+                    sched.status = CustomerEMISchedule.InstallmentStatus.PARTIAL
+                    sched.paid_date = None
+                else:
+                    sched.status = CustomerEMISchedule.InstallmentStatus.PENDING
+                    sched.paid_date = None
+                sched.save(update_fields=["amount_paid", "is_paid", "paid_date", "status", "updated_at"])
+
+        # Recheck application/customer completion status
+        rem_balance = app.customer_remaining_balance
+        from django.db.models import F as models_F
+        has_unpaid_scheds = app.emi_schedules.filter(is_paid=False, amount__gt=models_F("amount_paid")).exists()
+        if rem_balance <= Decimal("0.00") or not has_unpaid_scheds:
+            today_date = timezone.localdate()
+            if not app.completed_date:
+                app.completed_date = today_date
+                app.save(update_fields=["completed_date", "updated_at"])
+            if not customer.completed_date:
+                customer.completed_date = today_date
+                customer.save(update_fields=["completed_date", "updated_at"])
+        else:
+            if customer.completed_date and rem_balance > Decimal("0.00"):
+                customer.completed_date = None
+                customer.save(update_fields=["completed_date", "updated_at"])
+            if app.completed_date and rem_balance > Decimal("0.00"):
+                app.completed_date = None
+                app.save(update_fields=["completed_date", "updated_at"])
+
+        # Log audit entries for every changed field
+        if old_amount != new_amount:
+            CustomerUpdateHistory.objects.create(
+                customer=customer,
+                user=request.user,
+                section="Customer Payments",
+                field_name="Payment Amount",
+                previous_value=f"₹{old_amount:,.2f}",
+                new_value=f"₹{new_amount:,.2f}",
+                description=f"Recorded payment #{payment.id} amount updated by {request.user.username}",
+                notes=f"Payment Updated — Field: Payment Amount, Previous Value: ₹{old_amount:,.2f}, New Value: ₹{new_amount:,.2f} (Payment #{payment.id})"
+            )
+        if old_date != new_date:
+            CustomerUpdateHistory.objects.create(
+                customer=customer,
+                user=request.user,
+                section="Customer Payments",
+                field_name="Payment Date",
+                previous_value=old_date.strftime("%d-%m-%Y"),
+                new_value=new_date.strftime("%d-%m-%Y"),
+                description=f"Recorded payment #{payment.id} date updated by {request.user.username}",
+                notes=f"Payment Updated — Field: Payment Date, Previous Value: {old_date.strftime('%d-%m-%Y')}, New Value: {new_date.strftime('%d-%m-%Y')} (Payment #{payment.id})"
+            )
+        if old_mode != payment_mode:
+            CustomerUpdateHistory.objects.create(
+                customer=customer,
+                user=request.user,
+                section="Customer Payments",
+                field_name="Payment Mode",
+                previous_value=old_mode,
+                new_value=payment_mode,
+                description=f"Recorded payment #{payment.id} mode updated by {request.user.username}",
+                notes=f"Payment Updated — Field: Payment Mode, Previous Value: {old_mode}, New Value: {payment_mode} (Payment #{payment.id})"
+            )
+        if old_ref != transaction_reference:
+            CustomerUpdateHistory.objects.create(
+                customer=customer,
+                user=request.user,
+                section="Customer Payments",
+                field_name="Transaction Reference",
+                previous_value=old_ref or "—",
+                new_value=transaction_reference or "—",
+                description=f"Recorded payment #{payment.id} reference updated by {request.user.username}",
+                notes=f"Payment Updated — Field: Transaction Reference, Previous Value: '{old_ref or '—'}', New Value: '{transaction_reference or '—'}' (Payment #{payment.id})"
+            )
+        if old_remarks != remarks:
+            CustomerUpdateHistory.objects.create(
+                customer=customer,
+                user=request.user,
+                section="Customer Payments",
+                field_name="Payment Remarks",
+                previous_value=old_remarks or "—",
+                new_value=remarks or "—",
+                description=f"Recorded payment #{payment.id} remarks updated by {request.user.username}",
+                notes=f"Payment Updated — Field: Payment Remarks, Previous Value: '{old_remarks or '—'}', New Value: '{remarks or '—'}' (Payment #{payment.id})"
+            )
+
+    messages.success(request, f"Payment #{payment.id} updated successfully.")
     return redirect(next_url)
 
 

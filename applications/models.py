@@ -384,6 +384,8 @@ class FinanceApplication(models.Model):
             if remaining_to_distribute <= Decimal("0.00"):
                 break
             needed = sched.amount - sched.amount_paid
+            if needed <= Decimal("0.00"):
+                continue
             if remaining_to_distribute >= needed:
                 sched.amount_paid = sched.amount
                 sched.is_paid = True
@@ -427,8 +429,13 @@ class FinanceApplication(models.Model):
 
     @property
     def next_unpaid_schedule(self):
-        """Next unpaid EMI installment."""
-        return self.emi_schedules.filter(is_paid=False).order_by("installment_number").first()
+        """Next unpaid EMI installment with a positive remaining balance."""
+        return (
+            self.emi_schedules
+            .filter(is_paid=False, amount__gt=models.F("amount_paid"))
+            .order_by("installment_number")
+            .first()
+        )
 
     @property
     def next_unpaid_due_date(self):

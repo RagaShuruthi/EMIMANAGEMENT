@@ -339,9 +339,10 @@
                         <tbody>
                             {% for sched in item.schedules %}
                             <!-- Form container for individual installment save -->
-                            <form id="formSched{{ sched.pk }}" method="post" action="{% url 'admin_update_installment' pk=sched.pk %}">
+                            <form id="formSched{{ sched.pk }}" method="post" action="{% url 'admin_update_installment' pk=sched.pk %}" class="emi-installment-form" data-sched-id="{{ sched.pk }}">
                                 {% csrf_token %}
                                 <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <input type="hidden" name="carry_forward" id="carryForwardInput{{ sched.pk }}" value="">
                             </form>
 
                             <tr class="small">
@@ -383,7 +384,10 @@
                                 <!-- Status (Editable Dropdown) -->
                                 <td>
                                     <select name="status" form="formSched{{ sched.pk }}"
-                                            class="form-select form-select-sm fw-semibold {% if sched.status == 'PAID' or sched.is_paid %}text-success border-success-subtle{% elif sched.status == 'PARTIAL' %}text-warning-emphasis border-warning-subtle{% else %}text-secondary{% endif %}"
+                                            data-sched-id="{{ sched.pk }}"
+                                            data-inst-num="{{ sched.installment_number }}"
+                                            data-orig-status="{{ sched.status }}"
+                                            class="form-select form-select-sm fw-semibold emi-status-select {% if sched.status == 'PAID' or sched.is_paid %}text-success border-success-subtle{% elif sched.status == 'PARTIAL' %}text-warning-emphasis border-warning-subtle{% else %}text-secondary{% endif %}"
                                             style="min-width: 95px;" title="Change Installment Status">
                                         <option value="PENDING" {% if sched.status == 'PENDING' and not sched.is_paid %}selected{% endif %}>Pending</option>
                                         <option value="PARTIAL" {% if sched.status == 'PARTIAL' %}selected{% endif %}>Partial</option>
@@ -410,6 +414,60 @@
                             </tr>
                             {% empty %}
                             <tr><td colspan="9" class="text-center text-muted small py-3">Schedule not generated.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recorded Customer EMI Payments (Editable) -->
+        <div class="card rounded-3 border mb-4 shadow-sm">
+            <div class="card-header bg-white py-2.5 d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom">
+                <div>
+                    <h6 class="fw-bold mb-0 text-dark">
+                        <i class="bi bi-receipt-cutoff me-1 text-success"></i> Recorded Customer EMI Payments
+                    </h6>
+                    <span class="text-muted small">All payments recorded via Pay. Click Edit to modify any payment and automatically synchronize schedules &amp; summaries.</span>
+                </div>
+                {% if item.customer_remaining_balance > 0 and not customer.is_loss %}
+                <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#detailRecordPaymentModal">
+                    <i class="bi bi-plus-circle me-1"></i> Record Payment
+                </button>
+                {% endif %}
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle mb-0">
+                        <thead class="table-light small text-muted text-uppercase" style="letter-spacing: 0.03em;">
+                            <tr>
+                                <th>Date</th>
+                                <th class="text-end">Amount (₹)</th>
+                                <th>Mode</th>
+                                <th>Reference</th>
+                                <th>Remarks</th>
+                                <th>Recorded By</th>
+                                <th class="text-end">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for pay in item.customer_payments %}
+                            <tr class="small">
+                                <td class="text-nowrap font-monospace">{{ pay.payment_date|date:"M d, Y" }}</td>
+                                <td class="text-end fw-bold text-success font-monospace">₹{{ pay.amount|floatformat:2 }}</td>
+                                <td><span class="badge bg-light text-dark border">{{ pay.get_payment_mode_display|default:pay.payment_mode }}</span></td>
+                                <td class="text-muted font-monospace">{{ pay.transaction_reference|default:"—" }}</td>
+                                <td class="text-muted">{{ pay.remarks|default:"—" }}</td>
+                                <td class="text-muted">{{ pay.recorded_by.username|default:"Admin" }}</td>
+                                <td class="text-end text-nowrap">
+                                    <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2"
+                                            data-bs-toggle="modal" data-bs-target="#editCustomerPaymentModal{{ pay.pk }}">
+                                        <i class="bi bi-pencil-square me-1"></i>Edit
+                                    </button>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="7" class="text-center text-muted small py-3">No EMI payments recorded yet.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -797,4 +855,173 @@
         </div>
     </div>
 </div>
+
+<!-- Modal: Partial Payment Carry-Forward Confirmation -->
+<div class="modal fade" id="partialCarryForwardModal" tabindex="-1" aria-labelledby="partialCarryForwardModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-warning-subtle border-bottom border-warning-subtle">
+                <h5 class="modal-title fw-bold text-dark" id="partialCarryForwardModalLabel">
+                    <i class="bi bi-exclamation-circle-fill text-warning me-2"></i>Partial Payment Confirmation
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="fw-semibold text-dark mb-2">Do you want to move the remaining due amount to the next month?</p>
+                <div class="p-3 bg-light rounded border small mb-2">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="text-muted">Installment:</span>
+                        <strong id="partialModalInstLabel" class="text-dark">#—</strong>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span class="text-muted">Remaining Unpaid Amount:</span>
+                        <strong id="partialModalRemainingLabel" class="text-danger font-monospace">₹0.00</strong>
+                    </div>
+                </div>
+                <p class="text-muted small mb-0">
+                    Choosing <strong>Yes, Move to Next Month</strong> will add only the remaining unpaid balance to the next month's EMI due while keeping your partial payment recorded here.
+                </p>
+            </div>
+            <div class="modal-footer bg-light border-0 d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnPartialMoveNo">
+                    No, Keep Current Due
+                </button>
+                <button type="button" class="btn btn-warning btn-sm fw-semibold" id="btnPartialMoveYes">
+                    <i class="bi bi-arrow-right-circle me-1"></i>Yes, Move to Next Month
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modals: Edit Recorded Customer EMI Payments -->
+{% if app_details %}
+{% for item in app_details %}
+{% for pay in item.customer_payments %}
+<div class="modal fade" id="editCustomerPaymentModal{{ pay.pk }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form method="post" action="{% url 'admin_edit_customer_payment' pk=pay.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <div class="modal-header bg-primary-subtle border-bottom">
+                    <h5 class="modal-title fw-bold text-primary">
+                        <i class="bi bi-pencil-square me-2"></i>Edit Recorded Payment #{{ pay.pk }}
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-secondary">Amount Paid (₹) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" min="0.01" name="amount" value="{{ pay.amount|floatformat:2 }}" class="form-control font-monospace fw-bold" required>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold text-secondary">Payment Date</label>
+                            <input type="date" name="payment_date" value="{{ pay.payment_date|date:'Y-m-d' }}" class="form-control" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold text-secondary">Payment Mode</label>
+                            <select name="payment_mode" class="form-select">
+                                <option value="UPI" {% if pay.payment_mode == 'UPI' %}selected{% endif %}>UPI / GPay / PhonePe</option>
+                                <option value="CASH" {% if pay.payment_mode == 'CASH' %}selected{% endif %}>Cash</option>
+                                <option value="BANK" {% if pay.payment_mode == 'BANK' %}selected{% endif %}>Bank Transfer / NEFT / IMPS</option>
+                                <option value="CARD" {% if pay.payment_mode == 'CARD' %}selected{% endif %}>Debit / Credit Card</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-secondary">Transaction Reference / UTR</label>
+                        <input type="text" name="transaction_reference" value="{{ pay.transaction_reference }}" class="form-control" placeholder="Optional reference">
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label small fw-semibold text-secondary">Remarks</label>
+                        <input type="text" name="remarks" value="{{ pay.remarks }}" class="form-control" placeholder="Optional remarks">
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm fw-semibold">
+                        <i class="bi bi-check-lg me-1"></i>Save Payment Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endfor %}
+{% endif %}
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const partialModalEl = document.getElementById("partialCarryForwardModal");
+    if (!partialModalEl || typeof bootstrap === "undefined") return;
+
+    const partialModal = new bootstrap.Modal(partialModalEl);
+    let activeSchedId = null;
+
+    function getRemainingForSched(schedId) {
+        const amountEl = document.querySelector(`input[name="amount"][form="formSched${schedId}"]`);
+        const paidEl = document.querySelector(`input[name="amount_paid"][form="formSched${schedId}"]`);
+        const amt = parseFloat(amountEl ? amountEl.value : "0") || 0;
+        const paid = parseFloat(paidEl ? paidEl.value : "0") || 0;
+        return Math.max(0, amt - paid);
+    }
+
+    function openPartialModal(schedId, instNum) {
+        activeSchedId = schedId;
+        const remaining = getRemainingForSched(schedId);
+        document.getElementById("partialModalInstLabel").textContent = `#${instNum}`;
+        document.getElementById("partialModalRemainingLabel").textContent = `₹${remaining.toFixed(2)}`;
+        partialModal.show();
+    }
+
+    document.querySelectorAll(".emi-status-select").forEach(function (sel) {
+        sel.addEventListener("change", function () {
+            const schedId = sel.getAttribute("data-sched-id");
+            const instNum = sel.getAttribute("data-inst-num");
+            const carryInput = document.getElementById(`carryForwardInput${schedId}`);
+            if (carryInput) carryInput.value = "";
+            if (sel.value === "PARTIAL" && getRemainingForSched(schedId) > 0) {
+                openPartialModal(schedId, instNum);
+            }
+        });
+    });
+
+    document.querySelectorAll(".emi-installment-form").forEach(function (form) {
+        form.addEventListener("submit", function (e) {
+            const schedId = form.getAttribute("data-sched-id");
+            const sel = document.querySelector(`.emi-status-select[data-sched-id="${schedId}"]`);
+            const carryInput = document.getElementById(`carryForwardInput${schedId}`);
+            if (sel && sel.value === "PARTIAL" && sel.getAttribute("data-orig-status") !== "PARTIAL" && getRemainingForSched(schedId) > 0 && (!carryInput || !carryInput.value)) {
+                e.preventDefault();
+                openPartialModal(schedId, sel.getAttribute("data-inst-num"));
+            }
+        });
+    });
+
+    document.getElementById("btnPartialMoveYes").addEventListener("click", function () {
+        if (!activeSchedId) return;
+        const carryInput = document.getElementById(`carryForwardInput${activeSchedId}`);
+        const form = document.getElementById(`formSched${activeSchedId}`);
+        if (carryInput && form) {
+            carryInput.value = "yes";
+            partialModal.hide();
+            form.submit();
+        }
+    });
+
+    document.getElementById("btnPartialMoveNo").addEventListener("click", function () {
+        if (!activeSchedId) return;
+        const carryInput = document.getElementById(`carryForwardInput${activeSchedId}`);
+        const form = document.getElementById(`formSched${activeSchedId}`);
+        if (carryInput && form) {
+            carryInput.value = "no";
+            partialModal.hide();
+            form.submit();
+        }
+    });
+});
+</script>
 {% endblock %}
