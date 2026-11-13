@@ -373,25 +373,19 @@
                         <span>Finance Applications</span>
                     </a>
 
-                    <!-- 5. Submitted Applications -->
-                    <a class="nav-link {% if active_nav == 'submitted_apps' %}active{% endif %}" href="{% url 'shop_application_list' %}?status=SUBMITTED">
-                        <i class="bi bi-send-check-fill"></i>
-                        <span>Submitted Applications</span>
-                    </a>
-
-                    <!-- 6. Pending Applications -->
-                    <a class="nav-link {% if active_nav == 'pending_apps' %}active{% endif %}" href="{% url 'shop_application_list' %}?status=PENDING">
+                    <!-- 5. Under Review Applications -->
+                    <a class="nav-link {% if active_nav == 'under_review_apps' %}active{% endif %}" href="{% url 'shop_application_list' %}?status=UNDER_REVIEW">
                         <i class="bi bi-clock-history"></i>
-                        <span>Pending Applications</span>
+                        <span>Under Review</span>
                     </a>
 
-                    <!-- 7. Approved Applications -->
+                    <!-- 6. Approved Applications -->
                     <a class="nav-link {% if active_nav == 'approved_apps' %}active{% endif %}" href="{% url 'shop_application_list' %}?status=APPROVED">
                         <i class="bi bi-check-circle-fill"></i>
                         <span>Approved Applications</span>
                     </a>
 
-                    <!-- 8. Rejected Applications -->
+                    <!-- 7. Rejected Applications -->
                     <a class="nav-link {% if active_nav == 'rejected_apps' %}active{% endif %}" href="{% url 'shop_application_list' %}?status=REJECTED">
                         <i class="bi bi-x-circle-fill"></i>
                         <span>Rejected Applications</span>
@@ -400,6 +394,12 @@
 
                 <div class="sidebar-heading">Financials & Settings</div>
                 <nav class="nav flex-column">
+                    <!-- 8b. Collect EMI Installments -->
+                    <a class="nav-link {% if active_nav == 'emi_collection' %}active{% endif %}" href="{% url 'shop_emi_collection' %}">
+                        <i class="bi bi-cash-coin"></i>
+                        <span>Collect EMI</span>
+                    </a>
+
                     <!-- 9. Financier Payments -->
                     <a class="nav-link {% if active_nav == 'financier_payments' %}active{% endif %}" href="{% url 'shop_payments' %}">
                         <i class="bi bi-wallet2"></i>

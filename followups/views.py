@@ -460,7 +460,12 @@ def _calculate_customer_followup_data(customer, today, upcoming_days=7):
     from datetime import timedelta
     from decimal import Decimal
 
-    apps = list(customer.applications.all())
+    approved_statuses = [
+        FinanceApplication.Status.APPROVED,
+        FinanceApplication.Status.PAID,
+        FinanceApplication.Status.PARTIALLY_PAID,
+    ]
+    apps = [a for a in customer.applications.all() if a.status in approved_statuses]
     app = apps[0] if apps else None
 
     if not app:
@@ -595,15 +600,23 @@ def followup_dashboard_view(request):
     today = timezone.localdate()
     assigned_shops = _get_followup_assigned_shops(user)
 
-    # Scoped Customers in assigned shops
-    customers_qs = Customer.objects.filter(
-        shop__in=assigned_shops
-    ).select_related("shop").prefetch_related("applications", "followup_activities")
+    approved_statuses = [
+        FinanceApplication.Status.APPROVED,
+        FinanceApplication.Status.PAID,
+        FinanceApplication.Status.PARTIALLY_PAID,
+    ]
 
-    # Scoped Activities Base
+    # Scoped Customers in assigned shops (Only customers with Approved finance applications)
+    customers_qs = Customer.objects.filter(
+        shop__in=assigned_shops,
+        applications__status__in=approved_statuses,
+    ).distinct().select_related("shop").prefetch_related("applications", "followup_activities")
+
+    # Scoped Activities Base (Strictly for Approved customers)
     activities_base = FollowUpActivity.objects.filter(
-        shop__in=assigned_shops
-    ).select_related("customer", "shop", "employee")
+        shop__in=assigned_shops,
+        customer__applications__status__in=approved_statuses,
+    ).distinct().select_related("customer", "shop", "employee")
 
     # Pending follow-ups
     pending_followups = activities_base.filter(
@@ -629,10 +642,13 @@ def followup_dashboard_view(request):
     pending_due_count = 0
     total_outstanding_sum = Decimal("0.00")
 
-    # Calculate Top 5 Assigned Shops by customer count
+    # Calculate Top 5 Assigned Shops by approved customer count
     shop_stats = []
     for s in assigned_shops:
-        s_customers = Customer.objects.filter(shop=s)
+        s_customers = Customer.objects.filter(
+            shop=s,
+            applications__status__in=approved_statuses,
+        ).distinct()
         c_count = s_customers.count()
         shop_stats.append({
             "shop": s,
@@ -735,17 +751,25 @@ def followup_shops_list_view(request):
             Q(owner_name__icontains=search_query)
         )
 
-    # Calculate metrics for each assigned shop
+    # Calculate metrics for each assigned shop (Only for Approved applications)
+    approved_statuses = [
+        FinanceApplication.Status.APPROVED,
+        FinanceApplication.Status.PAID,
+        FinanceApplication.Status.PARTIALLY_PAID,
+    ]
     shop_items = []
     for s in assigned_shops:
-        customers = Customer.objects.filter(shop=s).prefetch_related("applications")
+        customers = Customer.objects.filter(
+            shop=s,
+            applications__status__in=approved_statuses,
+        ).distinct().prefetch_related("applications")
         c_count = customers.count()
         today_due_c = 0
         overdue_c = 0
         shop_outstanding = Decimal("0.00")
 
         for c in customers:
-            app = c.applications.first()
+            app = c.applications.filter(status__in=approved_statuses).first()
             if app:
                 shop_outstanding += app.customer_remaining_balance
                 if app.emi_schedules.filter(is_paid=False, due_date=today).exists():
@@ -801,7 +825,16 @@ def followup_shop_detail_view(request, shop_id):
     if shop not in assigned_shops:
         return HttpResponseForbidden("Access Denied: You are not authorized to view this shop's data.")
 
-    customers_qs = Customer.objects.filter(shop=shop).prefetch_related("applications", "followup_activities")
+    approved_statuses = [
+        FinanceApplication.Status.APPROVED,
+        FinanceApplication.Status.PAID,
+        FinanceApplication.Status.PARTIALLY_PAID,
+    ]
+    customers_qs = (
+        Customer.objects.filter(shop=shop, applications__status__in=approved_statuses)
+        .distinct()
+        .prefetch_related("applications", "followup_activities")
+    )
 
     search_query = request.GET.get("q", "").strip()
     if search_query:
@@ -909,9 +942,16 @@ def followup_tasks_view(request):
     today = timezone.localdate()
     assigned_shops = _get_followup_assigned_shops(user)
 
+    approved_statuses = [
+        FinanceApplication.Status.APPROVED,
+        FinanceApplication.Status.PAID,
+        FinanceApplication.Status.PARTIALLY_PAID,
+    ]
+
     customers_qs = Customer.objects.filter(
-        shop__in=assigned_shops
-    ).select_related("shop").prefetch_related("applications", "followup_activities")
+        shop__in=assigned_shops,
+        applications__status__in=approved_statuses,
+    ).distinct().select_related("shop").prefetch_related("applications", "followup_activities")
 
     search_query = request.GET.get("q", "").strip()
     shop_filter = request.GET.get("shop_id", "").strip()
@@ -1047,10 +1087,22 @@ def followup_pending_view(request):
     today = timezone.localdate()
     assigned_shops = _get_followup_assigned_shops(user)
 
-    activities_qs = FollowUpActivity.objects.filter(
-        shop__in=assigned_shops,
-        status=FollowUpActivity.Status.PENDING
-    ).select_related("customer", "shop", "employee").order_by("next_followup_date", "-created_at")
+    approved_statuses = [
+        FinanceApplication.Status.APPROVED,
+        FinanceApplication.Status.PAID,
+        FinanceApplication.Status.PARTIALLY_PAID,
+    ]
+
+    activities_qs = (
+        FollowUpActivity.objects.filter(
+            shop__in=assigned_shops,
+            status=FollowUpActivity.Status.PENDING,
+            customer__applications__status__in=approved_statuses,
+        )
+        .distinct()
+        .select_related("customer", "shop", "employee")
+        .order_by("next_followup_date", "-created_at")
+    )
 
     shop_filter = request.GET.get("shop_id", "").strip()
     if shop_filter:
@@ -1277,6 +1329,18 @@ def followup_customer_detail_view(request, pk):
         ).exists()
         if not is_assigned:
             return HttpResponseForbidden("Access Denied: You are not assigned to monitor this customer's shop.")
+
+    # Gate on approved application: pending customers must not appear in follow-up portal
+    app = customer.applications.filter(
+        status__in=[
+            FinanceApplication.Status.APPROVED,
+            FinanceApplication.Status.PAID,
+            FinanceApplication.Status.PARTIALLY_PAID,
+        ]
+    ).first()
+    if not app:
+        messages.warning(request, "This customer's finance application is pending approval and cannot be accessed for follow-ups yet.")
+        return redirect("followup_tasks")
 
     # Handle logging new follow-up interaction
     if request.method == "POST":

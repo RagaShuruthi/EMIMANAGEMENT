@@ -102,6 +102,7 @@ class CustomerManagementUpgradeTests(TestCase):
             mobile_price=Decimal("30000.00"),
             down_payment=Decimal("6000.00"),
             emi_duration=6,
+            status=FinanceApplication.Status.APPROVED,
         )
 
         self.assertEqual(app.financier_request_amount, Decimal("24000.00"))
@@ -133,6 +134,7 @@ class CustomerManagementUpgradeTests(TestCase):
             mobile_price=Decimal("30000.00"),
             down_payment=Decimal("6000.00"),
             emi_duration=6,
+            status=FinanceApplication.Status.APPROVED,
         )
 
         # Force first installment to be due in current calendar month
@@ -183,6 +185,7 @@ class CustomerManagementUpgradeTests(TestCase):
             mobile_price=Decimal("20000.00"),
             down_payment=Decimal("4000.00"),
             emi_duration=6,
+            status=FinanceApplication.Status.APPROVED,
         )
 
         # Admin disburses payout of ₹16,000 to the shop
@@ -917,7 +920,106 @@ class CustomerManagementUpgradeTests(TestCase):
         self.assertContains(detail_res, "Do you want to move the remaining due amount to the next month?")
         self.assertContains(detail_res, "Yes, Move to Next Month")
         self.assertContains(detail_res, "No, Keep Current Due")
-        self.assertContains(detail_res, f"editCustomerPaymentModal{payment.pk}")
+        self.assertNotContains(detail_res, "Record EMI Payment")
+        self.assertNotContains(detail_res, "Recorded Customer EMI Payments")
+
+    def test_26_emi_schedule_updates_reflect_on_all_customers_page(self):
+        """
+        Verifies that updating EMI schedule fields (amount, amount_paid up/down, due_date, status, update_note)
+        in View Customer immediately updates the All Customers page columns (Amount Paid, Remaining Balance,
+        Next Due Date, Due Status, and Update Status).
+        """
+        cust = Customer.objects.create(shop=self.shop_a, name="AllCust Sync Check", primary_mobile="9876500097")
+        app = FinanceApplication.objects.create(
+            shop=self.shop_a,
+            customer=cust,
+            mobile_price=Decimal("15000.00"),
+            monthly_emi=Decimal("5000.00"),
+            emi_duration=3,
+            status=FinanceApplication.Status.APPROVED
+        )
+        # Customer pays 5000 initially via Pay
+        app.record_customer_payment(amount=Decimal("5000.00"))
+        self.client.login(username="admin_user", password="AdminPassword123!")
+
+        sched1 = app.emi_schedules.order_by("installment_number")[0]
+        new_due = self.today
+
+        # Admin edits Inst #1 in View Customer: reduces paid from 5000 -> 2000, increases due 5000 -> 6000, sets due_date = today, adds update_note
+        res = self.client.post(
+            reverse("admin_update_installment", kwargs={"pk": sched1.pk}),
+            {
+                "amount": "6000.00",
+                "amount_paid": "2000.00",
+                "due_date": new_due.strftime("%Y-%m-%d"),
+                "status": "PARTIAL",
+                "update_note": "Synced from EMI schedule",
+                "carry_forward": "no"
+            }
+        )
+        self.assertEqual(res.status_code, 302)
+
+        # Verify on All Customers page
+        all_res = self.client.get(reverse("admin_all_customers") + f"?q={cust.primary_mobile}")
+        self.assertEqual(all_res.status_code, 200)
+        # Paid = 2000.00, Total = 15000 + 1000 = 16000, Remaining = 16000 - 2000 = 14000.00
+        self.assertContains(all_res, "2000.00")
+        self.assertContains(all_res, "14000.00")
+        self.assertContains(all_res, "Due Today")
+        self.assertContains(all_res, "Synced from EMI schedule")
+
+    def test_27_full_or_overpaid_emi_automatically_becomes_paid(self):
+        """
+        Verifies that if an EMI installment is fully paid (amount_paid == amount)
+        or paid more than the due (amount_paid > amount), it automatically becomes PAID
+        in the EMI schedule even if the status dropdown wasn't manually changed.
+        """
+        cust = Customer.objects.create(shop=self.shop_a, name="Auto Paid Cust", primary_mobile="9876500098")
+        app = FinanceApplication.objects.create(
+            shop=self.shop_a,
+            customer=cust,
+            mobile_price=Decimal("15000.00"),
+            monthly_emi=Decimal("5000.00"),
+            emi_duration=3,
+            status=FinanceApplication.Status.APPROVED
+        )
+        self.client.login(username="admin_user", password="AdminPassword123!")
+
+        sched1, sched2, sched3 = list(app.emi_schedules.order_by("installment_number"))
+
+        # 1. Exact full payment while status still submitted as PENDING
+        res1 = self.client.post(
+            reverse("admin_update_installment", kwargs={"pk": sched1.pk}),
+            {
+                "amount": "5000.00",
+                "amount_paid": "5000.00",
+                "due_date": sched1.due_date.strftime("%Y-%m-%d"),
+                "status": "PENDING"
+            }
+        )
+        self.assertEqual(res1.status_code, 302)
+        sched1.refresh_from_db()
+        self.assertEqual(sched1.amount_paid, Decimal("5000.00"))
+        self.assertEqual(sched1.status, CustomerEMISchedule.InstallmentStatus.PAID)
+        self.assertTrue(sched1.is_paid)
+        self.assertIsNotNone(sched1.paid_date)
+
+        # 2. Overpayment (more than due) while status still submitted as PENDING
+        res2 = self.client.post(
+            reverse("admin_update_installment", kwargs={"pk": sched2.pk}),
+            {
+                "amount": "5000.00",
+                "amount_paid": "7500.00",
+                "due_date": sched2.due_date.strftime("%Y-%m-%d"),
+                "status": "PENDING"
+            }
+        )
+        self.assertEqual(res2.status_code, 302)
+        sched2.refresh_from_db()
+        self.assertEqual(sched2.amount_paid, Decimal("7500.00"))
+        self.assertEqual(sched2.status, CustomerEMISchedule.InstallmentStatus.PAID)
+        self.assertTrue(sched2.is_paid)
+        self.assertIsNotNone(sched2.paid_date)
 
 
 

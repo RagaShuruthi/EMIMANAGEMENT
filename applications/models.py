@@ -413,11 +413,16 @@ class FinanceApplication(models.Model):
     def total_customer_paid(self):
         """
         Sum of all customer EMI payments received.
-        Synchronizes both actual payment transactions and installment schedule allocations.
+        Uses the authoritative EMI schedule amount_paid sum when schedules exist,
+        preserving full-payoff transaction overflow when all installments are settled.
         """
-        sched_paid = self.emi_schedules.aggregate(total=models.Sum("amount_paid"))["total"] or Decimal("0.00")
-        actual_paid = self.customer_emi_payments.aggregate(total=models.Sum("amount"))["total"] or Decimal("0.00")
-        return max(actual_paid, sched_paid)
+        if self.emi_schedules.exists():
+            sched_paid = self.emi_schedules.aggregate(total=models.Sum("amount_paid"))["total"] or Decimal("0.00")
+            if not self.emi_schedules.filter(is_paid=False).exists():
+                actual_paid = self.customer_emi_payments.aggregate(total=models.Sum("amount"))["total"] or Decimal("0.00")
+                return max(actual_paid, sched_paid)
+            return sched_paid
+        return self.customer_emi_payments.aggregate(total=models.Sum("amount"))["total"] or Decimal("0.00")
 
     @property
     def customer_remaining_balance(self):

@@ -827,5 +827,30 @@ class AdminDashboardReworkTests(TestCase):
         self.assertEqual(shop.owner_account, user)
         self.assertEqual(shop.phone, "9876543210")
 
+    def test_shop_payouts_pending_loans_filter_and_modal(self):
+        """Verify Pending Loans filter and clickable Pending Loans modal on Shop Payouts page."""
+        self.client.login(username="admin_rework", password="AdminPassword123!")
+
+        # Create a third shop with NO pending loans
+        empty_shop = Shop.objects.create(
+            name="Empty Shop Payouts",
+            owner_name="No Loans",
+            phone="9999900000",
+            is_active=True
+        )
+
+        # 1. Default view shows all shops and renders pendingLoansModal for shop1
+        res = self.client.get(reverse("admin_shop_payments"))
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, "Empty Shop Payouts")
+        self.assertContains(res, f"pendingLoansModal{self.shop1.id}")
+        self.assertContains(res, self.app1.application_number)
+
+        # 2. Filter by PENDING_LOANS excludes empty_shop
+        res_filtered = self.client.get(reverse("admin_shop_payments") + "?status=PENDING_LOANS")
+        self.assertEqual(res_filtered.status_code, 200)
+        self.assertContains(res_filtered, self.shop1.name)
+        self.assertNotContains(res_filtered, "Empty Shop Payouts")
+
 
 

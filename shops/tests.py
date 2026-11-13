@@ -1149,3 +1149,122 @@ class ShopReportsAndAnalyticsTests(TestCase):
         self.assertIn(CustomerDocument.DocType.PHOTOGRAPH, doc_types)
         self.assertIn(CustomerDocument.DocType.AADHAAR_FRONT, doc_types)
         self.assertIn(CustomerDocument.DocType.AADHAAR_BACK, doc_types)
+
+    def test_shop_emi_collection_deducts_financier_payable_and_notifies_admin_and_followup(self):
+        """
+        Tests Shop EMI Collection page:
+        - Shop collects an EMI installment from an approved customer.
+        - Customer EMI schedule and balance update.
+        - Financier's remaining payable to the shop is reduced by the collected amount.
+        - Admin audit history & Follow-up staff activity are created.
+        """
+        from decimal import Decimal
+        from customers.models import Customer, CustomerUpdateHistory
+        from applications.models import FinanceApplication
+        from payments.models import CustomerEMIPayment
+        from followups.models import FollowUpAssignment, FollowUpActivity
+        from admin_dashboard.views import get_shop_financials
+
+        # Create follow-up user & assign to self.shop
+        followup_user = User.objects.create_user(
+            username="followup_emi_sync",
+            password="FollowupPassword123!",
+            role=User.Role.FOLLOWUP
+        )
+        FollowUpAssignment.objects.create(
+            employee=followup_user,
+            shop=self.shop,
+            is_active=True
+        )
+
+        # Create approved customer & loan: Price 30000, Down 5000 -> Financier Request = 25000, 3 EMIs of 10000
+        cust = Customer.objects.create(
+            shop=self.shop,
+            name="Shop EMI Collector Cust",
+            primary_mobile="9876543219",
+            secondary_mobile="9876543218"
+        )
+        app = FinanceApplication.objects.create(
+            shop=self.shop,
+            customer=cust,
+            mobile_model="iPhone 15",
+            mobile_price=Decimal("30000.00"),
+            down_payment=Decimal("5000.00"),
+            monthly_emi=Decimal("10000.00"),
+            emi_duration=3,
+            status=FinanceApplication.Status.APPROVED
+        )
+
+        # Initial financier payable = 25000.00
+        fin_before = get_shop_financials(self.shop)
+        self.assertEqual(fin_before["remaining_due"], Decimal("25000.00"))
+
+        self.client.login(username="shop_rep_user", password="ShopPassword123!")
+
+        # GET Shop EMI Collection page
+        get_res = self.client.get(reverse("shop_emi_collection"))
+        self.assertEqual(get_res.status_code, 200)
+        self.assertContains(get_res, "Shop EMI Collector Cust")
+
+        # POST Collect 10000.00 EMI
+        post_res = self.client.post(reverse("shop_emi_collection"), {
+            "customer_id": cust.pk,
+            "amount": "10000.00",
+            "payment_date": "2026-11-12",
+            "payment_mode": "CASH",
+            "transaction_reference": "REC-555",
+            "remarks": "Collected November EMI at shop"
+        })
+        self.assertEqual(post_res.status_code, 302)
+
+        # 1. Verify CustomerEMIPayment created with collected_by_shop=True
+        pay = CustomerEMIPayment.objects.filter(customer=cust, collected_by_shop=True).first()
+        self.assertIsNotNone(pay)
+        self.assertEqual(pay.amount, Decimal("10000.00"))
+
+        # 2. Verify EMI schedule & remaining balance updated
+        app.refresh_from_db()
+        self.assertEqual(app.total_customer_paid, Decimal("10000.00"))
+        self.assertEqual(app.customer_remaining_balance, Decimal("20000.00"))
+
+        # 3. Verify Financier Remaining Due to Shop is reduced from 25000 -> 15000
+        fin_after = get_shop_financials(self.shop)
+        self.assertEqual(fin_after["shop_collected_emi"], Decimal("10000.00"))
+        self.assertEqual(fin_after["remaining_due"], Decimal("15000.00"))
+
+        # Also check Shop Dashboard & Financier Payments page show updated Amount Received (10000), Financier Requested (15000), and Outstanding (15000)
+        dash_res = self.client.get(reverse("shop_dashboard"))
+        self.assertEqual(dash_res.context["total_amount_received"], Decimal("10000.00"))
+        self.assertEqual(dash_res.context["total_amount_requested"], Decimal("15000.00"))
+        self.assertEqual(dash_res.context["outstanding_amount"], Decimal("15000.00"))
+        fin_pay_res = self.client.get(reverse("shop_payments"))
+        self.assertEqual(fin_pay_res.context["total_received"], Decimal("10000.00"))
+        self.assertEqual(fin_pay_res.context["total_requested"], Decimal("15000.00"))
+        self.assertEqual(fin_pay_res.context["outstanding"], Decimal("15000.00"))
+
+        # 4. Verify Admin audit & Follow-up person notification
+        audit = CustomerUpdateHistory.objects.filter(customer=cust, field_name="EMI Collected by Shop").first()
+        self.assertIsNotNone(audit)
+        fu_act = FollowUpActivity.objects.filter(
+            employee=followup_user,
+            customer=cust,
+            activity_type=FollowUpActivity.ActivityType.PAYMENT,
+            outcome=FollowUpActivity.Outcome.PAID
+        ).first()
+        self.assertIsNotNone(fu_act)
+
+        # 5. Excess collection test: if financier already paid 20000 (total 20000 + 10000 shop EMI = 30000 > 25000 request)
+        # Outstanding Balance card should show +₹5000.00
+        from payments.models import FinancierPayment
+        FinancierPayment.objects.create(
+            shop=self.shop,
+            application=app,
+            amount_received=Decimal("20000.00"),
+            payment_date="2026-11-12",
+            payment_reference="FIN-PAY-20000"
+        )
+        dash_excess_res = self.client.get(reverse("shop_dashboard"))
+        self.assertTrue(dash_excess_res.context["outstanding_excess"])
+        self.assertEqual(dash_excess_res.context["outstanding_amount"], Decimal("5000.00"))
+        self.assertContains(dash_excess_res, "+₹5000.00")
+

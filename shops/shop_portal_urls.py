@@ -17,6 +17,9 @@ urlpatterns = [
     path("applications/", shop_portal_views.application_list_view, name="shop_application_list"),
     path("applications/<int:pk>/", shop_portal_views.application_detail_view, name="shop_application_detail"),
 
+    # Shop EMI Installment Collection (deducted from Financier Payable)
+    path("emi-collections/", shop_portal_views.shop_emi_collection_view, name="shop_emi_collection"),
+
     # Financier Payments & Reconciliation
     path("payments/", shop_portal_views.financier_payments_view, name="shop_payments"),
 

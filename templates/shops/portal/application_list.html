@@ -13,7 +13,7 @@
     </a>
 </div>
 
-<!-- Status Navigation Tabs -->
+<!-- Status Navigation Tabs (Strictly: All, Under Review, Approved, Rejected) -->
 <ul class="nav nav-pills mb-4 gap-2 flex-wrap">
     <li class="nav-item">
         <a class="nav-link {% if not status_filter %}active{% else %}bg-white border text-dark{% endif %}" href="{% url 'shop_application_list' %}">
@@ -21,23 +21,18 @@
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link {% if status_filter == 'SUBMITTED' %}active{% else %}bg-white border text-dark{% endif %}" href="{% url 'shop_application_list' %}?status=SUBMITTED">
-            Submitted
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link {% if status_filter == 'PENDING' %}active{% else %}bg-white border text-dark{% endif %}" href="{% url 'shop_application_list' %}?status=PENDING">
-            Pending / Under Review
+        <a class="nav-link {% if status_filter == 'UNDER_REVIEW' %}active{% else %}bg-white border text-dark{% endif %}" href="{% url 'shop_application_list' %}?status=UNDER_REVIEW">
+            <i class="bi bi-clock-history me-1"></i>Under Review
         </a>
     </li>
     <li class="nav-item">
         <a class="nav-link {% if status_filter == 'APPROVED' %}active{% else %}bg-white border text-dark{% endif %}" href="{% url 'shop_application_list' %}?status=APPROVED">
-            Approved
+            <i class="bi bi-check-circle-fill me-1"></i>Approved
         </a>
     </li>
     <li class="nav-item">
         <a class="nav-link {% if status_filter == 'REJECTED' %}active{% else %}bg-white border text-dark{% endif %}" href="{% url 'shop_application_list' %}?status=REJECTED">
-            Rejected
+            <i class="bi bi-x-circle-fill me-1"></i>Rejected
         </a>
     </li>
 </ul>
@@ -104,16 +99,12 @@
                     <td>₹{{ app.monthly_emi|floatformat:2 }} <small class="text-muted">×{{ app.emi_duration }}m</small></td>
                     <td><span class="badge bg-light text-primary border font-monospace">{{ app.monthly_due_day }}th</span></td>
                     <td>
-                        {% if app.status == 'APPROVED' %}
+                        {% if app.status == 'APPROVED' or app.status == 'PAID' or app.status == 'PARTIALLY_PAID' %}
                             <span class="badge bg-success-subtle text-success px-2 py-1"><i class="bi bi-check-circle me-1"></i>Approved</span>
-                        {% elif app.status == 'SUBMITTED' %}
-                            <span class="badge bg-primary-subtle text-primary px-2 py-1"><i class="bi bi-send-check me-1"></i>Submitted</span>
                         {% elif app.status == 'REJECTED' %}
                             <span class="badge bg-danger-subtle text-danger px-2 py-1"><i class="bi bi-x-circle me-1"></i>Rejected</span>
-                        {% elif app.status == 'PAID' %}
-                            <span class="badge bg-info-subtle text-info-emphasis px-2 py-1"><i class="bi bi-cash me-1"></i>Paid</span>
                         {% else %}
-                            <span class="badge bg-warning-subtle text-warning-emphasis px-2 py-1"><i class="bi bi-clock me-1"></i>{{ app.get_status_display }}</span>
+                            <span class="badge bg-warning-subtle text-warning-emphasis px-2 py-1"><i class="bi bi-clock me-1"></i>Under Review</span>
                         {% endif %}
                     </td>
                     <td class="text-muted small">{{ app.application_date|date:"M d, Y" }}</td>

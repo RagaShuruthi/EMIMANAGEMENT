@@ -322,6 +322,7 @@ class FollowUpEmployeePortalIsolationTests(TestCase):
             emi_duration=6,
             monthly_emi=Decimal("5000.00"),
             monthly_due_day=5,
+            status=FinanceApplication.Status.APPROVED,
         )
 
         self.cust_shop2 = Customer.objects.create(
@@ -331,6 +332,18 @@ class FollowUpEmployeePortalIsolationTests(TestCase):
             secondary_mobile="9822222223",
             home_address="Shop 2 Address Street",
             work_address="Shop 2 Business Park"
+        )
+        self.app2 = FinanceApplication.objects.create(
+            shop=self.shop2,
+            customer=self.cust_shop2,
+            mobile_model="Samsung Galaxy A54",
+            mobile_price=Decimal("28000.00"),
+            down_payment=Decimal("4000.00"),
+            financier_request_amount=Decimal("24000.00"),
+            emi_duration=6,
+            monthly_emi=Decimal("4670.00"),
+            monthly_due_day=10,
+            status=FinanceApplication.Status.APPROVED,
         )
 
         # Follow-up employee assigned ONLY to Shop 1

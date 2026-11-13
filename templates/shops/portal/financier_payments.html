@@ -38,8 +38,8 @@
     <div class="col-12 col-sm-6 col-xl-3">
         <div class="metric-card border-warning-subtle shadow-sm h-100">
             <div class="metric-label text-warning-emphasis">Outstanding Balance Due</div>
-            <div class="metric-value text-warning-emphasis fs-3">₹{{ outstanding|floatformat:2 }}</div>
-            <small class="text-muted">Balance yet to be received from admin</small>
+            <div class="metric-value {% if outstanding_excess %}text-success{% else %}text-warning-emphasis{% endif %} fs-3">{% if outstanding_excess %}+{% endif %}₹{{ outstanding|floatformat:2 }}</div>
+            <small class="text-muted">{% if outstanding_excess %}Excess collected above financier due{% else %}Balance yet to be received from admin{% endif %}</small>
         </div>
     </div>
     <div class="col-12 col-sm-6 col-xl-3">

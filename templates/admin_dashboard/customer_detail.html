@@ -86,9 +86,6 @@
             <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#detailEditDueDateModal">
                 <i class="bi bi-calendar-event me-1"></i> Edit Next Due Date
             </button>
-            <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#detailRecordPaymentModal">
-                <i class="bi bi-cash me-1"></i> Record EMI Payment
-            </button>
             {% endif %}
             <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#detailDeleteCustomerModal">
                 <i class="bi bi-trash-fill me-1"></i> Delete Customer
@@ -313,9 +310,6 @@
                     <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#detailEditDueDateModal">
                         <i class="bi bi-calendar-event me-1"></i> Edit Next Due Date
                     </button>
-                    <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#detailRecordPaymentModal">
-                        <i class="bi bi-cash me-1"></i> Record EMI Payment
-                    </button>
                 </div>
                 {% endif %}
             </div>
@@ -327,9 +321,9 @@
                             <tr>
                                 <th style="width: 70px;">Inst #</th>
                                 <th style="width: 140px;">Due Date</th>
-                                <th style="min-width: 130px;" class="text-end">Amount Due (₹)</th>
-                                <th style="min-width: 130px;" class="text-end">Amount Paid (₹)</th>
-                                <th style="width: 110px;" class="text-end">Remaining</th>
+                                <th style="width: 125px;" class="text-end">Amount Due (₹)</th>
+                                <th style="width: 125px;" class="text-end">Amount Paid (₹)</th>
+                                <th style="width: 100px;" class="text-end">Remaining</th>
                                 <th style="width: 110px;" class="text-center">Status</th>
                                 <th style="width: 110px;">Settled Date</th>
                                 <th style="min-width: 180px;">Update</th>
@@ -358,21 +352,21 @@
 
                                 <!-- Amount Due (Editable) -->
                                 <td>
-                                    <div class="input-group input-group-sm">
+                                    <div class="input-group input-group-sm ms-auto" style="width: 118px;">
                                         <span class="input-group-text bg-white border-end-0 px-1 text-muted">₹</span>
                                         <input type="number" step="0.01" min="0" name="amount" form="formSched{{ sched.pk }}"
                                                value="{{ sched.amount|floatformat:2 }}" class="form-control form-control-sm font-monospace text-end border-start-0 fw-semibold"
-                                               style="min-width: 85px;" title="Edit Amount Due" required>
+                                               style="min-width: 75px;" title="Edit Amount Due" required>
                                     </div>
                                 </td>
 
                                 <!-- Amount Paid (Editable) -->
                                 <td>
-                                    <div class="input-group input-group-sm">
+                                    <div class="input-group input-group-sm ms-auto" style="width: 118px;">
                                         <span class="input-group-text bg-white border-end-0 px-1 text-success">₹</span>
                                         <input type="number" step="0.01" min="0" name="amount_paid" form="formSched{{ sched.pk }}"
                                                value="{{ sched.amount_paid|floatformat:2 }}" class="form-control form-control-sm font-monospace text-end border-start-0 text-success fw-bold"
-                                               style="min-width: 85px;" title="Edit Amount Paid" required>
+                                               style="min-width: 75px;" title="Edit Amount Paid" required>
                                     </div>
                                 </td>
 
@@ -414,60 +408,6 @@
                             </tr>
                             {% empty %}
                             <tr><td colspan="9" class="text-center text-muted small py-3">Schedule not generated.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- Recorded Customer EMI Payments (Editable) -->
-        <div class="card rounded-3 border mb-4 shadow-sm">
-            <div class="card-header bg-white py-2.5 d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom">
-                <div>
-                    <h6 class="fw-bold mb-0 text-dark">
-                        <i class="bi bi-receipt-cutoff me-1 text-success"></i> Recorded Customer EMI Payments
-                    </h6>
-                    <span class="text-muted small">All payments recorded via Pay. Click Edit to modify any payment and automatically synchronize schedules &amp; summaries.</span>
-                </div>
-                {% if item.customer_remaining_balance > 0 and not customer.is_loss %}
-                <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#detailRecordPaymentModal">
-                    <i class="bi bi-plus-circle me-1"></i> Record Payment
-                </button>
-                {% endif %}
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover align-middle mb-0">
-                        <thead class="table-light small text-muted text-uppercase" style="letter-spacing: 0.03em;">
-                            <tr>
-                                <th>Date</th>
-                                <th class="text-end">Amount (₹)</th>
-                                <th>Mode</th>
-                                <th>Reference</th>
-                                <th>Remarks</th>
-                                <th>Recorded By</th>
-                                <th class="text-end">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for pay in item.customer_payments %}
-                            <tr class="small">
-                                <td class="text-nowrap font-monospace">{{ pay.payment_date|date:"M d, Y" }}</td>
-                                <td class="text-end fw-bold text-success font-monospace">₹{{ pay.amount|floatformat:2 }}</td>
-                                <td><span class="badge bg-light text-dark border">{{ pay.get_payment_mode_display|default:pay.payment_mode }}</span></td>
-                                <td class="text-muted font-monospace">{{ pay.transaction_reference|default:"—" }}</td>
-                                <td class="text-muted">{{ pay.remarks|default:"—" }}</td>
-                                <td class="text-muted">{{ pay.recorded_by.username|default:"Admin" }}</td>
-                                <td class="text-end text-nowrap">
-                                    <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2"
-                                            data-bs-toggle="modal" data-bs-target="#editCustomerPaymentModal{{ pay.pk }}">
-                                        <i class="bi bi-pencil-square me-1"></i>Edit
-                                    </button>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr><td colspan="7" class="text-center text-muted small py-3">No EMI payments recorded yet.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -685,63 +625,6 @@
     </div>
 </div>
 
-<!-- Modal: Record Customer EMI Payment -->
-{% if app_details.0.app %}
-<div class="modal fade" id="detailRecordPaymentModal" tabindex="-1" aria-labelledby="detailRecordPaymentModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <form method="post" action="{% url 'admin_customer_record_payment' pk=customer.pk %}">
-                {% csrf_token %}
-                <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                <div class="modal-header">
-                    <h5 class="modal-title fw-bold" id="detailRecordPaymentModalLabel">
-                        <i class="bi bi-cash-coin me-2 text-success"></i>Record Customer EMI Payment
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="alert alert-light border small mb-3">
-                        <strong>Monthly EMI:</strong> ₹{{ app_details.0.app.monthly_emi|floatformat:2 }} &bull;
-                        <strong>Remaining:</strong> ₹{{ app_details.0.customer_remaining_balance|floatformat:2 }}
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-semibold text-secondary">Payment Amount (₹) <span class="text-danger">*</span></label>
-                        <input type="number" step="0.01" name="amount" class="form-control fw-bold text-success fs-5" value="{{ app_details.0.app.monthly_emi|floatformat:2 }}" required>
-                    </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col-6">
-                            <label class="form-label small fw-semibold text-secondary">Payment Date</label>
-                            <input type="date" name="payment_date" class="form-control" value="{% now 'Y-m-d' %}">
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label small fw-semibold text-secondary">Payment Mode</label>
-                            <select name="payment_mode" class="form-select">
-                                <option value="UPI" selected>UPI / GPay / PhonePe</option>
-                                <option value="CASH">Cash</option>
-                                <option value="BANK">Bank Transfer</option>
-                                <option value="CARD">Debit / Credit Card</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-semibold text-secondary">Transaction Reference / UTR</label>
-                        <input type="text" name="transaction_reference" class="form-control" placeholder="e.g. UPI Ref, Receipt #">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-semibold text-secondary">Remarks / Notes</label>
-                        <input type="text" name="remarks" class="form-control" placeholder="Optional payment remarks">
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success btn-sm">Confirm Payment</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-{% endif %}
-
 <!-- Modal: Move Customer to Loss -->
 <div class="modal fade" id="detailMoveToLossModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -894,65 +777,6 @@
     </div>
 </div>
 
-<!-- Modals: Edit Recorded Customer EMI Payments -->
-{% if app_details %}
-{% for item in app_details %}
-{% for pay in item.customer_payments %}
-<div class="modal fade" id="editCustomerPaymentModal{{ pay.pk }}" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow">
-            <form method="post" action="{% url 'admin_edit_customer_payment' pk=pay.pk %}">
-                {% csrf_token %}
-                <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                <div class="modal-header bg-primary-subtle border-bottom">
-                    <h5 class="modal-title fw-bold text-primary">
-                        <i class="bi bi-pencil-square me-2"></i>Edit Recorded Payment #{{ pay.pk }}
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body p-4">
-                    <div class="mb-3">
-                        <label class="form-label small fw-semibold text-secondary">Amount Paid (₹) <span class="text-danger">*</span></label>
-                        <input type="number" step="0.01" min="0.01" name="amount" value="{{ pay.amount|floatformat:2 }}" class="form-control font-monospace fw-bold" required>
-                    </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col-6">
-                            <label class="form-label small fw-semibold text-secondary">Payment Date</label>
-                            <input type="date" name="payment_date" value="{{ pay.payment_date|date:'Y-m-d' }}" class="form-control" required>
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label small fw-semibold text-secondary">Payment Mode</label>
-                            <select name="payment_mode" class="form-select">
-                                <option value="UPI" {% if pay.payment_mode == 'UPI' %}selected{% endif %}>UPI / GPay / PhonePe</option>
-                                <option value="CASH" {% if pay.payment_mode == 'CASH' %}selected{% endif %}>Cash</option>
-                                <option value="BANK" {% if pay.payment_mode == 'BANK' %}selected{% endif %}>Bank Transfer / NEFT / IMPS</option>
-                                <option value="CARD" {% if pay.payment_mode == 'CARD' %}selected{% endif %}>Debit / Credit Card</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-semibold text-secondary">Transaction Reference / UTR</label>
-                        <input type="text" name="transaction_reference" value="{{ pay.transaction_reference }}" class="form-control" placeholder="Optional reference">
-                    </div>
-                    <div class="mb-0">
-                        <label class="form-label small fw-semibold text-secondary">Remarks</label>
-                        <input type="text" name="remarks" value="{{ pay.remarks }}" class="form-control" placeholder="Optional remarks">
-                    </div>
-                </div>
-                <div class="modal-footer bg-light">
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary btn-sm fw-semibold">
-                        <i class="bi bi-check-lg me-1"></i>Save Payment Changes
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-{% endfor %}
-{% endfor %}
-{% endif %}
-
 <script>
 document.addEventListener("DOMContentLoaded", function () {
     const partialModalEl = document.getElementById("partialCarryForwardModal");
@@ -976,6 +800,25 @@ document.addEventListener("DOMContentLoaded", function () {
         document.getElementById("partialModalRemainingLabel").textContent = `₹${remaining.toFixed(2)}`;
         partialModal.show();
     }
+
+    document.querySelectorAll('input[name="amount_paid"], input[name="amount"]').forEach(function (inp) {
+        inp.addEventListener("input", function () {
+            const formId = inp.getAttribute("form");
+            if (!formId) return;
+            const schedId = formId.replace("formSched", "");
+            const amountEl = document.querySelector(`input[name="amount"][form="${formId}"]`);
+            const paidEl = document.querySelector(`input[name="amount_paid"][form="${formId}"]`);
+            const sel = document.querySelector(`.emi-status-select[data-sched-id="${schedId}"]`);
+            if (!amountEl || !paidEl || !sel) return;
+            const amt = parseFloat(amountEl.value) || 0;
+            const paid = parseFloat(paidEl.value) || 0;
+            if (amt > 0 && paid >= amt) {
+                sel.value = "PAID";
+            } else if (paid > 0 && paid < amt && sel.value === "PENDING") {
+                sel.value = "PARTIAL";
+            }
+        });
+    });
 
     document.querySelectorAll(".emi-status-select").forEach(function (sel) {
         sel.addEventListener("change", function () {

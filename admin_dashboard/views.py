@@ -56,20 +56,34 @@ def get_shop_customer_emi_stats(shop, today=None):
     if today is None:
         today = timezone.localdate()
 
-    total_customers = Customer.objects.filter(shop=shop).count()
+    approved_statuses = [
+        FinanceApplication.Status.APPROVED,
+        FinanceApplication.Status.PAID,
+        FinanceApplication.Status.PARTIALLY_PAID,
+    ]
+
+    total_customers = (
+        Customer.objects.filter(shop=shop, applications__status__in=approved_statuses)
+        .distinct()
+        .count()
+    )
 
     # Sum of customer EMI payments
-    total_paid = CustomerEMIPayment.objects.filter(customer__shop=shop).aggregate(
+    total_paid = CustomerEMIPayment.objects.filter(
+        customer__shop=shop,
+        application__status__in=approved_statuses
+    ).aggregate(
         total=Sum("amount")
     )["total"] or Decimal("0.00")
 
-    # Ensure all applications have default schedules initialized
-    for app in FinanceApplication.objects.filter(shop=shop):
+    # Ensure all approved applications have default schedules initialized
+    for app in FinanceApplication.objects.filter(shop=shop, status__in=approved_statuses):
         app.generate_default_schedule_if_missing()
 
     # Total pending this month: installments due in current calendar month that are unpaid
     month_unpaid = CustomerEMISchedule.objects.filter(
         customer__shop=shop,
+        application__status__in=approved_statuses,
         due_date__year=today.year,
         due_date__month=today.month,
         is_paid=False
@@ -79,6 +93,7 @@ def get_shop_customer_emi_stats(shop, today=None):
     # Total pending including all EMIs: all unpaid installments
     all_unpaid = CustomerEMISchedule.objects.filter(
         customer__shop=shop,
+        application__status__in=approved_statuses,
         is_paid=False
     )
     total_pending_all_emis = sum((s.remaining_amount for s in all_unpaid), Decimal("0.00"))
@@ -120,14 +135,13 @@ def prepare_customer_management_dataset(customers_qs, request, today=None, exclu
 
         app = c.applications.first()
 
-        # In Admin Dashboard Customer List, after the application is APPROVED only it has to be added in the customer list
-        if not (completed_only or loss_only):
-            if not app or app.status not in [
-                FinanceApplication.Status.APPROVED,
-                FinanceApplication.Status.PAID,
-                FinanceApplication.Status.PARTIALLY_PAID,
-            ]:
-                continue
+        # After the application is APPROVED only it has to be added in any customer list
+        if not app or app.status not in [
+            FinanceApplication.Status.APPROVED,
+            FinanceApplication.Status.PAID,
+            FinanceApplication.Status.PARTIALLY_PAID,
+        ]:
+            continue
         if app:
             app.generate_default_schedule_if_missing()
             next_sched = app.next_unpaid_schedule
@@ -323,7 +337,16 @@ def get_shop_financials(shop, start_date=None, end_date=None):
         total=Sum("amount_received")
     )["total"] or Decimal("0.00")
 
-    remaining_due = max(Decimal("0.00"), total_payable - total_paid)
+    emi_filter = Q(customer__shop=shop, collected_by_shop=True)
+    if start_date:
+        emi_filter &= (Q(payment_date__gte=start_date) | Q(created_at__date__gte=start_date))
+    if end_date:
+        emi_filter &= (Q(payment_date__lte=end_date) | Q(created_at__date__lte=end_date))
+    shop_collected_emi = CustomerEMIPayment.objects.filter(emi_filter).aggregate(
+        total=Sum("amount")
+    )["total"] or Decimal("0.00")
+
+    remaining_due = max(Decimal("0.00"), total_payable - total_paid - shop_collected_emi)
 
     if total_payable == Decimal("0.00"):
         payment_status = "NO_OBLIGATIONS"
@@ -333,7 +356,7 @@ def get_shop_financials(shop, start_date=None, end_date=None):
         payment_status = "PAID"
         payment_status_display = "Paid"
         badge_class = "success"
-    elif total_paid > Decimal("0.00"):
+    elif (total_paid + shop_collected_emi) > Decimal("0.00"):
         payment_status = "PARTIALLY_PAID"
         payment_status_display = "Partially Paid"
         badge_class = "warning"
@@ -345,6 +368,7 @@ def get_shop_financials(shop, start_date=None, end_date=None):
     return {
         "total_payable": total_payable,
         "total_paid": total_paid,
+        "shop_collected_emi": shop_collected_emi,
         "remaining_due": remaining_due,
         "payment_status": payment_status,
         "payment_status_display": payment_status_display,
@@ -393,15 +417,20 @@ def admin_dashboard_view(request):
     active_shops = Shop.objects.filter(is_active=True).count()
     inactive_shops = Shop.objects.filter(is_active=False).count()
 
-    total_customers = Customer.objects.count()
-    total_applications = FinanceApplication.objects.count()
-
     # Financial Aggregates (Money Admin Owes to Shops for Approved Applications)
     approved_statuses = [
         FinanceApplication.Status.APPROVED,
         FinanceApplication.Status.PAID,
         FinanceApplication.Status.PARTIALLY_PAID,
     ]
+
+    total_customers = (
+        Customer.objects.filter(applications__status__in=approved_statuses)
+        .distinct()
+        .count()
+    )
+    total_applications = FinanceApplication.objects.count()
+
     total_payable_agg = FinanceApplication.objects.filter(
         status__in=approved_statuses
     ).aggregate(
@@ -412,7 +441,11 @@ def admin_dashboard_view(request):
         total=Sum("amount_received")
     )["total"] or Decimal("0.00")
 
-    total_remaining_due = max(Decimal("0.00"), total_payable_agg - total_paid_agg)
+    total_shop_collected_emi = CustomerEMIPayment.objects.filter(
+        collected_by_shop=True
+    ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+
+    total_remaining_due = max(Decimal("0.00"), total_payable_agg - total_paid_agg - total_shop_collected_emi)
 
     # Follow-up Staff Metrics
     followup_base = User.objects.filter(role__in=[User.Role.FOLLOWUP, User.Role.EMPLOYEE])
@@ -433,7 +466,7 @@ def admin_dashboard_view(request):
     for s in recent_shops:
         fin = get_shop_financials(s)
         s.financials = fin
-        s.customer_count = s.customers.count()
+        s.customer_count = s.customers.filter(applications__status__in=approved_statuses).distinct().count()
 
     # Recent Applications / Customers
     recent_applications = (
@@ -799,7 +832,14 @@ def admin_update_installment_view(request, pk):
         CustomerEMISchedule.InstallmentStatus.PARTIAL,
         CustomerEMISchedule.InstallmentStatus.PAID,
     ]
-    if status_str in valid_statuses:
+    amount_changed = (old_paid != new_amount_paid) or (old_amount != new_amount)
+    if new_amount_paid >= new_amount and new_amount > Decimal("0.00") and not (
+        status_str == CustomerEMISchedule.InstallmentStatus.PENDING and status_str != old_status and old_paid == new_amount_paid
+    ):
+        # EMI is fully paid or paid more than due -> automatically mark as PAID
+        new_status = CustomerEMISchedule.InstallmentStatus.PAID
+        is_paid = True
+    elif status_str in valid_statuses and (status_str != old_status or not amount_changed):
         new_status = status_str
         if new_status == CustomerEMISchedule.InstallmentStatus.PAID:
             is_paid = True
@@ -809,7 +849,7 @@ def admin_update_installment_view(request, pk):
             is_paid = False
             if new_amount_paid >= new_amount and new_amount > Decimal("0.00"):
                 new_amount_paid = Decimal("0.00")
-        else: # PARTIAL
+        else:  # PARTIAL
             is_paid = False
     else:
         # Auto-compute status from amounts
@@ -901,6 +941,16 @@ def admin_update_installment_view(request, pk):
                     notes=f"Partial Payment Carry-Forward — Moved ₹{unpaid:,.2f} from Inst #{schedule.installment_number} to Inst #{next_sched.installment_number} (New Due: ₹{next_sched.amount:,.2f})"
                 )
 
+        # Sync manual Amount Due changes with app.total_emi_amount so Remaining Balance updates on All Customers page
+        if old_amount != new_amount and carried_forward_amount == Decimal("0.00"):
+            base_total = (
+                app.total_emi_amount
+                if (app.total_emi_amount and app.total_emi_amount > Decimal("0.00"))
+                else (app.mobile_price or Decimal("0.00"))
+            )
+            app.total_emi_amount = max(Decimal("0.00"), base_total + (new_amount - old_amount))
+            app.save(update_fields=["total_emi_amount", "updated_at"])
+
         # Recheck if application is completed or completion is reversed
         rem_balance = app.customer_remaining_balance
         from django.db.models import F as models_F
@@ -983,6 +1033,27 @@ def admin_update_installment_view(request, pk):
             description=f"Installment #{schedule.installment_number} custom note updated",
             notes=f"EMI Installment Updated — Field: Update Column, Previous Value: '{old_note or ''}', New Value: '{update_note}' (Inst #{schedule.installment_number})"
         )
+
+    # Sync latest_update_status so the All Customers page Update Status column reflects the change
+    latest_summary = ""
+    if old_note != update_note and update_note:
+        latest_summary = update_note
+    elif carried_forward_amount > Decimal("0.00"):
+        latest_summary = f"Inst #{schedule.installment_number} partial (₹{new_amount_paid:,.2f}), ₹{carried_forward_amount:,.2f} moved to Inst #{carried_to_inst_num}"
+    elif old_paid != new_amount_paid:
+        latest_summary = f"Inst #{schedule.installment_number} paid updated to ₹{new_amount_paid:,.2f}"
+    elif old_due_date != new_due_date:
+        latest_summary = f"Inst #{schedule.installment_number} due date updated to {new_due_date.strftime('%d-%m-%Y')}"
+    elif old_status != new_status:
+        latest_summary = f"Inst #{schedule.installment_number} status updated to {new_status}"
+    elif old_amount != new_amount:
+        latest_summary = f"Inst #{schedule.installment_number} due updated to ₹{new_amount:,.2f}"
+
+    if latest_summary:
+        customer.latest_update_status = latest_summary
+        customer.latest_update_at = timezone.now()
+        customer.latest_update_by = request.user
+        customer.save(update_fields=["latest_update_status", "latest_update_at", "latest_update_by", "updated_at"])
 
     if request.headers.get("x-requested-with") == "XMLHttpRequest" or request.POST.get("format") == "json":
         return JsonResponse({
@@ -1357,9 +1428,14 @@ def admin_shopwise_customers_view(request):
         )
 
     shops_data = []
+    approved_statuses = [
+        FinanceApplication.Status.APPROVED,
+        FinanceApplication.Status.PAID,
+        FinanceApplication.Status.PARTIALLY_PAID,
+    ]
     for s in shops_qs:
         stats = get_shop_customer_emi_stats(s)
-        app_count = s.applications.count()
+        app_count = s.applications.filter(status__in=approved_statuses).count()
         shops_data.append({
             "shop": s,
             "stats": stats,
@@ -1385,10 +1461,21 @@ def admin_shopwise_detail_view(request, shop_id):
     """
     shop = get_object_or_404(Shop.objects.select_related("owner_account"), pk=shop_id)
 
-    # Scoped Customers belonging strictly to this shop
-    customers_qs = Customer.objects.filter(shop=shop).prefetch_related(
-        "applications", "applications__emi_schedules", "applications__customer_emi_payments", "update_history"
-    ).order_by("-created_at")
+    approved_statuses = [
+        FinanceApplication.Status.APPROVED,
+        FinanceApplication.Status.PAID,
+        FinanceApplication.Status.PARTIALLY_PAID,
+    ]
+
+    # Scoped Customers belonging strictly to this shop with approved applications
+    customers_qs = (
+        Customer.objects.filter(shop=shop, applications__status__in=approved_statuses)
+        .distinct()
+        .prefetch_related(
+            "applications", "applications__emi_schedules", "applications__customer_emi_payments", "update_history"
+        )
+        .order_by("-created_at")
+    )
 
     search_query = request.GET.get("q", "").strip()
     if search_query:
@@ -1439,9 +1526,19 @@ def admin_shopwise_export_view(request, shop_id, export_format):
     Exports strictly shop-scoped customers to Excel or PDF respecting all active filters & sorting.
     """
     shop = get_object_or_404(Shop, pk=shop_id)
-    customers_qs = Customer.objects.filter(shop=shop).prefetch_related(
-        "applications", "applications__emi_schedules", "applications__customer_emi_payments", "update_history"
-    ).order_by("-created_at")
+    approved_statuses = [
+        FinanceApplication.Status.APPROVED,
+        FinanceApplication.Status.PAID,
+        FinanceApplication.Status.PARTIALLY_PAID,
+    ]
+    customers_qs = (
+        Customer.objects.filter(shop=shop, applications__status__in=approved_statuses)
+        .distinct()
+        .prefetch_related(
+            "applications", "applications__emi_schedules", "applications__customer_emi_payments", "update_history"
+        )
+        .order_by("-created_at")
+    )
 
     search_query = request.GET.get("q", "").strip()
     if search_query:
@@ -2034,8 +2131,20 @@ def admin_shop_payments_view(request):
         total_system_paid += fin["total_paid"]
         total_system_remaining += fin["remaining_due"]
 
+        pending_apps = list(
+            s.applications.filter(
+                status__in=[
+                    FinanceApplication.Status.APPROVED,
+                    FinanceApplication.Status.PARTIALLY_PAID,
+                ]
+            ).select_related("customer").order_by("-created_at")
+        )
+
         if status_filter:
-            if status_filter.upper() != fin["payment_status"]:
+            if status_filter.upper() == "PENDING_LOANS":
+                if len(pending_apps) == 0:
+                    continue
+            elif status_filter.upper() != fin["payment_status"]:
                 continue
 
         # Fetch full history of payout transactions for this shop with optional date filter
@@ -2056,13 +2165,8 @@ def admin_shop_payments_view(request):
             "financials": fin,
             "transactions": shop_txs,
             "filtered_paid_sum": filtered_paid_sum,
-            "pending_apps_count": s.applications.filter(
-                status__in=[
-                    FinanceApplication.Status.SUBMITTED,
-                    FinanceApplication.Status.APPROVED,
-                    FinanceApplication.Status.PARTIALLY_PAID,
-                ]
-            ).count()
+            "pending_apps": pending_apps,
+            "pending_apps_count": len(pending_apps),
         })
 
     # Recent Payment Transactions by Admin with date filtering

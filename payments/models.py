@@ -253,6 +253,11 @@ class CustomerEMIPayment(models.Model):
         default="",
         help_text="Payment notes or remarks."
     )
+    collected_by_shop = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="True if this EMI installment was directly collected by the retail shop (deducted from financier payable)."
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

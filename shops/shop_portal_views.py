@@ -21,9 +21,9 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
 
 from shops.models import Shop
-from customers.models import Customer
+from customers.models import Customer, CustomerUpdateHistory
 from applications.models import FinanceApplication, CustomerDocument, ApplicationHistory
-from payments.models import FinancierPayment
+from payments.models import FinancierPayment, CustomerEMISchedule, CustomerEMIPayment
 
 
 def get_authenticated_shop(request):
@@ -147,51 +147,69 @@ def shop_dashboard_view(request):
             return redirect("shop_list")
         return HttpResponseForbidden("No retail shop is linked to your user account. Please contact the administrator.")
 
-    # 1. Total Customers
-    total_customers = Customer.objects.filter(shop=shop).count()
+    # Approved statuses constant
+    approved_statuses = [
+        FinanceApplication.Status.APPROVED,
+        FinanceApplication.Status.PAID,
+        FinanceApplication.Status.PARTIALLY_PAID,
+    ]
+
+    # 1. Total Customers (Only count customers who have approved applications)
+    total_customers = (
+        Customer.objects.filter(shop=shop, applications__status__in=approved_statuses)
+        .distinct()
+        .count()
+    )
 
     # 2. Total Applications
     total_applications = FinanceApplication.objects.filter(shop=shop).count()
 
-    # 3. Applications Submitted
-    submitted_applications = FinanceApplication.objects.filter(
-        shop=shop, status=FinanceApplication.Status.SUBMITTED
-    ).count()
-
-    # 4. Applications Pending (Draft, Ready, Under Review)
-    pending_applications = FinanceApplication.objects.filter(
+    # 3. Applications Under Review (Draft, Ready, Submitted, Under Review)
+    under_review_applications = FinanceApplication.objects.filter(
         shop=shop,
         status__in=[
             FinanceApplication.Status.DRAFT,
             FinanceApplication.Status.READY,
+            FinanceApplication.Status.SUBMITTED,
             FinanceApplication.Status.UNDER_REVIEW,
+            FinanceApplication.Status.SUBMISSION_FAILED,
         ]
     ).count()
 
-    # 5. Applications Approved
+    # 4. Applications Approved
     approved_applications = FinanceApplication.objects.filter(
-        shop=shop, status=FinanceApplication.Status.APPROVED
+        shop=shop, status__in=approved_statuses
     ).count()
 
-    # 6. Applications Rejected
+    # 5. Applications Rejected
     rejected_applications = FinanceApplication.objects.filter(
         shop=shop, status=FinanceApplication.Status.REJECTED
     ).count()
 
-    # 7. Total Amount Requested from Financier (Excluding Rejected)
-    amount_requested_agg = FinanceApplication.objects.filter(shop=shop).exclude(
-        status=FinanceApplication.Status.REJECTED
+    # 6. Total Amount Requested from Financier (Only for Approved Applications)
+    amount_requested_agg = FinanceApplication.objects.filter(
+        shop=shop, status__in=approved_statuses
     ).aggregate(
         total=Sum("financier_request_amount")
     )["total"] or Decimal("0.00")
 
-    # 8. Total Amount Received from Financier (Direct Shop Payout or Application Payout)
+    # 7. Total Amount Received from Financier (Direct Shop Payout or Application Payout)
     amount_received_agg = FinancierPayment.objects.filter(
         Q(shop=shop) | Q(application__shop=shop)
     ).aggregate(total=Sum("amount_received"))["total"] or Decimal("0.00")
 
-    # 9. Outstanding Amount Yet to Be Received
-    outstanding_amount = max(Decimal("0.00"), amount_requested_agg - amount_received_agg)
+    # 7b. EMI Collected Directly by Shop (deducted from financier payable, added to amount received)
+    shop_collected_emi = CustomerEMIPayment.objects.filter(
+        customer__shop=shop, collected_by_shop=True
+    ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+
+    net_amount_requested = max(Decimal("0.00"), amount_requested_agg - shop_collected_emi)
+    total_amount_received = amount_received_agg + shop_collected_emi
+
+    # 8. Outstanding Amount Yet to Be Received (or +Excess if customer EMI collected exceeds payable)
+    raw_outstanding = amount_requested_agg - amount_received_agg - shop_collected_emi
+    outstanding_excess = raw_outstanding < Decimal("0.00")
+    outstanding_amount = abs(raw_outstanding) if outstanding_excess else raw_outstanding
 
     # Recent Applications
     recent_applications = (
@@ -210,13 +228,15 @@ def shop_dashboard_view(request):
         "active_nav": "dashboard",
         "total_customers": total_customers,
         "total_applications": total_applications,
-        "submitted_applications": submitted_applications,
-        "pending_applications": pending_applications,
+        "under_review_applications": under_review_applications,
+        "submitted_applications": under_review_applications,
+        "pending_applications": under_review_applications,
         "approved_applications": approved_applications,
         "rejected_applications": rejected_applications,
-        "total_amount_requested": amount_requested_agg,
-        "total_amount_received": amount_received_agg,
+        "total_amount_requested": net_amount_requested,
+        "total_amount_received": total_amount_received,
         "outstanding_amount": outstanding_amount,
+        "outstanding_excess": outstanding_excess,
         "recent_applications": recent_applications,
     }
     return render(request, "shops/portal/dashboard.html", context)
@@ -528,7 +548,7 @@ def customer_list_view(request):
 def application_list_view(request):
     """
     Lists finance applications with tabbed filtering:
-    All, Submitted, Pending, Approved, Rejected.
+    All, Under Review, Approved, Rejected.
     URL: /shop-dashboard/applications/
     """
     shop = get_authenticated_shop(request)
@@ -544,25 +564,33 @@ def application_list_view(request):
         .prefetch_related("financier_payments")
     )
 
-    if status_filter == "SUBMITTED":
-        applications_qs = applications_qs.filter(status=FinanceApplication.Status.SUBMITTED)
-        active_nav = "submitted_apps"
-    elif status_filter == "PENDING":
+    if status_filter in ["UNDER_REVIEW", "PENDING", "SUBMITTED"]:
         applications_qs = applications_qs.filter(
             status__in=[
                 FinanceApplication.Status.DRAFT,
                 FinanceApplication.Status.READY,
+                FinanceApplication.Status.SUBMITTED,
                 FinanceApplication.Status.UNDER_REVIEW,
+                FinanceApplication.Status.SUBMISSION_FAILED,
             ]
         )
-        active_nav = "pending_apps"
-    elif status_filter == "APPROVED":
-        applications_qs = applications_qs.filter(status=FinanceApplication.Status.APPROVED)
+        status_filter = "UNDER_REVIEW"
+        active_nav = "under_review_apps"
+    elif status_filter in ["APPROVED", "PAID", "PARTIALLY_PAID"]:
+        applications_qs = applications_qs.filter(
+            status__in=[
+                FinanceApplication.Status.APPROVED,
+                FinanceApplication.Status.PAID,
+                FinanceApplication.Status.PARTIALLY_PAID,
+            ]
+        )
+        status_filter = "APPROVED"
         active_nav = "approved_apps"
     elif status_filter == "REJECTED":
         applications_qs = applications_qs.filter(status=FinanceApplication.Status.REJECTED)
         active_nav = "rejected_apps"
     else:
+        status_filter = ""
         active_nav = "all_applications"
 
     if search_query:
@@ -724,14 +752,26 @@ def financier_payments_view(request):
     if current_group:
         daily_groups.append(current_group)
 
-    # Global shop aggregates (excluding rejected)
-    total_requested = FinanceApplication.objects.filter(shop=shop).exclude(
-        status=FinanceApplication.Status.REJECTED
+    # Global shop aggregates (Strictly only Approved applications)
+    approved_statuses = [
+        FinanceApplication.Status.APPROVED,
+        FinanceApplication.Status.PAID,
+        FinanceApplication.Status.PARTIALLY_PAID,
+    ]
+    total_requested_gross = FinanceApplication.objects.filter(
+        shop=shop, status__in=approved_statuses
     ).aggregate(
         total=Sum("financier_request_amount")
     )["total"] or Decimal("0.00")
-    total_received = payments_qs.aggregate(total=Sum("amount_received"))["total"] or Decimal("0.00")
-    outstanding = max(Decimal("0.00"), total_requested - total_received)
+    total_received_payouts = payments_qs.aggregate(total=Sum("amount_received"))["total"] or Decimal("0.00")
+    shop_collected_emi = CustomerEMIPayment.objects.filter(
+        customer__shop=shop, collected_by_shop=True
+    ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+    total_requested = max(Decimal("0.00"), total_requested_gross - shop_collected_emi)
+    total_received = total_received_payouts + shop_collected_emi
+    raw_outstanding = total_requested_gross - total_received_payouts - shop_collected_emi
+    outstanding_excess = raw_outstanding < Decimal("0.00")
+    outstanding = abs(raw_outstanding) if outstanding_excess else raw_outstanding
 
     today_received = payments_qs.filter(payment_date=today).aggregate(
         total=Sum("amount_received")
@@ -740,11 +780,10 @@ def financier_payments_view(request):
         payment_date__year=today.year, payment_date__month=today.month
     ).aggregate(total=Sum("amount_received"))["total"] or Decimal("0.00")
 
-    # Eligible applications for recording new payments (used in admin modal)
+    # Eligible applications for recording new payments (only approved & unpaid obligations)
     eligible_apps = FinanceApplication.objects.filter(
         shop=shop,
         status__in=[
-            FinanceApplication.Status.SUBMITTED,
             FinanceApplication.Status.APPROVED,
             FinanceApplication.Status.PARTIALLY_PAID,
         ]
@@ -759,6 +798,7 @@ def financier_payments_view(request):
         "total_requested": total_requested,
         "total_received": total_received,
         "outstanding": outstanding,
+        "outstanding_excess": outstanding_excess,
         "today_received": today_received,
         "month_received": month_received,
         "date_filter": date_filter,
@@ -1070,3 +1110,189 @@ def shop_profile_view(request):
         "active_nav": "profile",
     }
     return render(request, "shops/portal/profile.html", context)
+
+
+@login_required
+def shop_emi_collection_view(request):
+    """
+    Shop EMI Installment Collection Page.
+    Allows retail shops to collect monthly EMI installments directly from customers.
+    Collected amounts are:
+    1. Recorded permanently against the customer's EMI schedule & payment ledger.
+    2. Deducted automatically from the remaining amount the financier owes the shop.
+    3. Synced to the Admin Dashboard and the assigned Follow-up Person.
+    URL: /shop-dashboard/emi-collections/
+    """
+    shop = get_authenticated_shop(request)
+    if not shop:
+        return HttpResponseForbidden("Unauthorized shop access.")
+
+    today = timezone.localdate() if hasattr(timezone, "localdate") else timezone.now().date()
+
+    if request.method == "POST":
+        customer_id = request.POST.get("customer_id")
+        amount_str = request.POST.get("amount", "0").replace(",", "").strip()
+        payment_date_str = request.POST.get("payment_date", "").strip()
+        payment_mode = request.POST.get("payment_mode", "CASH").strip()
+        ref = request.POST.get("transaction_reference", "").strip()
+        remarks = request.POST.get("remarks", "").strip()
+
+        try:
+            amt = Decimal(amount_str)
+            if amt <= Decimal("0.00"):
+                raise ValueError("Amount must be positive.")
+        except Exception:
+            messages.error(request, "Please enter a valid positive EMI collection amount.")
+            return redirect("shop_emi_collection")
+
+        customer = get_object_or_404(Customer, pk=customer_id, shop=shop)
+        app = customer.applications.filter(
+            status__in=[
+                FinanceApplication.Status.APPROVED,
+                FinanceApplication.Status.PAID,
+                FinanceApplication.Status.PARTIALLY_PAID,
+            ]
+        ).first()
+        if not app:
+            messages.error(request, "No approved finance application found for this customer.")
+            return redirect("shop_emi_collection")
+
+        payment_date = today
+        if payment_date_str:
+            try:
+                from datetime import datetime
+                payment_date = datetime.strptime(payment_date_str, "%Y-%m-%d").date()
+            except Exception:
+                payment_date = today
+
+        with transaction.atomic():
+            payment = app.record_customer_payment(
+                amount=amt,
+                payment_date=payment_date,
+                payment_mode=payment_mode,
+                transaction_reference=ref or f"SHOP-COL-{shop.id}",
+                recorded_by=request.user,
+                remarks=remarks or f"Collected directly by shop ({shop.name})"
+            )
+            if payment:
+                payment.collected_by_shop = True
+                payment.save(update_fields=["collected_by_shop"])
+
+                # Update customer status & audit history for Admin Dashboard
+                status_msg = f"EMI of ₹{amt:,.2f} ({payment_mode}) collected by shop ({shop.name}) on {payment_date.strftime('%d-%m-%Y')}."
+                customer.latest_update_status = status_msg
+                customer.latest_update_at = timezone.now()
+                customer.latest_update_by = request.user
+                customer.save(update_fields=["latest_update_status", "latest_update_at", "latest_update_by", "updated_at"])
+
+                CustomerUpdateHistory.objects.create(
+                    customer=customer,
+                    user=request.user,
+                    section="Shop EMI Collection",
+                    field_name="EMI Collected by Shop",
+                    previous_value="—",
+                    new_value=f"₹{amt:,.2f}",
+                    description=f"Shop ({shop.name}) collected ₹{amt:,.2f} ({payment_mode}) — deducted from financier payable",
+                    notes=status_msg
+                )
+
+                # Notify corresponding Follow-up person assigned to this shop
+                from followups.models import FollowUpAssignment, FollowUpActivity
+                assigned_emp_id = (
+                    FollowUpAssignment.objects.filter(shop=shop, is_active=True)
+                    .values_list("employee_id", flat=True)
+                    .first()
+                )
+                FollowUpActivity.objects.create(
+                    employee_id=assigned_emp_id or request.user.id,
+                    customer=customer,
+                    shop=shop,
+                    activity_type=FollowUpActivity.ActivityType.PAYMENT,
+                    outcome=FollowUpActivity.Outcome.PAID,
+                    status=FollowUpActivity.Status.COMPLETED,
+                    notes=status_msg,
+                )
+
+        messages.success(
+            request,
+            f"Collected ₹{amt:,.2f} from '{customer.name}'. Deducted from financier payable and synced with Admin & Follow-up staff."
+        )
+        return redirect("shop_emi_collection")
+
+    search_query = request.GET.get("q", "").strip()
+    approved_statuses = [
+        FinanceApplication.Status.APPROVED,
+        FinanceApplication.Status.PAID,
+        FinanceApplication.Status.PARTIALLY_PAID,
+    ]
+    customers_qs = (
+        Customer.objects.filter(shop=shop, is_loss=False, applications__status__in=approved_statuses)
+        .distinct()
+        .prefetch_related("applications", "applications__emi_schedules", "applications__customer_emi_payments")
+        .order_by("-created_at")
+    )
+    if search_query:
+        customers_qs = customers_qs.filter(
+            Q(name__icontains=search_query)
+            | Q(primary_mobile__icontains=search_query)
+            | Q(applications__mobile_model__icontains=search_query)
+        ).distinct()
+
+    customer_rows = []
+    for c in customers_qs:
+        app = c.applications.filter(status__in=approved_statuses).first()
+        if not app:
+            continue
+        app.generate_default_schedule_if_missing()
+        rem = app.customer_remaining_balance
+        if rem <= Decimal("0.00"):
+            continue
+        next_sched = app.next_unpaid_schedule
+        customer_rows.append({
+            "customer": c,
+            "app": app,
+            "next_sched": next_sched,
+            "next_due_amount": next_sched.remaining_amount if next_sched else Decimal("0.00"),
+            "next_due_date": next_sched.due_date if next_sched else None,
+            "due_status": app.due_classification(today=today),
+            "total_paid": app.total_customer_paid,
+            "remaining_balance": rem,
+        })
+
+    shop_collections = (
+        CustomerEMIPayment.objects.filter(customer__shop=shop, collected_by_shop=True)
+        .select_related("customer", "application", "recorded_by")
+        .order_by("-payment_date", "-created_at")
+    )
+
+    total_collected_by_shop = shop_collections.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+    month_collected_by_shop = shop_collections.filter(
+        payment_date__year=today.year, payment_date__month=today.month
+    ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+
+    total_payable_from_financier = FinanceApplication.objects.filter(
+        shop=shop, status__in=approved_statuses
+    ).aggregate(total=Sum("financier_request_amount"))["total"] or Decimal("0.00")
+
+    total_financier_paid = FinancierPayment.objects.filter(
+        Q(shop=shop) | Q(application__shop=shop)
+    ).aggregate(total=Sum("amount_received"))["total"] or Decimal("0.00")
+
+    raw_net_due = total_payable_from_financier - total_financier_paid - total_collected_by_shop
+    outstanding_excess = raw_net_due < Decimal("0.00")
+    net_financier_remaining_due = abs(raw_net_due) if outstanding_excess else raw_net_due
+
+    context = {
+        "shop": shop,
+        "active_nav": "emi_collection",
+        "search_query": search_query,
+        "customer_rows": customer_rows,
+        "shop_collections": shop_collections[:50],
+        "total_collected_by_shop": total_collected_by_shop,
+        "month_collected_by_shop": month_collected_by_shop,
+        "total_payable_from_financier": total_payable_from_financier,
+        "net_financier_remaining_due": net_financier_remaining_due,
+        "outstanding_excess": outstanding_excess,
+        "today_iso": today.strftime("%Y-%m-%d"),
+    }
+    return render(request, "shops/portal/emi_collection.html", context)
