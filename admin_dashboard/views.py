@@ -14,7 +14,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum, Count, Q, F
 from django.http import HttpResponseForbidden, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
@@ -24,7 +24,22 @@ from django.views.decorators.http import require_POST
 from shops.models import Shop
 from customers.models import Customer, CustomerUpdateHistory
 from applications.models import FinanceApplication, ApplicationHistory
-from payments.models import FinancierPayment, CustomerEMISchedule, CustomerEMIPayment
+from payments.models import (
+    FinancierPayment,
+    CustomerEMISchedule,
+    CustomerEMIPayment,
+    ShopCollectionRecord,
+    ShopFinancialTransaction,
+)
+from payments.services import (
+    get_shop_financials,
+    get_shop_pending_loan_applications,
+    calculate_application_remaining_loan,
+    process_shop_collection,
+    record_admin_shop_receipt,
+    recalculate_shop_financials,
+    sync_all_existing_shop_collections,
+)
 from .reports_export import export_customers_to_excel, export_customers_to_pdf
 
 User = get_user_model()
@@ -308,76 +323,7 @@ def prepare_customer_management_dataset(customers_qs, request, today=None, exclu
     }
 
 
-def get_shop_financials(shop, start_date=None, end_date=None):
-    """
-    Authoritative calculation of money payable by admin to a shop:
-    - Total Payable = Sum of financier_request_amount across applications of this shop
-    - Amount Paid = Sum of confirmed FinancierPayment amounts received by this shop (direct or application-linked)
-    - Remaining Due = Total Payable - Amount Paid
-    Optional start_date and end_date filter by application / payment obligation date.
-    """
-    approved_statuses = [
-        FinanceApplication.Status.APPROVED,
-        FinanceApplication.Status.PAID,
-        FinanceApplication.Status.PARTIALLY_PAID,
-    ]
-    app_filter = Q(shop=shop, status__in=approved_statuses)
-    if start_date:
-        app_filter &= (Q(application_date__gte=start_date) | Q(created_at__date__gte=start_date))
-    if end_date:
-        app_filter &= (Q(application_date__lte=end_date) | Q(created_at__date__lte=end_date))
-
-    total_payable = FinanceApplication.objects.filter(app_filter).aggregate(
-        total=Sum("financier_request_amount")
-    )["total"] or Decimal("0.00")
-
-    pay_filter = (Q(application__shop=shop) | Q(shop=shop))
-    if start_date:
-        pay_filter &= (Q(payment_date__gte=start_date) | Q(created_at__date__gte=start_date))
-    if end_date:
-        pay_filter &= (Q(payment_date__lte=end_date) | Q(created_at__date__lte=end_date))
-
-    total_paid = FinancierPayment.objects.filter(pay_filter).aggregate(
-        total=Sum("amount_received")
-    )["total"] or Decimal("0.00")
-
-    emi_filter = Q(customer__shop=shop, collected_by_shop=True)
-    if start_date:
-        emi_filter &= (Q(payment_date__gte=start_date) | Q(created_at__date__gte=start_date))
-    if end_date:
-        emi_filter &= (Q(payment_date__lte=end_date) | Q(created_at__date__lte=end_date))
-    shop_collected_emi = CustomerEMIPayment.objects.filter(emi_filter).aggregate(
-        total=Sum("amount")
-    )["total"] or Decimal("0.00")
-
-    remaining_due = max(Decimal("0.00"), total_payable - total_paid - shop_collected_emi)
-
-    if total_payable == Decimal("0.00"):
-        payment_status = "NO_OBLIGATIONS"
-        payment_status_display = "No Obligations"
-        badge_class = "secondary"
-    elif remaining_due == Decimal("0.00"):
-        payment_status = "PAID"
-        payment_status_display = "Paid"
-        badge_class = "success"
-    elif (total_paid + shop_collected_emi) > Decimal("0.00"):
-        payment_status = "PARTIALLY_PAID"
-        payment_status_display = "Partially Paid"
-        badge_class = "warning"
-    else:
-        payment_status = "UNPAID"
-        payment_status_display = "Unpaid"
-        badge_class = "danger"
-
-    return {
-        "total_payable": total_payable,
-        "total_paid": total_paid,
-        "shop_collected_emi": shop_collected_emi,
-        "remaining_due": remaining_due,
-        "payment_status": payment_status,
-        "payment_status_display": payment_status_display,
-        "badge_class": badge_class,
-    }
+# get_shop_financials is imported from payments.services
 
 
 def get_next_due_date(monthly_due_day):
@@ -435,21 +381,34 @@ def admin_dashboard_view(request):
     )
     total_applications = FinanceApplication.objects.count()
 
+    sync_all_existing_shop_collections()
+
     total_payable_agg = FinanceApplication.objects.filter(
         status__in=approved_statuses
     ).aggregate(
         total=Sum("financier_request_amount")
     )["total"] or Decimal("0.00")
 
-    total_paid_agg = FinancierPayment.objects.aggregate(
+    total_actual_paid = FinancierPayment.objects.aggregate(
         total=Sum("amount_received")
     )["total"] or Decimal("0.00")
 
-    total_shop_collected_emi = CustomerEMIPayment.objects.filter(
-        collected_by_shop=True
-    ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+    total_shop_adjusted = ShopCollectionRecord.objects.aggregate(
+        total=Sum("adjusted_to_loan")
+    )["total"] or Decimal("0.00")
 
-    total_remaining_due = max(Decimal("0.00"), total_payable_agg - total_paid_agg - total_shop_collected_emi)
+    # Amount Disbursed = Actual amount paid by admin + Shop collections adjusted against pending loans
+    total_disbursed = total_actual_paid + total_shop_adjusted
+
+    total_remaining_due = max(Decimal("0.00"), total_payable_agg - total_disbursed)
+
+    # Collected from Shops (available for recovery / not yet acknowledged as received by financier)
+    total_collected_from_shops = ShopCollectionRecord.objects.exclude(
+        status=ShopCollectionRecord.CollectionStatus.RECEIVED
+    ).aggregate(
+        total=Sum(F("collectible_amount") - F("amount_received_by_admin"))
+    )["total"] or Decimal("0.00")
+    total_collected_from_shops = max(Decimal("0.00"), total_collected_from_shops)
 
     # Follow-up Staff Metrics
     followup_base = User.objects.filter(role__in=[User.Role.FOLLOWUP, User.Role.EMPLOYEE])
@@ -489,8 +448,12 @@ def admin_dashboard_view(request):
         "total_customers": total_customers,
         "total_applications": total_applications,
         "total_payable": total_payable_agg,
-        "total_paid": total_paid_agg,
+        "total_paid": total_disbursed,
+        "total_disbursed": total_disbursed,
+        "total_actual_paid": total_actual_paid,
+        "total_shop_adjusted": total_shop_adjusted,
         "total_remaining_due": total_remaining_due,
+        "total_collected_from_shops": total_collected_from_shops,
         "total_followups": total_followups,
         "active_followups": active_followups,
         "pending_approvals": pending_approvals,
@@ -2080,6 +2043,9 @@ def admin_edit_customer_payment_view(request, pk):
                 notes=f"Payment Updated — Field: Payment Remarks, Previous Value: '{old_remarks or '—'}', New Value: '{remarks or '—'}' (Payment #{payment.id})"
             )
 
+        if getattr(payment, "collected_by_shop", False):
+            recalculate_shop_financials(customer.shop)
+
     messages.success(request, f"Payment #{payment.id} updated successfully.")
     return redirect(next_url)
 
@@ -2108,17 +2074,23 @@ def admin_customer_emi_list_view(request):
 def admin_shop_payments_view(request):
     """
     Shop Payments Overview: Money the Admin Owes to Shops.
-    Calculates Remaining Due = Total Payable - Confirmed Payments Made by Admin.
+    Calculates Remaining Due = Total Payable - Confirmed Payments Made by Admin - Shop Collection Adjustments.
+    Tracks 'Collected from Shops' balances available for recovery and complete transparent Transaction History.
     URL: /admin-dashboard/payments/
     """
+    sync_all_existing_shop_collections()
+
+    active_tab = request.GET.get("tab", "balances").strip()
     search_query = request.GET.get("q", "").strip()
     status_filter = request.GET.get("status", "").strip()
     start_date = request.GET.get("start_date", "").strip()
     end_date = request.GET.get("end_date", "").strip()
+    tx_type_filter = request.GET.get("tx_type", "").strip()
+    shop_filter = request.GET.get("shop_id", "").strip()
 
     shops_qs = Shop.objects.all().select_related("owner_account").order_by("name")
 
-    if search_query:
+    if search_query and active_tab == "balances":
         shops_qs = shops_qs.filter(
             Q(name__icontains=search_query) |
             Q(owner_name__icontains=search_query) |
@@ -2128,48 +2100,37 @@ def admin_shop_payments_view(request):
     # Calculate live payment data for every shop
     payment_rows = []
     total_system_payable = Decimal("0.00")
-    total_system_paid = Decimal("0.00")
+    total_system_actual_paid = Decimal("0.00")
+    total_system_shop_adjusted = Decimal("0.00")
+    total_system_disbursed = Decimal("0.00")
     total_system_remaining = Decimal("0.00")
+    total_system_collected_from_shops = Decimal("0.00")
 
     for s in shops_qs:
-        fin = get_shop_financials(s)
+        fin = get_shop_financials(s, start_date=start_date or None, end_date=end_date or None)
         total_system_payable += fin["total_payable"]
-        total_system_paid += fin["total_paid"]
+        total_system_actual_paid += fin["actual_admin_paid"]
+        total_system_shop_adjusted += fin["shop_collection_adjusted"]
+        total_system_disbursed += fin["amount_disbursed"]
         total_system_remaining += fin["remaining_due"]
+        total_system_collected_from_shops += fin["shop_collectible_balance"]
 
-        all_candidate_apps = list(
-            s.applications.filter(
-                status__in=[
-                    FinanceApplication.Status.APPROVED,
-                    FinanceApplication.Status.PARTIALLY_PAID,
-                ]
-            ).select_related("customer").order_by("-created_at")
+        pending_apps = get_shop_pending_loan_applications(s)
+        direct_paid_apps = list(s.applications.filter(status=FinanceApplication.Status.PAID).select_related("customer").order_by("-created_at"))
+
+        collectible_records = list(
+            ShopCollectionRecord.objects.filter(shop=s, collectible_amount__gt=Decimal("0.00"))
+            .select_related("customer", "application", "received_by")
+            .order_by("-collection_date")
         )
-
-        pending_apps = []
-        direct_paid_apps = []
-
-        for app in all_candidate_apps:
-            app_shop_emis = list(
-                CustomerEMIPayment.objects.filter(
-                    Q(application=app) | Q(application__isnull=True, customer=app.customer),
-                    collected_by_shop=True
-                ).order_by("-payment_date", "-created_at")
-            )
-            app.direct_collected_payments = app_shop_emis
-            app.direct_collected_total = sum((p.amount for p in app_shop_emis), Decimal("0.00"))
-            app.is_directly_paid_by_customer = app.direct_collected_total > Decimal("0.00")
-
-            if app.is_directly_paid_by_customer:
-                # Customer paid directly to shop and updated: pending admin payout is NOT needed
-                direct_paid_apps.append(app)
-            else:
-                # Customer has not paid directly to shop: admin has to pay, pending list appears
-                pending_apps.append(app)
+        unreceived_records = [r for r in collectible_records if r.status != ShopCollectionRecord.CollectionStatus.RECEIVED]
 
         if status_filter:
             if status_filter.upper() == "PENDING_LOANS":
                 if len(pending_apps) == 0:
+                    continue
+            elif status_filter.upper() == "HAS_COLLECTIONS":
+                if fin["shop_collectible_balance"] <= Decimal("0.00"):
                     continue
             elif status_filter.upper() != fin["payment_status"]:
                 continue
@@ -2217,9 +2178,18 @@ def admin_shop_payments_view(request):
             })
 
         for emi_tx in shop_emi_txs:
+            rec = getattr(emi_tx, "shop_collection_record", None)
+            adj = rec.adjusted_to_loan if rec else emi_tx.amount
+            coll = rec.collectible_amount if rec else Decimal("0.00")
+            lbl = "Directly Paid by Customer"
+            if coll > Decimal("0.00") and adj <= Decimal("0.00"):
+                lbl = "Customer Collection (Unadjusted / Collectible)"
+            elif coll > Decimal("0.00"):
+                lbl = f"Customer Collection (₹{adj:,.2f} Adjusted, ₹{coll:,.2f} Collectible)"
+
             unified_audit_txs.append({
                 "type": "DIRECT_CUSTOMER_EMI",
-                "type_label": "Directly Paid by Customer",
+                "type_label": lbl,
                 "payment_date": emi_tx.payment_date,
                 "amount": emi_tx.amount,
                 "amount_received": emi_tx.amount,
@@ -2233,7 +2203,6 @@ def admin_shop_payments_view(request):
             })
 
         unified_audit_txs.sort(key=lambda x: (x["payment_date"], x["created_at"]), reverse=True)
-
         filtered_paid_sum = sum((t["amount"] for t in unified_audit_txs), Decimal("0.00"))
 
         payment_rows.append({
@@ -2245,7 +2214,55 @@ def admin_shop_payments_view(request):
             "pending_apps_count": len(pending_apps),
             "direct_paid_apps": direct_paid_apps,
             "direct_paid_apps_count": len(direct_paid_apps),
+            "collectible_records": collectible_records,
+            "unreceived_records": unreceived_records,
+            "collectible_count": len(unreceived_records),
+            "collectible_balance": fin["shop_collectible_balance"],
         })
+
+    # All Collectible Records for Tab 2 (Collected from Shops)
+    coll_records_qs = ShopCollectionRecord.objects.filter(collectible_amount__gt=Decimal("0.00")).select_related(
+        "shop", "customer", "application", "received_by", "followup_person"
+    ).order_by("-collection_date", "-created_at")
+
+    if shop_filter:
+        coll_records_qs = coll_records_qs.filter(shop_id=shop_filter)
+    if search_query and active_tab == "collected_from_shops":
+        coll_records_qs = coll_records_qs.filter(
+            Q(shop__name__icontains=search_query) |
+            Q(customer__name__icontains=search_query) |
+            Q(customer__primary_mobile__icontains=search_query)
+        )
+    if start_date:
+        coll_records_qs = coll_records_qs.filter(collection_date__gte=start_date)
+    if end_date:
+        coll_records_qs = coll_records_qs.filter(collection_date__lte=end_date)
+
+    all_collectible_records = list(coll_records_qs)
+    total_pending_recovery_count = sum(1 for r in all_collectible_records if r.status != ShopCollectionRecord.CollectionStatus.RECEIVED)
+
+    # All Financial Transactions for Tab 3 (Section 8)
+    tx_ledger_qs = ShopFinancialTransaction.objects.select_related(
+        "shop", "customer", "application", "followup_person", "recorded_by"
+    ).order_by("-transaction_date", "-created_at")
+
+    if tx_type_filter:
+        tx_ledger_qs = tx_ledger_qs.filter(transaction_type=tx_type_filter)
+    if shop_filter:
+        tx_ledger_qs = tx_ledger_qs.filter(shop_id=shop_filter)
+    if search_query and active_tab == "transactions":
+        tx_ledger_qs = tx_ledger_qs.filter(
+            Q(shop__name__icontains=search_query) |
+            Q(customer__name__icontains=search_query) |
+            Q(transaction_id__icontains=search_query) |
+            Q(remarks__icontains=search_query)
+        )
+    if start_date:
+        tx_ledger_qs = tx_ledger_qs.filter(transaction_date__gte=start_date)
+    if end_date:
+        tx_ledger_qs = tx_ledger_qs.filter(transaction_date__lte=end_date)
+
+    all_financial_transactions = list(tx_ledger_qs[:100])
 
     # Recent Payout & Settlement Audit Transactions with date filtering
     recent_admin_payouts_qs = FinancierPayment.objects.select_related(
@@ -2293,15 +2310,28 @@ def admin_shop_payments_view(request):
     unified_recent_txs.sort(key=lambda x: (x["payment_date"], x["created_at"]), reverse=True)
     recent_payments = unified_recent_txs[:50]
 
+    all_shops = list(Shop.objects.filter(is_active=True).order_by("name"))
+
     context = {
         "active_page": "payments",
+        "active_tab": active_tab,
         "payment_rows": payment_rows,
         "recent_payments": recent_payments,
+        "all_collectible_records": all_collectible_records,
+        "all_financial_transactions": all_financial_transactions,
+        "all_shops": all_shops,
         "total_system_payable": total_system_payable,
-        "total_system_paid": total_system_paid,
+        "total_system_actual_paid": total_system_actual_paid,
+        "total_system_shop_adjusted": total_system_shop_adjusted,
+        "total_system_disbursed": total_system_disbursed,
+        "total_system_paid": total_system_disbursed,
         "total_system_remaining": total_system_remaining,
+        "total_system_collected_from_shops": total_system_collected_from_shops,
+        "total_pending_recovery_count": total_pending_recovery_count,
         "search_query": search_query,
         "status_filter": status_filter,
+        "tx_type_filter": tx_type_filter,
+        "shop_filter": shop_filter,
         "start_date": start_date,
         "end_date": end_date,
     }
@@ -2379,28 +2409,73 @@ def admin_record_shop_payment_view(request):
             payment_screenshot=screenshot
         )
 
+        # Log ADMIN_PAYMENT in ShopFinancialTransaction
+        ShopFinancialTransaction.objects.create(
+            shop=shop,
+            customer=application.customer if application else None,
+            application=application,
+            transaction_type=ShopFinancialTransaction.TransactionType.ADMIN_PAYMENT,
+            amount=amount,
+            transaction_date=payment_date,
+            recorded_by=request.user,
+            remarks=remarks or f"Admin disbursement to shop (Ref: {reference})",
+            status=ShopFinancialTransaction.TransactionStatus.COMPLETED,
+            financier_payment=payment,
+        )
+
         # If payment was made directly to shop by amount, reconcile any approved applications in FIFO order
         if not application and shop:
-            unpaid_apps = shop.applications.filter(
-                status__in=[
-                    FinanceApplication.Status.APPROVED,
-                    FinanceApplication.Status.PARTIALLY_PAID,
-                ]
-            ).order_by("created_at")
+            unpaid_apps = get_shop_pending_loan_applications(shop)
             rem = amount
             for uapp in unpaid_apps:
-                due = uapp.outstanding_amount
-                if due <= 0:
+                due = calculate_application_remaining_loan(uapp)
+                if due <= Decimal("0.00"):
                     continue
                 if rem >= due:
                     uapp.status = FinanceApplication.Status.PAID
                     uapp.save(update_fields=["status", "updated_at"])
                     rem -= due
-                elif rem > 0:
+
+                    # Create LOAN_SETTLEMENT transaction
+                    ShopFinancialTransaction.objects.create(
+                        shop=shop,
+                        customer=uapp.customer,
+                        application=uapp,
+                        transaction_type=ShopFinancialTransaction.TransactionType.LOAN_SETTLEMENT,
+                        amount=uapp.financier_request_amount,
+                        transaction_date=payment_date,
+                        recorded_by=request.user,
+                        previous_balance=due,
+                        updated_balance=Decimal("0.00"),
+                        remarks=f"Loan #{uapp.application_number} fully settled through admin payment.",
+                        status=ShopFinancialTransaction.TransactionStatus.SETTLED,
+                        financier_payment=payment,
+                    )
+                elif rem > Decimal("0.00"):
                     uapp.status = FinanceApplication.Status.PARTIALLY_PAID
                     uapp.save(update_fields=["status", "updated_at"])
                     rem = Decimal("0.00")
                     break
+        elif application:
+            app_rem = calculate_application_remaining_loan(application)
+            if app_rem <= Decimal("0.00"):
+                application.status = FinanceApplication.Status.PAID
+                application.save(update_fields=["status", "updated_at"])
+
+                ShopFinancialTransaction.objects.create(
+                    shop=shop,
+                    customer=application.customer,
+                    application=application,
+                    transaction_type=ShopFinancialTransaction.TransactionType.LOAN_SETTLEMENT,
+                    amount=application.financier_request_amount,
+                    transaction_date=payment_date,
+                    recorded_by=request.user,
+                    previous_balance=app_rem,
+                    updated_balance=Decimal("0.00"),
+                    remarks=f"Loan #{application.application_number} fully settled through admin payment.",
+                    status=ShopFinancialTransaction.TransactionStatus.SETTLED,
+                    financier_payment=payment,
+                )
 
     # Success messaging
     if application:
@@ -2415,6 +2490,65 @@ def admin_record_shop_payment_view(request):
         )
 
     return redirect(next_url or "admin_shop_payments")
+
+
+# ==========================================
+# 7B. Admin Acknowledges Collection from Shop
+# ==========================================
+
+@require_POST
+@login_required
+@admin_required
+def admin_acknowledge_shop_collection_view(request):
+    """
+    Handles Admin Action: 'Received from Shop?' (Yes / No).
+    Supports full receipt and recording partial receipts.
+    URL: /admin-dashboard/payments/acknowledge-collection/
+    """
+    record_id = request.POST.get("record_id")
+    action = request.POST.get("action", "yes").strip()
+    amount_str = request.POST.get("amount_received", "").replace(",", "").strip()
+    received_date = request.POST.get("received_date") or timezone.localdate().strftime("%Y-%m-%d")
+    remarks = request.POST.get("remarks", "").strip()
+    next_url = request.POST.get("next") or reverse("admin_shop_payments") + "?tab=collected_from_shops"
+
+    record = get_object_or_404(
+        ShopCollectionRecord.objects.select_related("shop", "customer", "application"),
+        pk=record_id
+    )
+
+    amount = None
+    if amount_str:
+        try:
+            amount = Decimal(amount_str)
+            if amount <= Decimal("0.00"):
+                messages.error(request, "Received amount must be greater than zero.")
+                return redirect(next_url)
+        except Exception:
+            messages.error(request, "Invalid numeric receipt amount.")
+            return redirect(next_url)
+
+    record_admin_shop_receipt(
+        record=record,
+        action=action,
+        amount_received=amount,
+        received_date=received_date,
+        user=request.user,
+        remarks=remarks,
+    )
+
+    if action.lower() == "yes":
+        messages.success(
+            request,
+            f"Successfully recorded receipt of ₹{(amount or record.collectible_amount):,.2f} from {record.shop.name}."
+        )
+    else:
+        messages.info(
+            request,
+            f"Collection of ₹{record.collectible_amount:,.2f} from {record.shop.name} kept in pending recovery balance."
+        )
+
+    return redirect(next_url)
 
 
 # ==========================================

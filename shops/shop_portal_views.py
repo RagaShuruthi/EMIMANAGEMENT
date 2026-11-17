@@ -1193,6 +1193,10 @@ def shop_emi_collection_view(request):
                 payment.collected_by_shop = True
                 payment.save(update_fields=["collected_by_shop"])
 
+                # Process shop collection through financial accounting service
+                from payments.services import process_shop_collection
+                process_shop_collection(payment, user=request.user)
+
                 # Update customer status & audit history for Admin Dashboard
                 status_msg = f"EMI of ₹{amt:,.2f} ({payment_mode}) collected by shop ({shop.name}) on {payment_date.strftime('%d-%m-%Y')}."
                 customer.latest_update_status = status_msg
@@ -1288,17 +1292,8 @@ def shop_emi_collection_view(request):
         payment_date__year=today.year, payment_date__month=today.month
     ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
 
-    total_payable_from_financier = FinanceApplication.objects.filter(
-        shop=shop, status__in=approved_statuses
-    ).aggregate(total=Sum("financier_request_amount"))["total"] or Decimal("0.00")
-
-    total_financier_paid = FinancierPayment.objects.filter(
-        Q(shop=shop) | Q(application__shop=shop)
-    ).aggregate(total=Sum("amount_received"))["total"] or Decimal("0.00")
-
-    raw_net_due = total_payable_from_financier - total_financier_paid - total_collected_by_shop
-    outstanding_excess = raw_net_due < Decimal("0.00")
-    net_financier_remaining_due = abs(raw_net_due) if outstanding_excess else raw_net_due
+    from payments.services import get_shop_financials
+    fin = get_shop_financials(shop)
 
     context = {
         "shop": shop,
@@ -1306,11 +1301,14 @@ def shop_emi_collection_view(request):
         "search_query": search_query,
         "customer_rows": customer_rows,
         "shop_collections": shop_collections[:50],
-        "total_collected_by_shop": total_collected_by_shop,
+        "total_collected_by_shop": fin["total_shop_collected"],
         "month_collected_by_shop": month_collected_by_shop,
-        "total_payable_from_financier": total_payable_from_financier,
-        "net_financier_remaining_due": net_financier_remaining_due,
-        "outstanding_excess": outstanding_excess,
+        "total_payable_from_financier": fin["total_payable"],
+        "total_financier_paid": fin["actual_admin_paid"],
+        "shop_collection_adjusted": fin["shop_collection_adjusted"],
+        "shop_collectible_balance": fin["shop_collectible_balance"],
+        "net_financier_remaining_due": fin["remaining_due"],
+        "outstanding_excess": fin["shop_collectible_balance"] > Decimal("0.00"),
         "today_iso": today.strftime("%Y-%m-%d"),
     }
     return render(request, "shops/portal/emi_collection.html", context)

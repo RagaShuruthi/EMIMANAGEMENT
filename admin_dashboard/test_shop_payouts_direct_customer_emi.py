@@ -79,12 +79,12 @@ class ShopPayoutsDirectCustomerEMITests(TestCase):
             status=FinanceApplication.Status.APPROVED
         )
 
-        # Shop directly collects 5000 EMI from first customer (self.customer)
+        # Shop directly collects full 30000 EMI from first customer (self.customer), settling loan
         direct_payment = CustomerEMIPayment.objects.create(
             application=self.application,
             customer=self.customer,
             schedule=self.sched1,
-            amount=Decimal("5000.00"),
+            amount=Decimal("30000.00"),
             payment_date=timezone.localdate(),
             payment_mode=CustomerEMIPayment.PaymentMode.UPI,
             transaction_reference="UPI-DIRECT-8899",
@@ -96,7 +96,7 @@ class ShopPayoutsDirectCustomerEMITests(TestCase):
         self.assertEqual(res.status_code, 200)
 
         # 1. Check pending_apps:
-        # self.application was directly paid to shop -> pending is NOT needed (excluded)
+        # self.application was directly paid to shop in full -> settled, pending is NOT needed (excluded)
         # app2 was NOT directly paid to shop -> admin has to pay, pending list appears with app2
         row = res.context["payment_rows"][0]
         self.assertEqual(row["pending_apps_count"], 1)
@@ -111,16 +111,16 @@ class ShopPayoutsDirectCustomerEMITests(TestCase):
         audit_txs = row["transactions"]
         direct_tx = next((t for t in audit_txs if t["is_direct_customer_pay"]), None)
         self.assertIsNotNone(direct_tx)
-        self.assertEqual(direct_tx["amount"], Decimal("5000.00"))
+        self.assertEqual(direct_tx["amount"], Decimal("30000.00"))
         self.assertEqual(direct_tx["type_label"], "Directly Paid by Customer")
         self.assertContains(res, "Directly Paid by Customer")
 
         # 3. Check financials reflect deduction
         # Total payable = 30000 (app1) + 35000 (app2) = 65000
-        # shop_collected_emi = 5000 -> remaining_due = 60000
+        # shop_collected_emi = 30000 -> remaining_due = 35000
         self.assertEqual(row["financials"]["total_payable"], Decimal("65000.00"))
-        self.assertEqual(row["financials"]["shop_collected_emi"], Decimal("5000.00"))
-        self.assertEqual(row["financials"]["remaining_due"], Decimal("60000.00"))
+        self.assertEqual(row["financials"]["shop_collected_emi"], Decimal("30000.00"))
+        self.assertEqual(row["financials"]["remaining_due"], Decimal("35000.00"))
 
     def test_admin_update_installment_partial_carry_forward(self):
         """

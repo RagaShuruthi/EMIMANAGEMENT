@@ -272,3 +272,280 @@ class CustomerEMIPayment(models.Model):
     def __str__(self):
         return f"₹{self.amount} by {self.customer.name} on {self.payment_date} ({self.payment_mode})"
 
+
+class ShopCollectionRecord(models.Model):
+    """
+    Authoritative record for an EMI installment collected directly by a retail shop.
+    Tracks adjustment against the shop's pending loans versus any unadjusted
+    amount that is collectible/recoverable from the shop by the admin.
+    """
+    class CollectionStatus(models.TextChoices):
+        ADJUSTED = "ADJUSTED", "Adjusted against Loan"
+        PENDING = "PENDING", "Pending Admin Receipt"
+        PARTIAL = "PARTIAL", "Partially Received"
+        RECEIVED = "RECEIVED", "Received in Full"
+
+    payment = models.OneToOneField(
+        CustomerEMIPayment,
+        on_delete=models.CASCADE,
+        related_name="shop_collection_record",
+        help_text="The underlying customer EMI payment collected by the shop."
+    )
+    shop = models.ForeignKey(
+        "shops.Shop",
+        on_delete=models.CASCADE,
+        related_name="collection_records",
+        help_text="The shop that collected the payment."
+    )
+    customer = models.ForeignKey(
+        "customers.Customer",
+        on_delete=models.CASCADE,
+        related_name="shop_collection_records",
+        help_text="Customer who paid the EMI."
+    )
+    application = models.ForeignKey(
+        FinanceApplication,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="shop_collection_records",
+        help_text="Application this payment was made against."
+    )
+    amount_collected = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        help_text="Total amount collected by the shop from customer in INR."
+    )
+    adjusted_to_loan = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        help_text="Portion adjusted against shop's pending loan / financier settlement."
+    )
+    collectible_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        help_text="Portion not adjusted against any loan; recoverable by admin from shop."
+    )
+    amount_received_by_admin = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        help_text="Amount acknowledged as received by admin from the shop."
+    )
+    status = models.CharField(
+        max_length=32,
+        choices=CollectionStatus.choices,
+        default=CollectionStatus.PENDING,
+        db_index=True,
+        help_text="Status of the collection / recovery."
+    )
+    collection_date = models.DateField(
+        default=timezone.now,
+        help_text="Date shop collected the payment from customer."
+    )
+    received_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date admin received funds from shop."
+    )
+    received_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="acknowledged_shop_collections",
+        help_text="Admin user who acknowledged receipt."
+    )
+    followup_person = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="followup_shop_collections",
+        help_text="Follow-up staff member assigned to the shop."
+    )
+    notes = models.TextField(
+        blank=True,
+        default="",
+        help_text="Notes, audit trail, or explanation."
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-collection_date", "-created_at"]
+        verbose_name = "Shop Collection Record"
+        verbose_name_plural = "Shop Collection Records"
+        indexes = [
+            models.Index(fields=["shop", "status"]),
+            models.Index(fields=["customer", "-collection_date"]),
+        ]
+
+    @property
+    def remaining_collectible(self):
+        """Unreceived balance that admin has yet to recover from the shop."""
+        return max(Decimal("0.00"), self.collectible_amount - (self.amount_received_by_admin or Decimal("0.00")))
+
+    def __str__(self):
+        return f"{self.shop.name} - ₹{self.amount_collected} ({self.get_status_display()})"
+
+
+class ShopFinancialTransaction(models.Model):
+    """
+    Transparent transaction ledger for all shop payout and collection operations.
+    Maintains a permanent audit trail of every financial movement.
+    """
+    class TransactionType(models.TextChoices):
+        ADMIN_PAYMENT = "ADMIN_PAYMENT", "Admin Payment"
+        SHOP_COLLECTION = "SHOP_COLLECTION", "Shop Customer Collection"
+        LOAN_ADJUSTMENT = "LOAN_ADJUSTMENT", "Loan Adjustment"
+        FINANCIER_SETTLEMENT_ADJUSTMENT = "FINANCIER_SETTLEMENT_ADJUSTMENT", "Financier Settlement Adjustment"
+        SHOP_RECEIPT = "SHOP_RECEIPT", "Amount Received from Shop"
+        PARTIAL_RECEIPT = "PARTIAL_RECEIPT", "Partial Receipt"
+        LOAN_SETTLEMENT = "LOAN_SETTLEMENT", "Loan Settlement"
+
+    class TransactionStatus(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        COMPLETED = "COMPLETED", "Completed"
+        RECEIVED = "RECEIVED", "Received"
+        PARTIAL = "PARTIAL", "Partial Receipt"
+        ADJUSTED = "ADJUSTED", "Adjusted"
+        SETTLED = "SETTLED", "Settled"
+
+    transaction_id = models.CharField(
+        max_length=64,
+        unique=True,
+        db_index=True,
+        help_text="Unique transaction reference (e.g., TXN-20261117-XXXX)."
+    )
+    shop = models.ForeignKey(
+        "shops.Shop",
+        on_delete=models.CASCADE,
+        related_name="financial_transactions",
+        help_text="Shop involved in this financial transaction."
+    )
+    customer = models.ForeignKey(
+        "customers.Customer",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="shop_financial_transactions",
+        help_text="Associated customer if applicable."
+    )
+    application = models.ForeignKey(
+        FinanceApplication,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="shop_financial_transactions",
+        help_text="Associated finance application if applicable."
+    )
+    transaction_type = models.CharField(
+        max_length=40,
+        choices=TransactionType.choices,
+        db_index=True,
+        help_text="Type of financial movement."
+    )
+    amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        help_text="Transaction amount in INR."
+    )
+    transaction_date = models.DateField(
+        default=timezone.now,
+        db_index=True,
+        help_text="Date of transaction."
+    )
+    emi_month = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="EMI month or installment index if applicable."
+    )
+    followup_person = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="followup_transactions",
+        help_text="Follow-up staff member assigned."
+    )
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="recorded_shop_transactions",
+        help_text="User who logged or triggered this transaction."
+    )
+    previous_balance = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        help_text="Shop loan or collectible balance before this transaction."
+    )
+    updated_balance = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        help_text="Shop loan or collectible balance after this transaction."
+    )
+    remarks = models.TextField(
+        blank=True,
+        default="",
+        help_text="Notes and audit details."
+    )
+    status = models.CharField(
+        max_length=32,
+        choices=TransactionStatus.choices,
+        default=TransactionStatus.COMPLETED,
+        db_index=True,
+        help_text="Status of the transaction."
+    )
+    collection_record = models.ForeignKey(
+        ShopCollectionRecord,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="transactions",
+        help_text="Linked shop collection record."
+    )
+    financier_payment = models.ForeignKey(
+        FinancierPayment,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="transactions",
+        help_text="Linked admin financier payment."
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-transaction_date", "-created_at"]
+        verbose_name = "Shop Financial Transaction"
+        verbose_name_plural = "Shop Financial Transactions"
+        indexes = [
+            models.Index(fields=["shop", "-transaction_date"]),
+            models.Index(fields=["transaction_type", "-transaction_date"]),
+            models.Index(fields=["status"]),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self.transaction_id:
+            import uuid
+            t_date = self.transaction_date or timezone.localdate()
+            if isinstance(t_date, str):
+                date_prefix = t_date.replace("-", "")[:8]
+            else:
+                date_prefix = t_date.strftime("%Y%m%d")
+            rand_suffix = uuid.uuid4().hex[:6].upper()
+            self.transaction_id = f"TXN-{date_prefix}-{rand_suffix}"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.transaction_id} — {self.get_transaction_type_display()}: ₹{self.amount} ({self.shop.name})"
+
+

@@ -50,6 +50,7 @@ urlpatterns = [
     # Shop Payments & Payout Transactions (Money Admin Owes to Shops)
     path("payments/", views.admin_shop_payments_view, name="admin_shop_payments"),
     path("payments/record/", views.admin_record_shop_payment_view, name="admin_record_shop_payment"),
+    path("payments/acknowledge-collection/", views.admin_acknowledge_shop_collection_view, name="admin_acknowledge_shop_collection"),
 
     # Executive Reports & Performance Analytics
     path("reports/", views.admin_reports_view, name="admin_reports"),
