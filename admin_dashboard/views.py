@@ -68,17 +68,17 @@ def get_shop_customer_emi_stats(shop, today=None):
         .count()
     )
 
-    # Sum of customer EMI payments
-    total_paid = CustomerEMIPayment.objects.filter(
-        customer__shop=shop,
-        application__status__in=approved_statuses
-    ).aggregate(
-        total=Sum("amount")
-    )["total"] or Decimal("0.00")
-
     # Ensure all approved applications have default schedules initialized
-    for app in FinanceApplication.objects.filter(shop=shop, status__in=approved_statuses):
+    approved_apps = list(
+        FinanceApplication.objects.filter(shop=shop, status__in=approved_statuses)
+        .prefetch_related("emi_schedules", "customer_emi_payments")
+    )
+    for app in approved_apps:
         app.generate_default_schedule_if_missing()
+
+    # Sum of customer EMI payments across all approved applications
+    # Authoritative from customer installment schedules + direct payments
+    total_paid = sum((app.total_customer_paid for app in approved_apps), Decimal("0.00"))
 
     # Total pending this month: installments due in current calendar month that are unpaid
     month_unpaid = CustomerEMISchedule.objects.filter(
@@ -123,8 +123,11 @@ def prepare_customer_management_dataset(customers_qs, request, today=None, exclu
     if request.GET.get("loss_only") == "1":
         loss_only = True
 
+    customers_list = list(customers_qs)
+    Customer.annotate_duplicates(customers_list)
+
     all_rows = []
-    for c in customers_qs:
+    for c in customers_list:
         # Filter by Loss classification
         if loss_only:
             if not getattr(c, "is_loss", False):
@@ -245,6 +248,7 @@ def prepare_customer_management_dataset(customers_qs, request, today=None, exclu
             "completed_date": comp_date,
             "completed_date_display": comp_date.strftime("%d-%m-%Y") if comp_date else "—",
             "is_loss": getattr(c, "is_loss", False),
+            "is_duplicate": getattr(c, "_is_duplicate_number", False),
             "loss_date": getattr(c, "loss_date", None),
             "loss_date_display": c.loss_date.strftime("%d-%m-%Y") if getattr(c, "loss_date", None) else "—",
             "loss_reason": getattr(c, "loss_reason", ""),
@@ -883,7 +887,13 @@ def admin_update_installment_view(request, pk):
         carried_to_inst_num = None
         if new_status == CustomerEMISchedule.InstallmentStatus.PARTIAL and carry_forward == "yes":
             unpaid = max(Decimal("0.00"), new_amount - new_amount_paid)
-            if unpaid > Decimal("0.00"):
+            prev_marker = f"Inst #{schedule.installment_number} Due: ₹{new_amount:,.2f}, Remaining: ₹{unpaid:,.2f}"
+            already_carried = CustomerUpdateHistory.objects.filter(
+                customer=customer,
+                field_name="Partial Due Carry-Forward",
+                previous_value=prev_marker
+            ).exists()
+            if unpaid > Decimal("0.00") and not already_carried:
                 next_sched = (
                     app.emi_schedules
                     .filter(installment_number__gt=schedule.installment_number)
@@ -922,11 +932,7 @@ def admin_update_installment_view(request, pk):
                         status=CustomerEMISchedule.InstallmentStatus.PENDING,
                     )
 
-                # Reduce current installment due amount to the paid amount so remaining is 0.00
-                # (prevents double-counting in total outstanding balance while preserving payment & PARTIAL status)
-                schedule.amount = new_amount_paid
-                schedule.save(update_fields=["amount", "updated_at"])
-                new_amount = new_amount_paid
+                # The present amount due is NOT subtracted; only the next month amount has unpaid added to it
                 carried_forward_amount = unpaid
                 carried_to_inst_num = next_sched.installment_number
 
@@ -935,10 +941,10 @@ def admin_update_installment_view(request, pk):
                     user=request.user,
                     section="EMI Installments",
                     field_name="Partial Due Carry-Forward",
-                    previous_value=f"Inst #{schedule.installment_number} Remaining: ₹{unpaid:,.2f}",
+                    previous_value=prev_marker,
                     new_value=f"Inst #{next_sched.installment_number} Due: ₹{next_sched.amount:,.2f}",
-                    description=f"Moved remaining unpaid ₹{unpaid:,.2f} from Inst #{schedule.installment_number} to Inst #{next_sched.installment_number}",
-                    notes=f"Partial Payment Carry-Forward — Moved ₹{unpaid:,.2f} from Inst #{schedule.installment_number} to Inst #{next_sched.installment_number} (New Due: ₹{next_sched.amount:,.2f})"
+                    description=f"Added remaining unpaid ₹{unpaid:,.2f} to Inst #{next_sched.installment_number} without subtracting current due",
+                    notes=f"Partial Payment Carry-Forward — Added ₹{unpaid:,.2f} to Inst #{next_sched.installment_number} (New Due: ₹{next_sched.amount:,.2f}), current Inst #{schedule.installment_number} due remains ₹{new_amount:,.2f}"
                 )
 
         # Sync manual Amount Due changes with app.total_emi_amount so Remaining Balance updates on All Customers page
@@ -2131,7 +2137,7 @@ def admin_shop_payments_view(request):
         total_system_paid += fin["total_paid"]
         total_system_remaining += fin["remaining_due"]
 
-        pending_apps = list(
+        all_candidate_apps = list(
             s.applications.filter(
                 status__in=[
                     FinanceApplication.Status.APPROVED,
@@ -2139,6 +2145,27 @@ def admin_shop_payments_view(request):
                 ]
             ).select_related("customer").order_by("-created_at")
         )
+
+        pending_apps = []
+        direct_paid_apps = []
+
+        for app in all_candidate_apps:
+            app_shop_emis = list(
+                CustomerEMIPayment.objects.filter(
+                    Q(application=app) | Q(application__isnull=True, customer=app.customer),
+                    collected_by_shop=True
+                ).order_by("-payment_date", "-created_at")
+            )
+            app.direct_collected_payments = app_shop_emis
+            app.direct_collected_total = sum((p.amount for p in app_shop_emis), Decimal("0.00"))
+            app.is_directly_paid_by_customer = app.direct_collected_total > Decimal("0.00")
+
+            if app.is_directly_paid_by_customer:
+                # Customer paid directly to shop and updated: pending admin payout is NOT needed
+                direct_paid_apps.append(app)
+            else:
+                # Customer has not paid directly to shop: admin has to pay, pending list appears
+                pending_apps.append(app)
 
         if status_filter:
             if status_filter.upper() == "PENDING_LOANS":
@@ -2158,26 +2185,113 @@ def admin_shop_payments_view(request):
             "application", "application__customer", "shop"
         ).order_by("-payment_date", "-created_at"))
 
-        filtered_paid_sum = sum((t.amount_received for t in shop_txs), Decimal("0.00"))
+        # Fetch CustomerEMIPayments collected directly by this shop (reduces financier settlement)
+        emi_tx_filter = Q(customer__shop=s, collected_by_shop=True)
+        if start_date:
+            emi_tx_filter &= (Q(payment_date__gte=start_date) | Q(created_at__date__gte=start_date))
+        if end_date:
+            emi_tx_filter &= (Q(payment_date__lte=end_date) | Q(created_at__date__lte=end_date))
+
+        shop_emi_txs = list(
+            CustomerEMIPayment.objects.filter(emi_tx_filter)
+            .select_related("customer", "application", "recorded_by")
+            .order_by("-payment_date", "-created_at")
+        )
+
+        # Build unified audit transaction items for the modal
+        unified_audit_txs = []
+        for tx in shop_txs:
+            unified_audit_txs.append({
+                "type": "ADMIN_PAYOUT",
+                "type_label": "Admin Payout",
+                "payment_date": tx.payment_date,
+                "amount": tx.amount_received,
+                "amount_received": tx.amount_received,
+                "payment_reference": tx.payment_reference,
+                "payment_screenshot": getattr(tx, "payment_screenshot", None),
+                "application": tx.application,
+                "customer_name": tx.application.customer.name if tx.application else None,
+                "remarks": tx.remarks or "Admin payout to shop",
+                "is_direct_customer_pay": False,
+                "created_at": tx.created_at,
+            })
+
+        for emi_tx in shop_emi_txs:
+            unified_audit_txs.append({
+                "type": "DIRECT_CUSTOMER_EMI",
+                "type_label": "Directly Paid by Customer",
+                "payment_date": emi_tx.payment_date,
+                "amount": emi_tx.amount,
+                "amount_received": emi_tx.amount,
+                "payment_reference": emi_tx.transaction_reference or f"Direct EMI ({emi_tx.get_payment_mode_display()})",
+                "payment_screenshot": None,
+                "application": emi_tx.application,
+                "customer_name": emi_tx.customer.name if emi_tx.customer else None,
+                "remarks": emi_tx.remarks or f"Directly collected by shop from customer ({emi_tx.get_payment_mode_display()}) — deducted from financier settlement",
+                "is_direct_customer_pay": True,
+                "created_at": emi_tx.created_at,
+            })
+
+        unified_audit_txs.sort(key=lambda x: (x["payment_date"], x["created_at"]), reverse=True)
+
+        filtered_paid_sum = sum((t["amount"] for t in unified_audit_txs), Decimal("0.00"))
 
         payment_rows.append({
             "shop": s,
             "financials": fin,
-            "transactions": shop_txs,
+            "transactions": unified_audit_txs,
             "filtered_paid_sum": filtered_paid_sum,
             "pending_apps": pending_apps,
             "pending_apps_count": len(pending_apps),
+            "direct_paid_apps": direct_paid_apps,
+            "direct_paid_apps_count": len(direct_paid_apps),
         })
 
-    # Recent Payment Transactions by Admin with date filtering
-    recent_payments = FinancierPayment.objects.select_related(
+    # Recent Payout & Settlement Audit Transactions with date filtering
+    recent_admin_payouts_qs = FinancierPayment.objects.select_related(
         "shop", "application", "application__shop", "application__customer"
     )
+    recent_shop_emis_qs = CustomerEMIPayment.objects.filter(collected_by_shop=True).select_related(
+        "customer", "application", "customer__shop"
+    )
+
     if start_date:
-        recent_payments = recent_payments.filter(payment_date__gte=start_date)
+        recent_admin_payouts_qs = recent_admin_payouts_qs.filter(payment_date__gte=start_date)
+        recent_shop_emis_qs = recent_shop_emis_qs.filter(payment_date__gte=start_date)
     if end_date:
-        recent_payments = recent_payments.filter(payment_date__lte=end_date)
-    recent_payments = recent_payments.order_by("-payment_date", "-created_at")
+        recent_admin_payouts_qs = recent_admin_payouts_qs.filter(payment_date__lte=end_date)
+        recent_shop_emis_qs = recent_shop_emis_qs.filter(payment_date__lte=end_date)
+
+    recent_admin_payouts = list(recent_admin_payouts_qs)
+    recent_shop_emis = list(recent_shop_emis_qs)
+
+    unified_recent_txs = []
+    for p in recent_admin_payouts:
+        unified_recent_txs.append({
+            "payment_date": p.payment_date,
+            "shop": p.shop or (p.application.shop if p.application else None),
+            "application": p.application,
+            "payment_reference": p.payment_reference,
+            "amount_received": p.amount_received,
+            "payment_screenshot": getattr(p, "payment_screenshot", None),
+            "remarks": p.remarks or "Admin payout to retail partner",
+            "is_direct_customer_pay": False,
+            "created_at": p.created_at,
+        })
+    for p in recent_shop_emis:
+        unified_recent_txs.append({
+            "payment_date": p.payment_date,
+            "shop": p.customer.shop if p.customer else None,
+            "application": p.application,
+            "payment_reference": p.transaction_reference or f"Direct EMI ({p.get_payment_mode_display()})",
+            "amount_received": p.amount,
+            "payment_screenshot": None,
+            "remarks": f"Directly collected by shop from customer ({p.get_payment_mode_display()}) — deducted from financier settlement",
+            "is_direct_customer_pay": True,
+            "created_at": p.created_at,
+        })
+    unified_recent_txs.sort(key=lambda x: (x["payment_date"], x["created_at"]), reverse=True)
+    recent_payments = unified_recent_txs[:50]
 
     context = {
         "active_page": "payments",

@@ -1232,14 +1232,14 @@ class ShopReportsAndAnalyticsTests(TestCase):
         self.assertEqual(fin_after["shop_collected_emi"], Decimal("10000.00"))
         self.assertEqual(fin_after["remaining_due"], Decimal("15000.00"))
 
-        # Also check Shop Dashboard & Financier Payments page show updated Amount Received (10000), Financier Requested (15000), and Outstanding (15000)
+        # Also check Shop Dashboard & Financier Payments page show updated Amount Received (10000), Financier Requested remains gross (25000), and Outstanding (15000)
         dash_res = self.client.get(reverse("shop_dashboard"))
         self.assertEqual(dash_res.context["total_amount_received"], Decimal("10000.00"))
-        self.assertEqual(dash_res.context["total_amount_requested"], Decimal("15000.00"))
+        self.assertEqual(dash_res.context["total_amount_requested"], Decimal("25000.00"))
         self.assertEqual(dash_res.context["outstanding_amount"], Decimal("15000.00"))
         fin_pay_res = self.client.get(reverse("shop_payments"))
         self.assertEqual(fin_pay_res.context["total_received"], Decimal("10000.00"))
-        self.assertEqual(fin_pay_res.context["total_requested"], Decimal("15000.00"))
+        self.assertEqual(fin_pay_res.context["total_requested"], Decimal("25000.00"))
         self.assertEqual(fin_pay_res.context["outstanding"], Decimal("15000.00"))
 
         # 4. Verify Admin audit & Follow-up person notification

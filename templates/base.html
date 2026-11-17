@@ -16,6 +16,12 @@
 
     <style>
         :root {
+            --bs-primary: #7c3aed;
+            --bs-primary-rgb: 124, 58, 237;
+            --bs-link-color: #7c3aed;
+            --bs-link-hover-color: #6d28d9;
+            --bs-primary-border-subtle: #ddd6fe;
+            --bs-primary-bg-subtle: #f5f3ff;
             --fin-bg: #f8fafc;
             --fin-surface: #ffffff;
             --fin-border: #e2e8f0;
@@ -132,9 +138,9 @@
             border-style: solid;
         }
         .bg-primary-subtle {
-            background-color: #eff6ff !important;
-            color: #1d4ed8 !important;
-            border-color: #bfdbfe !important;
+            background-color: var(--fin-primary-soft) !important;
+            color: var(--fin-primary) !important;
+            border-color: #ddd6fe !important;
         }
         .bg-success-subtle {
             background-color: #ecfdf5 !important;
@@ -195,7 +201,7 @@
         }
         .form-control:focus, .form-select:focus {
             border-color: var(--fin-primary);
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
             outline: none;
         }
         .btn {

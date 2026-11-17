@@ -23,3 +23,4 @@ class ShopAdmin(admin.ModelAdmin):
     search_fields = ("name", "owner_name", "phone", "email", "gpay", "bank_account_number")
     raw_id_fields = ("owner_account",)
     readonly_fields = ("created_at", "updated_at")
+    

@@ -55,6 +55,12 @@ class FinanceApplication(models.Model):
         max_length=200,
         help_text="Exact brand, model, and storage variant of the phone (e.g., Samsung Galaxy S24 256GB)."
     )
+    variant = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="Mobile phone RAM / storage variant (e.g. 8/128, 256, 1tb)."
+    )
     mobile_price = models.DecimalField(
         max_digits=12,
         decimal_places=2,

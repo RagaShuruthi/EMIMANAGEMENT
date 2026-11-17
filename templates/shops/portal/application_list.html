@@ -16,22 +16,26 @@
 <!-- Status Navigation Tabs (Strictly: All, Under Review, Approved, Rejected) -->
 <ul class="nav nav-pills mb-4 gap-2 flex-wrap">
     <li class="nav-item">
-        <a class="nav-link {% if not status_filter %}active{% else %}bg-white border text-dark{% endif %}" href="{% url 'shop_application_list' %}">
+        <a class="nav-link {% if not status_filter %}active{% else %}bg-white border text-dark{% endif %}"
+            href="{% url 'shop_application_list' %}">
             All Applications
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link {% if status_filter == 'UNDER_REVIEW' %}active{% else %}bg-white border text-dark{% endif %}" href="{% url 'shop_application_list' %}?status=UNDER_REVIEW">
+        <a class="nav-link {% if status_filter == 'UNDER_REVIEW' %}active{% else %}bg-white border text-dark{% endif %}"
+            href="{% url 'shop_application_list' %}?status=UNDER_REVIEW">
             <i class="bi bi-clock-history me-1"></i>Under Review
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link {% if status_filter == 'APPROVED' %}active{% else %}bg-white border text-dark{% endif %}" href="{% url 'shop_application_list' %}?status=APPROVED">
+        <a class="nav-link {% if status_filter == 'APPROVED' %}active{% else %}bg-white border text-dark{% endif %}"
+            href="{% url 'shop_application_list' %}?status=APPROVED">
             <i class="bi bi-check-circle-fill me-1"></i>Approved
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link {% if status_filter == 'REJECTED' %}active{% else %}bg-white border text-dark{% endif %}" href="{% url 'shop_application_list' %}?status=REJECTED">
+        <a class="nav-link {% if status_filter == 'REJECTED' %}active{% else %}bg-white border text-dark{% endif %}"
+            href="{% url 'shop_application_list' %}?status=REJECTED">
             <i class="bi bi-x-circle-fill me-1"></i>Rejected
         </a>
     </li>
@@ -47,13 +51,16 @@
             <div class="col-12 col-md-10">
                 <div class="input-group">
                     <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-                    <input type="text" name="q" class="form-control border-start-0 ps-0" placeholder="Search by application number, customer name, mobile, phone model..." value="{{ search_query }}">
+                    <input type="text" name="q" class="form-control border-start-0 ps-0"
+                        placeholder="Search by application number, customer name, mobile, phone model..."
+                        value="{{ search_query }}">
                 </div>
             </div>
             <div class="col-12 col-md-2 d-flex gap-2">
                 <button type="submit" class="btn btn-primary w-100">Search</button>
                 {% if search_query %}
-                <a href="{% url 'shop_application_list' %}{% if status_filter %}?status={{ status_filter }}{% endif %}" class="btn btn-outline-secondary" title="Clear">Clear</a>
+                <a href="{% url 'shop_application_list' %}{% if status_filter %}?status={{ status_filter }}{% endif %}"
+                    class="btn btn-outline-secondary" title="Clear">Clear</a>
                 {% endif %}
             </div>
         </form>
@@ -84,32 +91,40 @@
                 {% for app in applications %}
                 <tr>
                     <td>
-                        <a href="{% url 'shop_application_detail' pk=app.pk %}" class="fw-bold text-decoration-none text-primary">
+                        <a href="{% url 'shop_application_detail' pk=app.pk %}"
+                            class="fw-bold text-decoration-none text-primary">
                             {{ app.application_number }}
                         </a>
                     </td>
                     <td>
                         <div class="fw-semibold text-dark">{{ app.customer.name }}</div>
-                        <small class="text-muted"><i class="bi bi-telephone me-1"></i>{{ app.customer.primary_mobile }}</small>
+                        <small class="text-muted"><i class="bi bi-telephone me-1"></i>{{ app.customer.primary_mobile
+                            }}</small>
                     </td>
                     <td>{{ app.mobile_model }}</td>
                     <td>₹{{ app.mobile_price|floatformat:2 }}</td>
                     <td>₹{{ app.down_payment|floatformat:2 }}</td>
                     <td class="fw-bold text-dark">₹{{ app.financier_request_amount|floatformat:2 }}</td>
-                    <td>₹{{ app.monthly_emi|floatformat:2 }} <small class="text-muted">×{{ app.emi_duration }}m</small></td>
-                    <td><span class="badge bg-light text-primary border font-monospace">{{ app.monthly_due_day }}th</span></td>
+                    <td>₹{{ app.monthly_emi|floatformat:2 }} <small class="text-muted">×{{ app.emi_duration }}m</small>
+                    </td>
+                    <td><span class="badge bg-light text-primary border font-monospace">{{ app.monthly_due_day
+                            }}th</span></td>
                     <td>
                         {% if app.status == 'APPROVED' or app.status == 'PAID' or app.status == 'PARTIALLY_PAID' %}
-                            <span class="badge bg-success-subtle text-success px-2 py-1"><i class="bi bi-check-circle me-1"></i>Approved</span>
+                        <span class="badge bg-success-subtle text-success px-2 py-1"><i
+                                class="bi bi-check-circle me-1"></i>Approved</span>
                         {% elif app.status == 'REJECTED' %}
-                            <span class="badge bg-danger-subtle text-danger px-2 py-1"><i class="bi bi-x-circle me-1"></i>Rejected</span>
+                        <span class="badge bg-danger-subtle text-danger px-2 py-1"><i
+                                class="bi bi-x-circle me-1"></i>Rejected</span>
                         {% else %}
-                            <span class="badge bg-warning-subtle text-warning-emphasis px-2 py-1"><i class="bi bi-clock me-1"></i>Under Review</span>
+                        <span class="badge bg-warning-subtle text-warning-emphasis px-2 py-1"><i
+                                class="bi bi-clock me-1"></i>Under Review</span>
                         {% endif %}
                     </td>
                     <td class="text-muted small">{{ app.application_date|date:"M d, Y" }}</td>
                     <td class="text-end">
-                        <a href="{% url 'shop_application_detail' pk=app.pk %}" class="btn btn-sm btn-outline-secondary">
+                        <a href="{% url 'shop_application_detail' pk=app.pk %}"
+                            class="btn btn-sm btn-outline-secondary">
                             <i class="bi bi-eye"></i> View
                         </a>
                     </td>
@@ -130,15 +145,20 @@
     <!-- Pagination -->
     {% if applications.has_other_pages %}
     <div class="card-footer bg-white border-top py-3 d-flex justify-content-between align-items-center">
-        <small class="text-muted">Showing page {{ applications.number }} of {{ applications.paginator.num_pages }}</small>
+        <small class="text-muted">Showing page {{ applications.number }} of {{ applications.paginator.num_pages
+            }}</small>
         <nav aria-label="Page navigation">
             <ul class="pagination pagination-sm mb-0">
                 {% if applications.has_previous %}
-                <li class="page-item"><a class="page-link" href="?page={{ applications.previous_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}">Previous</a></li>
+                <li class="page-item"><a class="page-link"
+                        href="?page={{ applications.previous_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}">Previous</a>
+                </li>
                 {% endif %}
                 <li class="page-item active"><span class="page-link">{{ applications.number }}</span></li>
                 {% if applications.has_next %}
-                <li class="page-item"><a class="page-link" href="?page={{ applications.next_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}">Next</a></li>
+                <li class="page-item"><a class="page-link"
+                        href="?page={{ applications.next_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}">Next</a>
+                </li>
                 {% endif %}
             </ul>
         </nav>

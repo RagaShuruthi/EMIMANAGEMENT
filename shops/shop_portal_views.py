@@ -198,12 +198,11 @@ def shop_dashboard_view(request):
         Q(shop=shop) | Q(application__shop=shop)
     ).aggregate(total=Sum("amount_received"))["total"] or Decimal("0.00")
 
-    # 7b. EMI Collected Directly by Shop (deducted from financier payable, added to amount received)
+    # 7b. EMI Collected Directly by Shop (added to amount received and deducted from outstanding)
     shop_collected_emi = CustomerEMIPayment.objects.filter(
         customer__shop=shop, collected_by_shop=True
     ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
 
-    net_amount_requested = max(Decimal("0.00"), amount_requested_agg - shop_collected_emi)
     total_amount_received = amount_received_agg + shop_collected_emi
 
     # 8. Outstanding Amount Yet to Be Received (or +Excess if customer EMI collected exceeds payable)
@@ -233,7 +232,7 @@ def shop_dashboard_view(request):
         "pending_applications": under_review_applications,
         "approved_applications": approved_applications,
         "rejected_applications": rejected_applications,
-        "total_amount_requested": net_amount_requested,
+        "total_amount_requested": amount_requested_agg,
         "total_amount_received": total_amount_received,
         "outstanding_amount": outstanding_amount,
         "outstanding_excess": outstanding_excess,
@@ -271,6 +270,12 @@ def customer_registration_view(request):
 
         # Section B: Device & Financing Details
         mobile_model = request.POST.get("mobile_model", "").strip()
+        variant = request.POST.get("variant", "").strip()
+        custom_variant = request.POST.get("custom_variant", "").strip()
+        device_type = request.POST.get("device_type", "android").strip().lower()
+        if variant == "custom" and custom_variant:
+            variant = custom_variant
+
         mobile_price_str = request.POST.get("mobile_price", "0").replace(",", "").strip()
         down_payment_str = request.POST.get("down_payment", "0").replace(",", "").strip()
         total_emi_str = request.POST.get("total_emi_amount", "").replace(",", "").strip()
@@ -409,6 +414,9 @@ def customer_registration_view(request):
             "application_date": app_date_str,
             "monthly_due_day": str(monthly_due_day),
             "mobile_model": mobile_model,
+            "variant": variant,
+            "custom_variant": custom_variant,
+            "device_type": device_type,
             "mobile_price": mobile_price_str if mobile_price_str != "0" else "",
             "down_payment": down_payment_str,
             "total_emi_amount": str(total_emi) if total_emi > Decimal("0.00") else "",
@@ -448,11 +456,18 @@ def customer_registration_view(request):
                     )
 
                     # 3. Create Finance Application
+                    # Compose full mobile model if variant is provided and not already present
+                    if variant and variant.lower() not in mobile_model.lower():
+                        full_mobile_model = f"{mobile_model} {variant}".strip()
+                    else:
+                        full_mobile_model = mobile_model
+
                     application = FinanceApplication(
                         shop=shop,
                         customer=customer,
                         application_date=app_date_str,
-                        mobile_model=mobile_model,
+                        mobile_model=full_mobile_model,
+                        variant=variant,
                         mobile_price=mobile_price,
                         down_payment=down_payment,
                         total_emi_amount=total_emi,
@@ -528,7 +543,7 @@ def customer_registration_view(request):
         "shop": shop,
         "active_nav": "add_customer",
         "today_date": timezone.now().strftime("%Y-%m-%d"),
-        "form_data": {"monthly_due_day": initial_due_day},
+        "form_data": {"monthly_due_day": initial_due_day, "device_type": "android", "variant": ""},
         "field_errors": {},
     }
     return render(request, "shops/portal/customer_register.html", context)
@@ -767,7 +782,7 @@ def financier_payments_view(request):
     shop_collected_emi = CustomerEMIPayment.objects.filter(
         customer__shop=shop, collected_by_shop=True
     ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
-    total_requested = max(Decimal("0.00"), total_requested_gross - shop_collected_emi)
+    total_requested = total_requested_gross
     total_received = total_received_payouts + shop_collected_emi
     raw_outstanding = total_requested_gross - total_received_payouts - shop_collected_emi
     outstanding_excess = raw_outstanding < Decimal("0.00")
@@ -1239,7 +1254,9 @@ def shop_emi_collection_view(request):
         ).distinct()
 
     customer_rows = []
-    for c in customers_qs:
+    customers_list = list(customers_qs)
+    Customer.annotate_duplicates(customers_list)
+    for c in customers_list:
         app = c.applications.filter(status__in=approved_statuses).first()
         if not app:
             continue
@@ -1251,6 +1268,7 @@ def shop_emi_collection_view(request):
         customer_rows.append({
             "customer": c,
             "app": app,
+            "is_duplicate": getattr(c, "_is_duplicate_number", c.is_duplicate_number),
             "next_sched": next_sched,
             "next_due_amount": next_sched.remaining_amount if next_sched else Decimal("0.00"),
             "next_due_date": next_sched.due_date if next_sched else None,

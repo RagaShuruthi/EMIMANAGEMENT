@@ -148,35 +148,88 @@
                 </div>
                 <div class="card-body p-4">
                     <div class="row g-3">
-                        <!-- Mobile Model (Accepts Alphabets, Numbers, Spaces, and Symbols) -->
-                        <div class="col-12 col-md-6">
+                        <!-- Mobile Model Name (Accepts Alphabets, Numbers, Spaces, and Symbols) -->
+                        <div class="col-12 col-md-5">
                             <label for="id_mobile_model" class="form-label small fw-semibold text-secondary">
-                                Mobile Phone Model & Variant <span class="text-danger">*</span>
+                                Mobile Phone Name <span class="text-danger">*</span>
                             </label>
-                            <input type="text"
-                                class="form-control {% if field_errors.mobile_model %}is-invalid{% endif %}"
-                                id="id_mobile_model" name="mobile_model" value="{{ form_data.mobile_model|default:'' }}"
-                                placeholder="e.g. Samsung Galaxy S24 Ultra 8/256 or iPhone 16 Pro Max"
-                                data-no-phone-sanitize="true" required>
-                            <div class="invalid-feedback">Mobile phone model is mandatory (letters, numbers, spaces, and
-                                symbols allowed).</div>
+                            <div class="input-group has-validation">
+                                <span class="input-group-text bg-light"><i class="bi bi-phone"></i></span>
+                                <input type="text"
+                                    class="form-control {% if field_errors.mobile_model %}is-invalid{% endif %}"
+                                    id="id_mobile_model" name="mobile_model"
+                                    value="{{ form_data.mobile_model|default:'' }}"
+                                    placeholder="e.g. Samsung Galaxy S24 Ultra or iPhone 16 Pro"
+                                    data-no-phone-sanitize="true" required>
+                                <div class="invalid-feedback">Mobile phone name is mandatory (letters, numbers, spaces,
+                                    and symbols allowed).</div>
+                            </div>
+                            <div class="form-text text-muted small">Enter phone brand & model.</div>
+                        </div>
+
+                        <!-- Device Type Toggle (Android / iPhone) -->
+                        <div class="col-12 col-sm-6 col-md-3">
+                            <label
+                                class="form-label small fw-semibold text-secondary d-flex justify-content-between align-items-center">
+                                <span>Device Type</span>
+                                <span class="badge bg-primary-subtle text-primary border"
+                                    id="device_type_badge">Android</span>
+                            </label>
+                            <div class="btn-group w-100" role="group" aria-label="Device Type">
+                                <input type="radio" class="btn-check" name="device_type" id="device_type_android"
+                                    value="android" {% if form_data.device_type != 'iphone' %}checked{% endif %}>
+                                <label
+                                    class="btn btn-outline-primary d-flex align-items-center justify-content-center gap-1 py-2 fw-semibold"
+                                    for="device_type_android">
+                                    <i class="bi bi-android2"></i> Android
+                                </label>
+
+                                <input type="radio" class="btn-check" name="device_type" id="device_type_iphone"
+                                    value="iphone" {% if form_data.device_type == 'iphone' %}checked{% endif %}>
+                                <label
+                                    class="btn btn-outline-primary d-flex align-items-center justify-content-center gap-1 py-2 fw-semibold"
+                                    for="device_type_iphone">
+                                    <i class="bi bi-apple"></i> iPhone
+                                </label>
+                            </div>
+                            <div class="form-text text-muted small">Auto-detects from model name or click to switch.
+                            </div>
+                        </div>
+
+                        <!-- Variant Dropdown -->
+                        <div class="col-12 col-sm-6 col-md-4">
+                            <label for="id_variant" class="form-label small fw-semibold text-secondary">
+                                Variant <span class="text-danger">*</span>
+                            </label>
+                            <div class="has-validation">
+                                <select
+                                    class="form-select fw-semibold {% if field_errors.variant %}is-invalid{% endif %}"
+                                    id="id_variant" name="variant" required>
+                                    <option value="">-- Select Variant --</option>
+                                </select>
+                                <div class="invalid-feedback">Please select a phone variant.</div>
+                            </div>
+                            <div class="form-text text-muted small" id="variant_hint">RAM / Storage specification</div>
+                            <input type="text" class="form-control form-control-sm mt-1 d-none" id="id_custom_variant"
+                                name="custom_variant" value="{{ form_data.custom_variant|default:'' }}"
+                                placeholder="Enter custom variant">
                         </div>
 
                         <!-- EMI Duration (Exclusively 3 and 6 Months scheme) -->
-                        <div class="col-12 col-md-6">
+                        <div class="col-12 col-md-3">
                             <label for="id_emi_duration" class="form-label small fw-semibold text-secondary">
-                                EMI Duration (Tenure Scheme) <span class="text-danger">*</span>
+                                EMI Duration (Tenure) <span class="text-danger">*</span>
                             </label>
                             <select class="form-select form-select-lg fw-semibold" id="id_emi_duration"
                                 name="emi_duration" required>
                                 <option value="6" {% if form_data.emi_duration == '6' or not form_data.emi_duration %}selected{% endif %}>6 Months Scheme</option>
                                 <option value="3" {% if form_data.emi_duration == '3' %}selected{% endif %}>3 Months Scheme</option>
                             </select>
-                            <div class="form-text text-muted small">Choose 3 or 6 months repayment scheme.</div>
+                            <div class="form-text text-muted small">Choose 3 or 6 months.</div>
                         </div>
 
                         <!-- Phone Price -->
-                        <div class="col-12 col-md-4">
+                        <div class="col-12 col-md-3">
                             <label for="id_mobile_price" class="form-label small fw-semibold text-secondary">
                                 Phone Price (₹) <span class="text-danger">*</span>
                             </label>
@@ -190,11 +243,11 @@
                                 <div class="invalid-feedback">Phone price must be a valid amount greater than zero.
                                 </div>
                             </div>
-                            <div class="form-text small text-muted">Retail price of the phone.</div>
+                            <div class="form-text small text-muted">Retail price of phone.</div>
                         </div>
 
                         <!-- Down Payment (Upfront Cash Payment) -->
-                        <div class="col-12 col-md-4">
+                        <div class="col-12 col-md-3">
                             <label for="id_down_payment"
                                 class="form-label small fw-semibold text-secondary d-flex justify-content-between align-items-center">
                                 <span>Down Payment (₹) <span class="text-danger">*</span></span>
@@ -209,13 +262,14 @@
                                     value="{{ form_data.down_payment|default:'0.00' }}" placeholder="e.g. 5000.00"
                                     required>
                                 <div class="invalid-feedback" id="id_down_payment_feedback">
-                                    {% if field_errors.down_payment %}{{ field_errors.down_payment }}{% else %}Down payment cannot be greater than actual phone price.{% endif %}
+                                    {% if field_errors.down_payment %}{{ field_errors.down_payment }}{% else %}Down
+                                    payment cannot be greater than actual phone price.{% endif %}
                                 </div>
                             </div>
                         </div>
 
                         <!-- Monthly EMI Amount -->
-                        <div class="col-12 col-md-4">
+                        <div class="col-12 col-md-3">
                             <label for="id_monthly_emi" class="form-label small fw-semibold text-secondary">
                                 Monthly EMI (₹) <span class="text-danger">*</span>
                             </label>
@@ -225,13 +279,16 @@
                                     class="form-control form-control-lg font-monospace fw-bold text-primary {% if field_errors.monthly_emi %}is-invalid{% endif %}"
                                     id="id_monthly_emi" name="monthly_emi"
                                     value="{{ form_data.monthly_emi|default:'' }}" placeholder="e.g. 5000.00" required>
-                                <div class="invalid-feedback">Monthly EMI must be a valid amount greater than zero.</div>
+                                <div class="invalid-feedback">Monthly EMI must be a valid amount greater than zero.
+                                </div>
                             </div>
                             <input type="hidden" name="total_emi_amount" id="id_total_emi_amount"
                                 value="{{ form_data.total_emi_amount|default:'' }}">
                             <div class="d-flex justify-content-between align-items-center mt-1 px-1 small">
-                                <span class="text-muted">Original: <strong id="id_emi_original_val" class="font-monospace text-dark">₹0.00</strong></span>
-                                <span class="text-muted">Round Off: <strong id="id_emi_roundoff_val" class="font-monospace text-primary">₹0.00</strong></span>
+                                <span class="text-muted">Original: <strong id="id_emi_original_val"
+                                        class="font-monospace text-dark">₹0.00</strong></span>
+                                <span class="text-muted">Round Off: <strong id="id_emi_roundoff_val"
+                                        class="font-monospace text-primary">₹0.00</strong></span>
                             </div>
                         </div>
                     </div>
@@ -246,7 +303,9 @@
                 </div>
                 <div class="card-body p-4">
                     <p class="text-muted small mb-4">
-                        Please upload customer identity documents. <strong>Customer Photograph, Aadhaar Card Front, and Aadhaar Card Back are strictly mandatory.</strong> Supported formats: JPG, PNG, PDF (Max 10MB each).
+                        Please upload customer identity documents. <strong>Customer Photograph, Aadhaar Card Front, and
+                            Aadhaar Card Back are strictly mandatory.</strong> Supported formats: JPG, PNG, PDF (Max
+                        10MB each).
                     </p>
 
                     <!-- Mandatory Documents Row -->
@@ -266,7 +325,8 @@
                                     <input type="file"
                                         class="form-control form-control-sm {% if field_errors.doc_photo %}is-invalid{% endif %}"
                                         id="id_doc_photo" name="doc_photo" accept="image/*" required>
-                                    <div class="invalid-feedback text-start small">Customer photograph is mandatory.</div>
+                                    <div class="invalid-feedback text-start small">Customer photograph is mandatory.
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -285,8 +345,10 @@
                                 <div>
                                     <input type="file"
                                         class="form-control form-control-sm {% if field_errors.doc_aadhaar_front %}is-invalid{% endif %}"
-                                        id="id_doc_aadhaar_front" name="doc_aadhaar_front" accept=".pdf,image/*" required>
-                                    <div class="invalid-feedback text-start small">Aadhaar Card Front is mandatory.</div>
+                                        id="id_doc_aadhaar_front" name="doc_aadhaar_front" accept=".pdf,image/*"
+                                        required>
+                                    <div class="invalid-feedback text-start small">Aadhaar Card Front is mandatory.
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -316,56 +378,62 @@
                     <div class="row g-3">
                         <!-- 4. PAN Card (Optional) -->
                         <div class="col-12 col-md-6">
-                            <div class="p-3 border rounded-3 bg-light text-center h-100 d-flex flex-column justify-content-between position-relative border-secondary-subtle">
+                            <div
+                                class="p-3 border rounded-3 bg-light text-center h-100 d-flex flex-column justify-content-between position-relative border-secondary-subtle">
                                 <div>
-                                    <span class="badge bg-secondary-subtle text-secondary position-absolute top-0 end-0 m-2">Optional</span>
+                                    <span
+                                        class="badge bg-secondary-subtle text-secondary position-absolute top-0 end-0 m-2">Optional</span>
                                     <i class="bi bi-credit-card-2-front fs-1 text-secondary mb-2 d-block mt-2"></i>
                                     <label class="form-label fw-bold small text-dark d-block">PAN Card</label>
                                     <small class="text-muted d-block mb-3">Government PAN proof</small>
                                 </div>
                                 <div>
-                                    <input type="file" class="form-control form-control-sm" name="doc_pan" accept=".pdf,image/*">
+                                    <input type="file" class="form-control form-control-sm" name="doc_pan"
+                                        accept=".pdf,image/*">
                                 </div>
                             </div>
                         </div>
 
                         <!-- 5. Voter ID / Other Proof (Optional) -->
                         <div class="col-12 col-md-6">
-                            <div class="p-3 border rounded-3 bg-light text-center h-100 d-flex flex-column justify-content-between position-relative border-secondary-subtle">
+                            <div
+                                class="p-3 border rounded-3 bg-light text-center h-100 d-flex flex-column justify-content-between position-relative border-secondary-subtle">
                                 <div>
-                                    <span class="badge bg-secondary-subtle text-secondary position-absolute top-0 end-0 m-2">Optional</span>
+                                    <span
+                                        class="badge bg-secondary-subtle text-secondary position-absolute top-0 end-0 m-2">Optional</span>
                                     <i class="bi bi-file-earmark-person fs-1 text-secondary mb-2 d-block mt-2"></i>
-                                    <label class="form-label fw-bold small text-dark d-block">Voter ID / Address Proof</label>
+                                    <label class="form-label fw-bold small text-dark d-block">Voter ID / Address
+                                        Proof</label>
                                     <small class="text-muted d-block mb-3">Alternative address or ID proof</small>
                                 </div>
                                 <div>
-                                    <input type="file" class="form-control form-control-sm" name="doc_voter" accept=".pdf,image/*">
+                                    <input type="file" class="form-control form-control-sm" name="doc_voter"
+                                        accept=".pdf,image/*">
                                 </div>
                             </div>
                         </div>
                     </div>
-                        </div>
-                    </div>
                 </div>
             </div>
-
-            <!-- Form Submission Actions -->
-            <div class="d-flex justify-content-between align-items-center mb-5 flex-wrap gap-2">
-                <a href="{% url 'shop_dashboard' %}" class="btn btn-outline-secondary px-4 py-2">
-                    <i class="bi bi-arrow-left me-1"></i> Cancel
-                </a>
-                <div class="d-flex gap-2">
-                    <button type="submit" name="action" value="draft" class="btn btn-outline-primary px-4 py-2">
-                        <i class="bi bi-save me-1"></i> Save as Draft
-                    </button>
-                    <button type="submit" name="action" value="submit"
-                        class="btn btn-primary px-4 py-2 shadow-sm fw-semibold">
-                        <i class="bi bi-send-check-fill me-1"></i> Submit Application to Financier
-                    </button>
-                </div>
-            </div>
-        </form>
     </div>
+</div>
+
+<!-- Form Submission Actions -->
+<div class="d-flex justify-content-between align-items-center mb-5 flex-wrap gap-2">
+    <a href="{% url 'shop_dashboard' %}" class="btn btn-outline-secondary px-4 py-2">
+        <i class="bi bi-arrow-left me-1"></i> Cancel
+    </a>
+    <div class="d-flex gap-2">
+        <button type="submit" name="action" value="draft" class="btn btn-outline-primary px-4 py-2">
+            <i class="bi bi-save me-1"></i> Save as Draft
+        </button>
+        <button type="submit" name="action" value="submit" class="btn btn-primary px-4 py-2 shadow-sm fw-semibold">
+            <i class="bi bi-send-check-fill me-1"></i> Submit Application to Financier
+        </button>
+    </div>
+</div>
+</form>
+</div>
 </div>
 {% endblock %}
 
@@ -531,6 +599,138 @@
     });
     calculateFinancing();
 
+    // 2b. Device Type & Variant Dynamic Selection
+    const ANDROID_VARIANTS = [
+        "4/64",
+        "4/128",
+        "6/128",
+        "6/256",
+        "8/128",
+        "8/256",
+        "12/256",
+        "12/512",
+        "16/256",
+        "16/512",
+        "16/1tb",
+        "24/1tb",
+        "2/32",
+        "2/64",
+        "3/32",
+        "3/64"
+    ];
+
+    const IPHONE_VARIANTS = [
+        "64",
+        "128",
+        "256",
+        "512",
+        "1tb",
+        "2tb"
+    ];
+
+    const variantSelect = document.getElementById('id_variant');
+    const deviceTypeBadge = document.getElementById('device_type_badge');
+    const variantHint = document.getElementById('variant_hint');
+    const radioAndroid = document.getElementById('device_type_android');
+    const radioIphone = document.getElementById('device_type_iphone');
+    const modelInput = document.getElementById('id_mobile_model');
+    const customVariantInput = document.getElementById('id_custom_variant');
+
+    function populateVariants(type, preselectVal) {
+        if (!variantSelect) return;
+        const list = (type === 'iphone') ? IPHONE_VARIANTS : ANDROID_VARIANTS;
+
+        if (deviceTypeBadge) {
+            deviceTypeBadge.textContent = (type === 'iphone') ? 'iPhone' : 'Android';
+        }
+        if (variantHint) {
+            variantHint.textContent = (type === 'iphone')
+                ? 'iPhone storage: 64, 128, 256, 512, 1tb, 2tb'
+                : 'Android RAM/Storage: 4/64, 6/128, 8/128, 8/256...';
+        }
+
+        const currentVal = (preselectVal !== undefined) ? preselectVal : variantSelect.value;
+        variantSelect.innerHTML = '<option value="">-- Select Variant --</option>';
+
+        let isMatch = false;
+        list.forEach(function (v) {
+            const opt = document.createElement('option');
+            opt.value = v;
+            opt.textContent = v;
+            if (currentVal && currentVal.toLowerCase() === v.toLowerCase()) {
+                opt.selected = true;
+                isMatch = true;
+            }
+            variantSelect.appendChild(opt);
+        });
+
+        const customOpt = document.createElement('option');
+        customOpt.value = 'custom';
+        customOpt.textContent = 'Other / Custom Variant...';
+        if (currentVal && !isMatch && currentVal !== '') {
+            customOpt.selected = true;
+            if (customVariantInput) {
+                customVariantInput.classList.remove('d-none');
+                customVariantInput.value = currentVal;
+            }
+        }
+        variantSelect.appendChild(customOpt);
+    }
+
+    // Auto-detect Android vs iPhone from Model Name input
+    if (modelInput) {
+        modelInput.addEventListener('input', function () {
+            const val = this.value.toLowerCase().trim();
+            if (val.includes('iphone') || val.includes('apple') || val.startsWith('ios')) {
+                if (radioIphone && !radioIphone.checked) {
+                    radioIphone.checked = true;
+                    populateVariants('iphone');
+                }
+            } else if (val.includes('samsung') || val.includes('redmi') || val.includes('vivo') ||
+                val.includes('oppo') || val.includes('realme') || val.includes('oneplus') ||
+                val.includes('moto') || val.includes('xiaomi') || val.includes('poco') ||
+                val.includes('iqoo') || val.includes('pixel') || val.includes('nothing') ||
+                val.includes('honor') || val.includes('tecno') || val.includes('infinix')) {
+                if (radioAndroid && !radioAndroid.checked) {
+                    radioAndroid.checked = true;
+                    populateVariants('android');
+                }
+            }
+        });
+    }
+
+    if (radioAndroid) {
+        radioAndroid.addEventListener('change', function () {
+            if (this.checked) populateVariants('android');
+        });
+    }
+    if (radioIphone) {
+        radioIphone.addEventListener('change', function () {
+            if (this.checked) populateVariants('iphone');
+        });
+    }
+
+    if (variantSelect) {
+        variantSelect.addEventListener('change', function () {
+            if (this.value === 'custom') {
+                if (customVariantInput) {
+                    customVariantInput.classList.remove('d-none');
+                    customVariantInput.focus();
+                }
+            } else {
+                if (customVariantInput) {
+                    customVariantInput.classList.add('d-none');
+                    customVariantInput.value = '';
+                }
+            }
+        });
+    }
+
+    // Initial setup
+    const initialType = (radioIphone && radioIphone.checked) ? 'iphone' : 'android';
+    const savedVariant = "{{ form_data.variant|default:'' }}";
+    populateVariants(initialType, savedVariant);
+
     // 3. Strict 10-digit numeric filter for mobile numbers
     ['id_primary_mobile', 'id_secondary_mobile'].forEach(function (fieldId) {
         const field = document.getElementById(fieldId);
@@ -564,6 +764,8 @@
         { id: 'id_home_address' },
         { id: 'id_work_address' },
         { id: 'id_mobile_model' },
+        { id: 'id_variant' },
+        { id: 'id_custom_variant' },
         { id: 'id_mobile_price' },
         { id: 'id_down_payment' },
         { id: 'id_monthly_emi' },
@@ -573,7 +775,7 @@
     ].forEach(function (item) {
         const el = document.getElementById(item.id);
         if (el) {
-            const evtName = item.isFile ? 'change' : 'input';
+            const evtName = (item.isFile || item.id === 'id_variant') ? 'change' : 'input';
             el.addEventListener(evtName, function () {
                 clearFieldValidation(el, item.boxId);
             });
@@ -633,6 +835,15 @@
             const modelVal = modelEl ? modelEl.value.trim() : '';
             const modelPattern = /^[A-Za-z0-9\s\-_\+\(\)\/\.]+$/;
             validateField('id_mobile_model', !modelVal || !modelPattern.test(modelVal));
+
+            // Variant Selection
+            const variantEl = document.getElementById('id_variant');
+            let variantVal = variantEl ? variantEl.value.trim() : '';
+            if (variantVal === 'custom') {
+                const customEl = document.getElementById('id_custom_variant');
+                variantVal = customEl ? customEl.value.trim() : '';
+            }
+            validateField('id_variant', !variantVal);
 
             // Selling Price (> 0)
             const priceEl = document.getElementById('id_mobile_price');

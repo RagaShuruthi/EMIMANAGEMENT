@@ -140,8 +140,11 @@
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <div class="metric-label text-warning-emphasis">Outstanding Balance</div>
-                    <div class="metric-value {% if outstanding_excess %}text-success{% else %}text-warning-emphasis{% endif %} fs-3">{% if outstanding_excess %}+{% endif %}₹{{ outstanding_amount|floatformat:2 }}</div>
-                    <small class="text-muted">{% if outstanding_excess %}Excess collected above financier due{% else %}Pending disbursement{% endif %}</small>
+                    <div
+                        class="metric-value {% if outstanding_excess %}text-success{% else %}text-warning-emphasis{% endif %} fs-3">
+                        {% if outstanding_excess %}+{% endif %}₹{{ outstanding_amount|floatformat:2 }}</div>
+                    <small class="text-muted">{% if outstanding_excess %}Excess collected above financier due{% else
+                        %}Pending disbursement{% endif %}</small>
                 </div>
                 <div class="metric-icon-box bg-warning-subtle text-warning-emphasis">
                     <i class="bi bi-hourglass-split"></i>
@@ -153,7 +156,8 @@
 
 <!-- Recent Applications Section -->
 <div class="card border-0 shadow-sm rounded-3">
-    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div
+        class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
         <div>
             <h5 class="fw-bold mb-0 text-dark">Recent Finance Applications</h5>
             <small class="text-muted">Latest mobile financing requests originating from this shop</small>
@@ -184,7 +188,8 @@
                 {% for app in recent_applications %}
                 <tr>
                     <td>
-                        <a href="{% url 'shop_application_detail' pk=app.pk %}" class="fw-bold text-decoration-none text-primary">
+                        <a href="{% url 'shop_application_detail' pk=app.pk %}"
+                            class="fw-bold text-decoration-none text-primary">
                             {{ app.application_number }}
                         </a>
                     </td>
@@ -195,20 +200,25 @@
                     <td>{{ app.mobile_model }}</td>
                     <td>₹{{ app.mobile_price|floatformat:2 }}</td>
                     <td>₹{{ app.down_payment|floatformat:2 }}</td>
-                    <td class="fw-bold text-primary">₹{{ app.monthly_emi|floatformat:2 }} <small class="text-muted fw-normal">×{{ app.emi_duration }}m</small></td>
+                    <td class="fw-bold text-primary">₹{{ app.monthly_emi|floatformat:2 }} <small
+                            class="text-muted fw-normal">×{{ app.emi_duration }}m</small></td>
                     <td class="fw-bold text-dark">₹{{ app.financier_request_amount|floatformat:2 }}</td>
                     <td>
                         {% if app.status == 'REJECTED' %}
-                            <span class="badge bg-danger-subtle text-danger px-2 py-1"><i class="bi bi-x-circle me-1"></i>Rejected</span>
+                        <span class="badge bg-danger-subtle text-danger px-2 py-1"><i
+                                class="bi bi-x-circle me-1"></i>Rejected</span>
                         {% elif app.status == 'APPROVED' or app.status == 'PAID' or app.status == 'PARTIALLY_PAID' %}
-                            <span class="badge bg-success-subtle text-success px-2 py-1"><i class="bi bi-check-circle me-1"></i>Approved</span>
+                        <span class="badge bg-success-subtle text-success px-2 py-1"><i
+                                class="bi bi-check-circle me-1"></i>Approved</span>
                         {% else %}
-                            <span class="badge bg-warning-subtle text-warning-emphasis px-2 py-1"><i class="bi bi-clock me-1"></i>Under Review</span>
+                        <span class="badge bg-warning-subtle text-warning-emphasis px-2 py-1"><i
+                                class="bi bi-clock me-1"></i>Under Review</span>
                         {% endif %}
                     </td>
                     <td class="text-muted small">{{ app.created_at|date:"M d, Y" }}</td>
                     <td class="text-end">
-                        <a href="{% url 'shop_application_detail' pk=app.pk %}" class="btn btn-sm btn-outline-secondary">
+                        <a href="{% url 'shop_application_detail' pk=app.pk %}"
+                            class="btn btn-sm btn-outline-secondary">
                             <i class="bi bi-eye"></i> Details
                         </a>
                     </td>
@@ -220,7 +230,8 @@
         <div class="p-5 text-center text-muted">
             <i class="bi bi-inbox fs-1 d-block mb-3 text-secondary"></i>
             <h6 class="fw-semibold">No Finance Applications Yet</h6>
-            <p class="small mb-3">Begin by registering your first customer and submitting an EMI financing application.</p>
+            <p class="small mb-3">Begin by registering your first customer and submitting an EMI financing application.
+            </p>
             <a href="{% url 'shop_customer_add' %}" class="btn btn-primary btn-sm">
                 <i class="bi bi-plus-lg me-1"></i> Add New Customer
             </a>

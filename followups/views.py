@@ -657,7 +657,9 @@ def followup_dashboard_view(request):
     shop_stats.sort(key=lambda x: (x["customer_count"], x["shop"].name), reverse=True)
     top_5_shops = [item["shop"] for item in shop_stats[:5]]
 
-    for customer in customers_qs.order_by("-created_at"):
+    customers_list = list(customers_qs.order_by("-created_at"))
+    Customer.annotate_duplicates(customers_list)
+    for customer in customers_list:
         metrics = _calculate_customer_followup_data(customer, today, upcoming_days=7)
 
         customer.mobile_model = metrics["mobile_model"]
@@ -855,7 +857,9 @@ def followup_shop_detail_view(request, shop_id):
     pending_due_count = 0
     total_shop_outstanding = Decimal("0.00")
 
-    for customer in customers_qs.order_by("-created_at"):
+    customers_list = list(customers_qs.order_by("-created_at"))
+    Customer.annotate_duplicates(customers_list)
+    for customer in customers_list:
         metrics = _calculate_customer_followup_data(customer, today, upcoming_days=7)
 
         customer.mobile_model = metrics["mobile_model"]
@@ -993,7 +997,9 @@ def followup_tasks_view(request):
     all_count = 0
     total_outstanding_sum = Decimal("0.00")
 
-    for customer in customers_qs.order_by("-created_at"):
+    customers_list = list(customers_qs.order_by("-created_at"))
+    Customer.annotate_duplicates(customers_list)
+    for customer in customers_list:
         all_count += 1
         metrics = _calculate_customer_followup_data(customer, today, upcoming_days=7)
 
@@ -1129,7 +1135,9 @@ def followup_pending_view(request):
 
     # Enrich each pending activity with accurate application and schedule data
     pending_items = []
-    for act in activities_qs:
+    activities_list = list(activities_qs)
+    Customer.annotate_duplicates([act.customer for act in activities_list if act.customer])
+    for act in activities_list:
         cust = act.customer
         metrics = _calculate_customer_followup_data(cust, today, upcoming_days=7)
         cust.mobile_model = metrics["mobile_model"]

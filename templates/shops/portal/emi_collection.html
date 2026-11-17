@@ -100,6 +100,11 @@
                 <tr>
                     <td>
                         <div class="fw-bold text-dark">{{ row.customer.name }}</div>
+                        {% if row.is_duplicate or row.customer.is_duplicate_number %}
+                        <div class="mt-0.5">
+                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-1.5 py-0.5" style="font-size: 0.68rem; font-weight: 600;"><i class="bi bi-exclamation-triangle-fill me-1"></i>Duplicate</span>
+                        </div>
+                        {% endif %}
                         <div class="small text-muted">{{ row.customer.primary_mobile }}</div>
                     </td>
                     <td>{{ row.app.mobile_model }}</td>

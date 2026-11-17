@@ -28,6 +28,11 @@
             <div>
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     <h3 class="fw-bold mb-0 text-dark">{{ customer.name }}</h3>
+                    {% if customer.is_duplicate_number %}
+                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1" style="font-size: 0.75rem; font-weight: 600;">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>Duplicate
+                    </span>
+                    {% endif %}
                     <span class="badge bg-secondary-subtle text-secondary font-monospace">Customer ID #{{ customer.id }}</span>
                     {% if customer.is_loss %}
                     <span class="badge bg-danger text-white"><i class="bi bi-shield-slash me-1"></i>Loss Account ({{ customer.loss_date|date:"d-m-Y" }})</span>
@@ -371,7 +376,7 @@
                                 </td>
 
                                 <!-- Remaining -->
-                                <td class="text-end font-monospace {% if sched.remaining_amount > 0 %}text-danger fw-semibold{% else %}text-muted{% endif %}">
+                                <td class="text-end font-monospace {% if sched.remaining_amount > 0 %}text-danger fw-semibold{% else %}text-muted{% endif %}" id="remainingCell{{ sched.pk }}">
                                     ₹{{ sched.remaining_amount|floatformat:2 }}
                                 </td>
 
@@ -387,6 +392,15 @@
                                         <option value="PARTIAL" {% if sched.status == 'PARTIAL' %}selected{% endif %}>Partial</option>
                                         <option value="PAID" {% if sched.status == 'PAID' or sched.is_paid %}selected{% endif %}>Paid</option>
                                     </select>
+                                    {% if sched.status == 'PARTIAL' %}
+                                    <div class="mt-0.5 text-center">
+                                        <button type="button" class="btn btn-link p-0 text-warning text-decoration-none" style="font-size: 0.68rem; font-weight: 600;"
+                                                onclick="window.openPartialModal('{{ sched.pk }}', '{{ sched.installment_number }}')"
+                                                title="Click to decide whether to move remaining balance to next month">
+                                            <i class="bi bi-question-circle me-0.5"></i>Move remaining?
+                                        </button>
+                                    </div>
+                                    {% endif %}
                                 </td>
 
                                 <!-- Settled Date -->
@@ -800,7 +814,9 @@ document.addEventListener("DOMContentLoaded", function () {
         document.getElementById("partialModalRemainingLabel").textContent = `₹${remaining.toFixed(2)}`;
         partialModal.show();
     }
+    window.openPartialModal = openPartialModal;
 
+    // Live calculation while typing (NO modal popup while typing)
     document.querySelectorAll('input[name="amount_paid"], input[name="amount"]').forEach(function (inp) {
         inp.addEventListener("input", function () {
             const formId = inp.getAttribute("form");
@@ -809,37 +825,65 @@ document.addEventListener("DOMContentLoaded", function () {
             const amountEl = document.querySelector(`input[name="amount"][form="${formId}"]`);
             const paidEl = document.querySelector(`input[name="amount_paid"][form="${formId}"]`);
             const sel = document.querySelector(`.emi-status-select[data-sched-id="${schedId}"]`);
-            if (!amountEl || !paidEl || !sel) return;
+            const remCell = document.getElementById(`remainingCell${schedId}`);
+            if (!amountEl || !paidEl) return;
             const amt = parseFloat(amountEl.value) || 0;
             const paid = parseFloat(paidEl.value) || 0;
-            if (amt > 0 && paid >= amt) {
-                sel.value = "PAID";
-            } else if (paid > 0 && paid < amt && sel.value === "PENDING") {
-                sel.value = "PARTIAL";
+            const rem = Math.max(0, amt - paid);
+            if (remCell) {
+                remCell.textContent = `₹${rem.toFixed(2)}`;
+                if (rem > 0) {
+                    remCell.className = "text-end font-monospace text-danger fw-semibold";
+                } else {
+                    remCell.className = "text-end font-monospace text-muted";
+                }
+            }
+            // Auto-adjust status indicator without triggering any modal
+            if (sel) {
+                if (amt > 0 && paid >= amt) {
+                    sel.value = "PAID";
+                    sel.className = "form-select form-select-sm fw-semibold emi-status-select text-success border-success-subtle";
+                } else if (paid > 0 && paid < amt && sel.value === "PENDING") {
+                    sel.value = "PARTIAL";
+                    sel.className = "form-select form-select-sm fw-semibold emi-status-select text-warning-emphasis border-warning-subtle";
+                }
             }
         });
     });
 
+    // Style adjustments when user changes status dropdown (NO modal popup on select change)
     document.querySelectorAll(".emi-status-select").forEach(function (sel) {
+        const schedId = sel.getAttribute("data-sched-id");
         sel.addEventListener("change", function () {
-            const schedId = sel.getAttribute("data-sched-id");
-            const instNum = sel.getAttribute("data-inst-num");
             const carryInput = document.getElementById(`carryForwardInput${schedId}`);
             if (carryInput) carryInput.value = "";
-            if (sel.value === "PARTIAL" && getRemainingForSched(schedId) > 0) {
-                openPartialModal(schedId, instNum);
+            if (sel.value === "PAID") {
+                sel.className = "form-select form-select-sm fw-semibold emi-status-select text-success border-success-subtle";
+            } else if (sel.value === "PARTIAL") {
+                sel.className = "form-select form-select-sm fw-semibold emi-status-select text-warning-emphasis border-warning-subtle";
+            } else {
+                sel.className = "form-select form-select-sm fw-semibold emi-status-select text-secondary";
             }
         });
     });
 
+    // ONLY when admin clicks Save button: trigger partial carry-forward modal if partial
     document.querySelectorAll(".emi-installment-form").forEach(function (form) {
         form.addEventListener("submit", function (e) {
             const schedId = form.getAttribute("data-sched-id");
             const sel = document.querySelector(`.emi-status-select[data-sched-id="${schedId}"]`);
+            const amountEl = document.querySelector(`input[name="amount"][form="formSched${schedId}"]`);
+            const paidEl = document.querySelector(`input[name="amount_paid"][form="formSched${schedId}"]`);
             const carryInput = document.getElementById(`carryForwardInput${schedId}`);
-            if (sel && sel.value === "PARTIAL" && sel.getAttribute("data-orig-status") !== "PARTIAL" && getRemainingForSched(schedId) > 0 && (!carryInput || !carryInput.value)) {
+
+            const amt = amountEl ? (parseFloat(amountEl.value) || 0) : 0;
+            const paid = paidEl ? (parseFloat(paidEl.value) || 0) : 0;
+            const isPartial = (sel && sel.value === "PARTIAL") || (paid > 0 && paid < amt && (!sel || sel.value !== "PAID"));
+
+            if (isPartial && (!carryInput || !carryInput.value)) {
                 e.preventDefault();
-                openPartialModal(schedId, sel.getAttribute("data-inst-num"));
+                const instNum = sel ? sel.getAttribute("data-inst-num") : schedId;
+                openPartialModal(schedId, instNum);
             }
         });
     });

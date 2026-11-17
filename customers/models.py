@@ -88,6 +88,90 @@ class Customer(models.Model):
     def __str__(self):
         return f"{self.name} ({self.primary_mobile})"
 
+    @property
+    def is_duplicate_number(self):
+        """
+        True if another customer was registered prior to this customer
+        using the same primary or secondary mobile number.
+        """
+        if hasattr(self, "_is_duplicate_number"):
+            return self._is_duplicate_number
+
+        if not self.primary_mobile:
+            return False
+
+        clean_p = self.primary_mobile.strip()
+        q = models.Q(primary_mobile=clean_p) | models.Q(secondary_mobile=clean_p)
+        if self.secondary_mobile and self.secondary_mobile.strip():
+            clean_s = self.secondary_mobile.strip()
+            q |= models.Q(primary_mobile=clean_s) | models.Q(secondary_mobile=clean_s)
+
+        qs = Customer.objects.filter(q)
+        if self.pk:
+            if self.created_at:
+                qs = qs.filter(
+                    models.Q(created_at__lt=self.created_at) |
+                    (models.Q(created_at=self.created_at) & models.Q(pk__lt=self.pk))
+                )
+            else:
+                qs = qs.filter(pk__lt=self.pk)
+        return qs.exists()
+
+    @classmethod
+    def annotate_duplicates(cls, customer_list):
+        """
+        Efficiently precomputes `_is_duplicate_number = True/False` on a list of Customer objects
+        using a single batch query.
+        """
+        customers = list(customer_list)
+        numbers = set()
+        for c in customers:
+            if c.primary_mobile and c.primary_mobile.strip():
+                numbers.add(c.primary_mobile.strip())
+            if c.secondary_mobile and c.secondary_mobile.strip():
+                numbers.add(c.secondary_mobile.strip())
+
+        if not numbers or not customers:
+            for c in customers:
+                c._is_duplicate_number = False
+            return customers
+
+        # Find earliest registered customer (by created_at, id) for each phone number
+        earliest_by_number = {}
+        earlier_matches = cls.objects.filter(
+            models.Q(primary_mobile__in=numbers) | models.Q(secondary_mobile__in=numbers)
+        ).values("id", "primary_mobile", "secondary_mobile", "created_at").order_by("created_at", "id")
+
+        for rec in earlier_matches:
+            rec_id = rec["id"]
+            rec_time = rec["created_at"]
+            p = rec["primary_mobile"].strip() if rec["primary_mobile"] else ""
+            s = rec["secondary_mobile"].strip() if rec["secondary_mobile"] else ""
+            for num in (p, s):
+                if num and num in numbers and num not in earliest_by_number:
+                    earliest_by_number[num] = (rec_time, rec_id)
+
+        for c in customers:
+            is_dup = False
+            c_time = c.created_at
+            c_id = c.id or 0
+            p = c.primary_mobile.strip() if c.primary_mobile else ""
+            s = c.secondary_mobile.strip() if c.secondary_mobile else ""
+
+            for num in (p, s):
+                if num and num in earliest_by_number:
+                    earliest_time, earliest_id = earliest_by_number[num]
+                    if c_time and earliest_time:
+                        if earliest_time < c_time or (earliest_time == c_time and earliest_id < c_id):
+                            is_dup = True
+                            break
+                    elif c_id and earliest_id < c_id:
+                        is_dup = True
+                        break
+            c._is_duplicate_number = is_dup
+
+        return customers
+
 
 class CustomerUpdateHistory(models.Model):
     """

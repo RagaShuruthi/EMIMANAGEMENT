@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,19 +13,67 @@
     <!-- Google Fonts: Open Sans, Noto Sans & JetBrains Mono -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@300;400;500;600;700;800&family=Open+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@300;400;500;600;700;800&family=Open+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
 
     <style>
         :root {
-            --primary-navy: #0f172a;
-            --sidebar-navy: #0f172a;
-            --royal-blue: #1e40af;
-            --accent-blue: #2563eb;
-            --hover-blue: #1d4ed8;
+            --bs-primary: #7c3aed;
+            --bs-primary-rgb: 124, 58, 237;
+            --bs-link-color: #7c3aed;
+            --bs-link-hover-color: #6d28d9;
+            --bs-primary-border-subtle: #ddd6fe;
+            --bs-primary-bg-subtle: #f5f3ff;
+            --fin-bg: #f8fafc;
+            --fin-surface: #ffffff;
+            --fin-border: #e2e8f0;
+            --fin-border-light: #f1f5f9;
+            --fin-text-primary: #0f172a;
+            --fin-text-secondary: #334155;
+            --fin-text-muted: #64748b;
+            --fin-primary: #7c3aed;
+            --fin-primary-dark: #6d28d9;
+            --fin-primary-soft: #f5f3ff;
+            --fin-sidebar-bg: #1e1338;
+            --fin-sidebar-card: #2c1a52;
+            --fin-sidebar-border: rgba(255, 255, 255, 0.08);
             --light-bg: #f8fafc;
             --card-border: #e2e8f0;
             --fin-radius: 8px;
             --fin-radius-sm: 6px;
+        }
+
+        .btn-primary {
+            background-color: var(--fin-primary) !important;
+            border-color: var(--fin-primary) !important;
+        }
+        .btn-primary:hover, .btn-primary:focus {
+            background-color: var(--fin-primary-dark) !important;
+            border-color: var(--fin-primary-dark) !important;
+        }
+        .btn-outline-primary {
+            color: var(--fin-primary) !important;
+            border-color: var(--fin-primary) !important;
+        }
+        .btn-outline-primary:hover, .btn-outline-primary:focus, .btn-outline-primary.active, .btn-check:checked + .btn-outline-primary {
+            background-color: var(--fin-primary) !important;
+            border-color: var(--fin-primary) !important;
+            color: #ffffff !important;
+        }
+        .text-primary {
+            color: var(--fin-primary) !important;
+        }
+        .border-primary {
+            border-color: var(--fin-primary) !important;
+        }
+        .bg-primary {
+            background-color: var(--fin-primary) !important;
+        }
+        .bg-primary-subtle {
+            background-color: var(--fin-primary-soft) !important;
+            color: var(--fin-primary) !important;
+            border-color: #ddd6fe !important;
         }
 
         /* Base Typography: Open Sans / Noto Sans */
@@ -46,14 +95,52 @@
             letter-spacing: -0.011em;
         }
 
-        h1, .h1 { font-size: 1.35rem; font-weight: 700; color: #0f172a; }
-        h2, .h2 { font-size: 1.2rem; font-weight: 700; color: #0f172a; }
-        h3, .h3 { font-size: 1.05rem; font-weight: 700; color: #0f172a; }
-        h4, .h4 { font-size: 0.95rem; font-weight: 600; color: #0f172a; }
-        h5, .h5 { font-size: 0.88rem; font-weight: 600; color: #0f172a; }
-        h6, .h6 { font-size: 0.8rem; font-weight: 600; color: #0f172a; }
+        h1,
+        .h1 {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: #0f172a;
+        }
 
-        .font-monospace, code, .metric-value, .table-amount {
+        h2,
+        .h2 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        h3,
+        .h3 {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        h4,
+        .h4 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #0f172a;
+        }
+
+        h5,
+        .h5 {
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: #0f172a;
+        }
+
+        h6,
+        .h6 {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #0f172a;
+        }
+
+        .font-monospace,
+        code,
+        .metric-value,
+        .table-amount {
             font-family: 'JetBrains Mono', ui-monospace, monospace !important;
             font-variant-numeric: tabular-nums;
             font-size: 0.82rem;
@@ -66,14 +153,17 @@
             box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.05), 0 1px 2px -1px rgba(15, 23, 42, 0.03);
             background-color: #ffffff;
         }
+
         .table {
             font-size: 0.82rem;
             color: #0f172a;
         }
-        .table > :not(caption) > * > * {
+
+        .table> :not(caption)>*>* {
             padding: 0.65rem 0.85rem;
             border-bottom: 1px solid #f1f5f9;
         }
+
         .table thead th {
             font-size: 0.7rem;
             font-weight: 700;
@@ -84,6 +174,7 @@
             padding: 0.65rem 0.85rem;
             border-bottom: 1px solid var(--card-border);
         }
+
         .btn {
             font-family: 'Open Sans', 'Noto Sans', sans-serif;
             font-size: 0.8rem;
@@ -93,11 +184,13 @@
             letter-spacing: 0.01em;
             transition: all 0.15s ease;
         }
+
         .btn-sm {
             font-size: 0.72rem;
             padding: 0.25rem 0.55rem;
             border-radius: 4px;
         }
+
         .badge {
             font-family: 'Open Sans', 'Noto Sans', sans-serif;
             font-size: 0.72rem;
@@ -107,15 +200,20 @@
             border-width: 1px;
             border-style: solid;
         }
-        .form-control, .form-select, .input-group-text {
+
+        .form-control,
+        .form-select,
+        .input-group-text {
             font-size: 0.82rem;
             padding: 0.42rem 0.72rem;
             border: 1px solid #cbd5e1;
             border-radius: var(--fin-radius-sm);
         }
-        .form-control:focus, .form-select:focus {
-            border-color: #2563eb;
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+
+        .form-control:focus,
+        .form-select:focus {
+            border-color: var(--fin-primary);
+            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
             outline: none;
         }
 
@@ -128,56 +226,66 @@
             top: 0;
             z-index: 1030;
         }
+
         /* Layout Wrapper */
         .portal-layout {
             display: flex;
             flex: 1;
         }
-        /* Sidebar Navigation */
+
+        /* Sidebar Navigation - EMI SAFE Purple Theme */
         .shop-sidebar {
             width: 245px;
-            background-color: var(--sidebar-navy);
-            color: #e2e8f0;
+            background: linear-gradient(180deg, #241442 0%, #150a2b 100%);
+            color: #cbd5e1;
             flex-shrink: 0;
             display: flex;
             flex-direction: column;
             transition: all 0.25s ease;
-            border-right: 1px solid #1e293b;
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
         }
+
         .shop-sidebar .nav-link {
-            color: #94a3b8;
+            color: #cbd5e1;
             font-weight: 500;
-            font-size: 0.78rem;
-            padding: 0.48rem 0.95rem;
+            font-size: 0.82rem;
+            padding: 0.52rem 0.85rem;
             display: flex;
             align-items: center;
-            gap: 0.65rem;
-            margin: 0.1rem 0.5rem;
-            transition: all 0.15s ease;
-            border-left: 2px solid transparent;
+            gap: 0.75rem;
+            margin: 0.15rem 0.65rem;
+            transition: all 0.15s ease-in-out;
+            border-radius: var(--fin-radius-sm);
+            border-left: none;
         }
+
         .shop-sidebar .nav-link:hover {
             color: #ffffff;
-            background-color: rgba(255, 255, 255, 0.06);
-            border-left-color: #64748b;
+            background-color: rgba(255, 255, 255, 0.1);
         }
+
         .shop-sidebar .nav-link.active {
-            color: #ffffff;
-            background-color: #1e293b;
+            color: #ffffff !important;
+            background-color: #7c3aed !important;
             font-weight: 600;
-            border-left-color: #3b82f6;
+            box-shadow: 0 4px 14px rgba(124, 58, 237, 0.45);
         }
+
         .shop-sidebar .nav-link i {
-            font-size: 0.95rem;
+            font-size: 1rem;
+            width: 1.25rem;
+            text-align: center;
         }
+
         .sidebar-heading {
-            font-size: 0.62rem;
+            font-size: 0.7rem;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.08em;
-            color: #64748b;
-            padding: 0.85rem 1rem 0.25rem;
+            color: #94a3b8;
+            padding: 1rem 1rem 0.35rem;
         }
+
         /* Main Content Container */
         .shop-content {
             flex: 1;
@@ -185,6 +293,7 @@
             max-width: 100%;
             overflow-x: hidden;
         }
+
         /* Metric & Feature Cards */
         .metric-card {
             background-color: #ffffff;
@@ -194,16 +303,19 @@
             box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
             transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
+
         .metric-card:hover {
             transform: translateY(-2px);
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
         }
+
         .metric-value {
             font-size: 1.9rem;
             font-weight: 700;
             color: #0f172a;
             line-height: 1.15;
         }
+
         .metric-label {
             font-size: 0.8rem;
             font-weight: 600;
@@ -211,6 +323,7 @@
             letter-spacing: 0.04em;
             color: #64748b;
         }
+
         .metric-icon-box {
             width: 46px;
             height: 46px;
@@ -220,6 +333,7 @@
             justify-content: center;
             font-size: 1.35rem;
         }
+
         /* Status Badges */
         .badge-status {
             padding: 0.35rem 0.75rem;
@@ -227,6 +341,7 @@
             font-size: 0.75rem;
             border-radius: 50rem;
         }
+
         /* Mobile responsive adjustments */
         @media (max-width: 991.98px) {
             .shop-sidebar {
@@ -236,9 +351,11 @@
                 left: -270px;
                 z-index: 1020;
             }
+
             .shop-sidebar.show {
                 left: 0;
             }
+
             .shop-content {
                 padding: 1.25rem;
             }
@@ -246,15 +363,18 @@
     </style>
     {% block extra_css %}{% endblock %}
 </head>
+
 <body>
     <!-- Top Header Navigation -->
     <header class="shop-header d-flex align-items-center justify-content-between px-3 px-md-4">
         <div class="d-flex align-items-center gap-3">
-            <button class="btn btn-outline-secondary d-lg-none btn-sm" id="sidebarToggleBtn" type="button" aria-label="Toggle Sidebar">
+            <button class="btn btn-outline-secondary d-lg-none btn-sm" id="sidebarToggleBtn" type="button"
+                aria-label="Toggle Sidebar">
                 <i class="bi bi-list fs-5"></i>
             </button>
             <div class="d-flex align-items-center gap-2">
-                <div class="bg-primary text-white rounded-3 p-2 d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+                <div class="sidebar-brand-badge"
+                    style="width: 38px; height: 38px; background: linear-gradient(135deg, #7c3aed, #4c1d95); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #ffffff; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);">
                     <i class="bi bi-phone-fill fs-5"></i>
                 </div>
                 <div>
@@ -270,7 +390,9 @@
                     <i class="bi bi-shop me-1"></i> Switch Shop: <strong>{{ shop.name }}</strong>
                 </button>
                 <ul class="dropdown-menu shadow-sm">
-                    <li><h6 class="dropdown-header">Registered Retail Shops</h6></li>
+                    <li>
+                        <h6 class="dropdown-header">Registered Retail Shops</h6>
+                    </li>
                     {% for s in all_shops %}
                     <li>
                         <a class="dropdown-item {% if s.id == shop.id %}active{% endif %}" href="?shop_id={{ s.id }}">
@@ -278,8 +400,11 @@
                         </a>
                     </li>
                     {% endfor %}
-                    <li><hr class="dropdown-divider"></li>
-                    <li><a class="dropdown-item text-primary" href="{% url 'admin_dashboard' %}"><i class="bi bi-speedometer2 me-1"></i> Go to Admin Dashboard</a></li>
+                    <li>
+                        <hr class="dropdown-divider">
+                    </li>
+                    <li><a class="dropdown-item text-primary" href="{% url 'admin_dashboard' %}"><i
+                                class="bi bi-speedometer2 me-1"></i> Go to Admin Dashboard</a></li>
                 </ul>
             </div>
             {% endif %}
@@ -287,7 +412,8 @@
 
         <div class="d-flex align-items-center gap-2 gap-md-3">
             <!-- Add New Customer Header Button -->
-            <a href="{% url 'shop_customer_add' %}" class="btn btn-primary d-inline-flex align-items-center gap-1 shadow-sm px-3 py-2 fw-semibold">
+            <a href="{% url 'shop_customer_add' %}"
+                class="btn btn-primary d-inline-flex align-items-center gap-1 shadow-sm px-3 py-2 fw-semibold">
                 <i class="bi bi-person-plus-fill"></i>
                 <span class="d-none d-sm-inline">+ Add New Customer</span>
             </a>
@@ -296,7 +422,8 @@
             <div class="position-relative p-2 text-secondary" style="cursor: pointer;" title="Notifications">
                 <i class="bi bi-bell fs-5"></i>
                 {% if pending_applications %}
-                <span class="position-absolute top-1 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.65rem;">
+                <span class="position-absolute top-1 start-100 translate-middle badge rounded-pill bg-danger"
+                    style="font-size: 0.65rem;">
                     {{ pending_applications }}
                 </span>
                 {% endif %}
@@ -304,8 +431,10 @@
 
             <!-- User Profile Dropdown -->
             <div class="dropdown">
-                <button class="btn btn-light border d-flex align-items-center gap-2 py-1 px-2 rounded-3" type="button" data-bs-toggle="dropdown">
-                    <div class="bg-primary-subtle text-primary fw-bold rounded-circle d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                <button class="btn btn-light border d-flex align-items-center gap-2 py-1 px-2 rounded-3" type="button"
+                    data-bs-toggle="dropdown">
+                    <div class="bg-primary-subtle text-primary fw-bold rounded-circle d-flex align-items-center justify-content-center"
+                        style="width: 32px; height: 32px;">
                         {{ request.user.username|make_list|first|upper }}
                     </div>
                     <div class="text-start d-none d-md-block">
@@ -325,7 +454,9 @@
                             <i class="bi bi-speedometer2 me-2 text-primary"></i> Admin Dashboard
                         </a>
                     </li>
-                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <hr class="dropdown-divider">
+                    </li>
                     {% endif %}
                     <li>
                         <a class="dropdown-item py-2" href="{% url 'shop_profile' %}">
@@ -353,13 +484,15 @@
                 <div class="sidebar-heading">Operations</div>
                 <nav class="nav flex-column">
                     <!-- 1. Dashboard -->
-                    <a class="nav-link {% if active_nav == 'dashboard' %}active{% endif %}" href="{% url 'shop_dashboard' %}">
+                    <a class="nav-link {% if active_nav == 'dashboard' %}active{% endif %}"
+                        href="{% url 'shop_dashboard' %}">
                         <i class="bi bi-grid-fill"></i>
                         <span>Dashboard</span>
                     </a>
 
                     <!-- 2. Add New Customer -->
-                    <a class="nav-link {% if active_nav == 'add_customer' %}active{% endif %}" href="{% url 'shop_customer_add' %}">
+                    <a class="nav-link {% if active_nav == 'add_customer' %}active{% endif %}"
+                        href="{% url 'shop_customer_add' %}">
                         <i class="bi bi-person-plus-fill"></i>
                         <span>Add New Customer</span>
                     </a>
@@ -368,25 +501,29 @@
                 <div class="sidebar-heading">Applications</div>
                 <nav class="nav flex-column">
                     <!-- 4. Finance Applications -->
-                    <a class="nav-link {% if active_nav == 'all_applications' %}active{% endif %}" href="{% url 'shop_application_list' %}">
+                    <a class="nav-link {% if active_nav == 'all_applications' %}active{% endif %}"
+                        href="{% url 'shop_application_list' %}">
                         <i class="bi bi-file-earmark-text-fill"></i>
                         <span>Finance Applications</span>
                     </a>
 
                     <!-- 5. Under Review Applications -->
-                    <a class="nav-link {% if active_nav == 'under_review_apps' %}active{% endif %}" href="{% url 'shop_application_list' %}?status=UNDER_REVIEW">
+                    <a class="nav-link {% if active_nav == 'under_review_apps' %}active{% endif %}"
+                        href="{% url 'shop_application_list' %}?status=UNDER_REVIEW">
                         <i class="bi bi-clock-history"></i>
                         <span>Under Review</span>
                     </a>
 
                     <!-- 6. Approved Applications -->
-                    <a class="nav-link {% if active_nav == 'approved_apps' %}active{% endif %}" href="{% url 'shop_application_list' %}?status=APPROVED">
+                    <a class="nav-link {% if active_nav == 'approved_apps' %}active{% endif %}"
+                        href="{% url 'shop_application_list' %}?status=APPROVED">
                         <i class="bi bi-check-circle-fill"></i>
                         <span>Approved Applications</span>
                     </a>
 
                     <!-- 7. Rejected Applications -->
-                    <a class="nav-link {% if active_nav == 'rejected_apps' %}active{% endif %}" href="{% url 'shop_application_list' %}?status=REJECTED">
+                    <a class="nav-link {% if active_nav == 'rejected_apps' %}active{% endif %}"
+                        href="{% url 'shop_application_list' %}?status=REJECTED">
                         <i class="bi bi-x-circle-fill"></i>
                         <span>Rejected Applications</span>
                     </a>
@@ -395,25 +532,29 @@
                 <div class="sidebar-heading">Financials & Settings</div>
                 <nav class="nav flex-column">
                     <!-- 8b. Collect EMI Installments -->
-                    <a class="nav-link {% if active_nav == 'emi_collection' %}active{% endif %}" href="{% url 'shop_emi_collection' %}">
+                    <a class="nav-link {% if active_nav == 'emi_collection' %}active{% endif %}"
+                        href="{% url 'shop_emi_collection' %}">
                         <i class="bi bi-cash-coin"></i>
                         <span>Collect EMI</span>
                     </a>
 
                     <!-- 9. Financier Payments -->
-                    <a class="nav-link {% if active_nav == 'financier_payments' %}active{% endif %}" href="{% url 'shop_payments' %}">
+                    <a class="nav-link {% if active_nav == 'financier_payments' %}active{% endif %}"
+                        href="{% url 'shop_payments' %}">
                         <i class="bi bi-wallet2"></i>
                         <span>Financier Payments</span>
                     </a>
 
                     <!-- 10. Reports & Analytics -->
-                    <a class="nav-link {% if active_nav == 'reports' %}active{% endif %}" href="{% url 'shop_reports' %}">
+                    <a class="nav-link {% if active_nav == 'reports' %}active{% endif %}"
+                        href="{% url 'shop_reports' %}">
                         <i class="bi bi-bar-chart-line-fill"></i>
                         <span>Reports & Analytics</span>
                     </a>
 
                     <!-- 11. Shop Profile -->
-                    <a class="nav-link {% if active_nav == 'profile' %}active{% endif %}" href="{% url 'shop_profile' %}">
+                    <a class="nav-link {% if active_nav == 'profile' %}active{% endif %}"
+                        href="{% url 'shop_profile' %}">
                         <i class="bi bi-shop"></i>
                         <span>Shop Profile</span>
                     </a>
@@ -421,7 +562,8 @@
                     <!-- 12. Logout -->
                     <form method="post" action="{% url 'logout' %}" class="mt-2">
                         {% csrf_token %}
-                        <button type="submit" class="nav-link border-0 bg-transparent text-danger w-100 text-start" style="cursor: pointer;">
+                        <button type="submit" class="nav-link border-0 bg-transparent text-danger w-100 text-start"
+                            style="cursor: pointer;">
                             <i class="bi bi-box-arrow-right"></i>
                             <span>Logout</span>
                         </button>
@@ -436,8 +578,10 @@
             {% if messages %}
             <div class="mb-4">
                 {% for message in messages %}
-                <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show shadow-sm border-0" role="alert">
-                    <i class="bi {% if message.tags == 'success' %}bi-check-circle-fill{% elif message.tags == 'warning' %}bi-exclamation-triangle-fill{% elif message.tags == 'danger' or message.tags == 'error' %}bi-x-octagon-fill{% else %}bi-info-circle-fill{% endif %} me-2"></i>
+                <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show shadow-sm border-0"
+                    role="alert">
+                    <i
+                        class="bi {% if message.tags == 'success' %}bi-check-circle-fill{% elif message.tags == 'warning' %}bi-exclamation-triangle-fill{% elif message.tags == 'danger' or message.tags == 'error' %}bi-x-octagon-fill{% else %}bi-info-circle-fill{% endif %} me-2"></i>
                     {{ message }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
@@ -456,13 +600,13 @@
         const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
         const portalSidebar = document.getElementById('portalSidebar');
         if (sidebarToggleBtn && portalSidebar) {
-            sidebarToggleBtn.addEventListener('click', function() {
+            sidebarToggleBtn.addEventListener('click', function () {
                 portalSidebar.classList.toggle('show');
             });
         }
 
         // Global Phone Number Validator & Exactly 10-Digit Enforcer
-        (function() {
+        (function () {
             function isPhoneField(el) {
                 if (!el || el.tagName !== 'INPUT') return false;
                 if (el.dataset.noPhoneSanitize === 'true') return false;
@@ -496,21 +640,21 @@
                 }
             }
 
-            document.addEventListener('input', function(e) {
+            document.addEventListener('input', function (e) {
                 if (isPhoneField(e.target)) {
                     sanitizePhone(e.target);
                 }
             });
 
-            document.addEventListener('paste', function(e) {
+            document.addEventListener('paste', function (e) {
                 if (isPhoneField(e.target)) {
-                    setTimeout(function() { sanitizePhone(e.target); }, 0);
+                    setTimeout(function () { sanitizePhone(e.target); }, 0);
                 }
             });
 
-            document.addEventListener('DOMContentLoaded', function() {
+            document.addEventListener('DOMContentLoaded', function () {
                 var inputs = document.querySelectorAll('input');
-                inputs.forEach(function(inp) {
+                inputs.forEach(function (inp) {
                     if (isPhoneField(inp)) {
                         inp.setAttribute('maxlength', '10');
                         inp.setAttribute('pattern', '\\d{10}');
@@ -522,4 +666,5 @@
     </script>
     {% block extra_js %}{% endblock %}
 </body>
+
 </html>

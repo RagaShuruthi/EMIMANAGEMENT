@@ -108,9 +108,13 @@ def export_customers_to_excel(customer_rows, title="Customers EMI Report", shop_
         due_date_str = row.get("next_due_date_display") or "—"
         update_status = row.get("update_status") or "—"
 
+        cust_display_name = row.get("customer_name") or "—"
+        if row.get("is_duplicate"):
+            cust_display_name = f"{cust_display_name} [Duplicate]"
+
         values = [
             idx,
-            row.get("customer_name") or "—",
+            cust_display_name,
             row.get("phone") or "—",
             row.get("secondary_mobile") or "—",
             row.get("shop_name") or "—",
@@ -316,9 +320,13 @@ def export_customers_to_pdf(customer_rows, title="Customers EMI Report", shop_na
         if len(work_addr) > 35:
             work_addr = work_addr[:32] + "..."
 
+        cust_pdf_name = str(row.get("customer_name") or "—")
+        if row.get("is_duplicate"):
+            cust_pdf_name = f"{cust_pdf_name} <font color='#dc2626'><b>[Duplicate]</b></font>"
+
         table_data.append([
             Paragraph(str(idx), td_style),
-            Paragraph(str(row.get("customer_name") or "—"), td_style),
+            Paragraph(cust_pdf_name, td_style),
             Paragraph(str(row.get("phone") or "—"), td_style),
             Paragraph(str(row.get("secondary_mobile") or "—"), td_style),
             Paragraph(str(row.get("mobile_model") or "—"), td_style),

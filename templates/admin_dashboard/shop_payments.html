@@ -154,7 +154,12 @@
                     </td>
 
                     <td class="text-end fw-semibold text-success">
-                        ₹{{ row.financials.total_paid|floatformat:2 }}
+                        <div>₹{{ row.financials.total_paid|floatformat:2 }}</div>
+                        {% if row.financials.shop_collected_emi > 0 %}
+                        <div class="text-success small" style="font-size: 0.72rem;" title="Collected directly by shop from customer EMIs (deducted from settlement)">
+                            + ₹{{ row.financials.shop_collected_emi|floatformat:2 }} customer direct
+                        </div>
+                        {% endif %}
                     </td>
 
                     <td class="text-end fw-bold {% if row.financials.remaining_due > 0 %}text-danger{% else %}text-muted{% endif %}">
@@ -220,21 +225,27 @@
                     <div class="modal-body p-4">
                         <!-- Shop Balance Summary Cards inside Modal -->
                         <div class="row g-2 mb-3">
-                            <div class="col-12 col-md-4">
+                            <div class="col-6 col-md-3">
                                 <div class="p-3 bg-light rounded-3 border">
                                     <div class="text-muted small text-uppercase fw-semibold">Total Payable</div>
                                     <div class="fs-5 fw-bold text-dark">₹{{ row.financials.total_payable|floatformat:2 }}</div>
                                 </div>
                             </div>
-                            <div class="col-12 col-md-4">
+                            <div class="col-6 col-md-3">
                                 <div class="p-3 bg-light rounded-3 border border-success-subtle">
-                                    <div class="text-success small text-uppercase fw-semibold">Total Paid by Admin</div>
+                                    <div class="text-success small text-uppercase fw-semibold">Paid by Admin</div>
                                     <div class="fs-5 fw-bold text-success">₹{{ row.financials.total_paid|floatformat:2 }}</div>
                                 </div>
                             </div>
-                            <div class="col-12 col-md-4">
+                            <div class="col-6 col-md-3">
+                                <div class="p-3 bg-light rounded-3 border border-info-subtle">
+                                    <div class="text-info-emphasis small text-uppercase fw-semibold">Direct Customer EMI</div>
+                                    <div class="fs-5 fw-bold text-info-emphasis">₹{{ row.financials.shop_collected_emi|floatformat:2 }}</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
                                 <div class="p-3 bg-light rounded-3 border {% if row.financials.remaining_due > 0 %}border-danger-subtle{% endif %}">
-                                    <div class="{% if row.financials.remaining_due > 0 %}text-danger{% else %}text-muted{% endif %} small text-uppercase fw-semibold">Remaining Balance Due</div>
+                                    <div class="{% if row.financials.remaining_due > 0 %}text-danger{% else %}text-muted{% endif %} small text-uppercase fw-semibold">Remaining Due</div>
                                     <div class="fs-5 fw-bold {% if row.financials.remaining_due > 0 %}text-danger{% else %}text-muted{% endif %}">₹{{ row.financials.remaining_due|floatformat:2 }}</div>
                                 </div>
                             </div>
@@ -293,30 +304,44 @@
                                 <thead class="table-light text-uppercase small text-muted">
                                     <tr>
                                         <th>Date</th>
-                                        <th class="text-end">Amount Paid</th>
-                                        <th>Bank Reference / UTR</th>
-                                        <th>Proof / Screenshot</th>
+                                        <th>Type</th>
+                                        <th class="text-end">Amount Credited</th>
+                                        <th>Reference / UTR</th>
+                                        <th>Proof / Method</th>
                                         <th>Application / Customer</th>
-                                        <th>Remarks</th>
+                                        <th>Remarks / Audit</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for tx in row.transactions %}
-                                    <tr>
+                                    <tr class="{% if tx.is_direct_customer_pay %}table-light{% endif %}">
                                         <td class="fw-semibold text-dark text-nowrap">
                                             <i class="bi bi-calendar3 me-1 text-muted"></i>{{ tx.payment_date|date:"d M Y" }}
                                         </td>
+                                        <td>
+                                            {% if tx.is_direct_customer_pay %}
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle">
+                                                <i class="bi bi-person-check-fill me-1"></i>Directly Paid by Customer
+                                            </span>
+                                            {% else %}
+                                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                                                <i class="bi bi-bank me-1"></i>Admin Payout
+                                            </span>
+                                            {% endif %}
+                                        </td>
                                         <td class="text-end fw-bold text-success fs-6 text-nowrap">
-                                            ₹{{ tx.amount_received|floatformat:2 }}
+                                            ₹{{ tx.amount|floatformat:2 }}
                                         </td>
                                         <td>
                                             <code class="text-primary fw-bold">{{ tx.payment_reference }}</code>
                                         </td>
                                         <td>
-                                            {% if tx.payment_screenshot %}
-                                            <a href="{{ tx.payment_screenshot.url }}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2 shadow-xs" title="Open Screenshot Proof">
+                                            {% if tx.proof_file %}
+                                            <a href="{{ tx.proof_file.url }}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2 shadow-xs" title="Open Screenshot Proof">
                                                 <i class="bi bi-image me-1"></i> View Screenshot
                                             </a>
+                                            {% elif tx.is_direct_customer_pay %}
+                                            <span class="badge bg-light text-muted border">Customer EMI</span>
                                             {% else %}
                                             <span class="text-muted small fst-italic">None</span>
                                             {% endif %}
@@ -325,11 +350,13 @@
                                             {% if tx.application %}
                                             <div>
                                                 <span class="badge bg-light text-secondary border font-monospace">{{ tx.application.application_number }}</span>
-                                                <span class="fw-semibold text-dark">{{ tx.application.customer.name }}</span>
+                                                <span class="fw-semibold text-dark">{{ tx.customer_name|default:tx.application.customer.name }}</span>
                                             </div>
                                             <small class="text-muted">{{ tx.application.mobile_model }}</small>
+                                            {% elif tx.customer_name %}
+                                            <div class="fw-semibold text-dark">{{ tx.customer_name }}</div>
                                             {% else %}
-                                            <span class="badge bg-light text-muted border">Direct Shop Payout</span>
+                                            <span class="badge bg-light text-muted border">Direct Shop Settlement</span>
                                             {% endif %}
                                         </td>
                                         <td class="small text-muted">{{ tx.remarks|default:"—" }}</td>
@@ -499,7 +526,7 @@
             </thead>
             <tbody>
                 {% for p in recent_payments %}
-                <tr>
+                <tr class="{% if p.is_direct_customer_pay %}table-light{% endif %}">
                     <td class="fw-semibold text-dark">{{ p.payment_date|date:"M d, Y" }}</td>
                     <td>
                         {% if p.shop %}
@@ -517,22 +544,34 @@
                     <td>
                         {% if p.application %}
                         <span class="badge bg-light text-secondary border font-monospace">{{ p.application.application_number }}</span>
-                        <div class="small text-muted">{{ p.application.customer.name }} ({{ p.application.mobile_model }})</div>
+                        <div class="small fw-semibold text-dark">{{ p.customer_name|default:p.application.customer.name }}</div>
+                        {% if p.mobile_model %}<small class="text-muted">{{ p.mobile_model }}</small>{% endif %}
+                        {% elif p.customer_name %}
+                        <div class="small fw-semibold text-dark">{{ p.customer_name }}</div>
                         {% else %}
                         <span class="badge bg-light text-muted border">Direct Shop Payout</span>
                         {% endif %}
                     </td>
                     <td>
                         <code class="text-primary fw-bold">{{ p.payment_reference }}</code>
+                        {% if p.is_direct_customer_pay %}
+                        <div>
+                            <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.68rem;">
+                                <i class="bi bi-person-check-fill me-1"></i>Directly Paid by Customer
+                            </span>
+                        </div>
+                        {% endif %}
                     </td>
                     <td class="text-end fw-bold text-success">
                         ₹{{ p.amount_received|floatformat:2 }}
                     </td>
                     <td>
-                        {% if p.payment_screenshot %}
-                        <a href="{{ p.payment_screenshot.url }}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" title="View Payment Proof Screenshot">
+                        {% if p.proof_file %}
+                        <a href="{{ p.proof_file.url }}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" title="View Payment Proof Screenshot">
                             <i class="bi bi-image me-1"></i> Screenshot
                         </a>
+                        {% elif p.is_direct_customer_pay %}
+                        <span class="badge bg-light text-muted border">Customer Direct</span>
                         {% else %}
                         <span class="text-muted small fst-italic">None</span>
                         {% endif %}
@@ -588,6 +627,13 @@
                                 <td class="text-end font-monospace fw-bold text-dark">₹{{ app.financier_request_amount|floatformat:2 }}</td>
                                 <td class="text-center">
                                     <span class="badge bg-light text-dark border">{{ app.get_status_display }}</span>
+                                    {% if app.is_directly_paid_by_customer %}
+                                    <div class="mt-1">
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle px-1.5 py-0.5" style="font-size: 0.72rem; font-weight: 600;" title="EMI directly collected by shop from customer — deducted from financier settlement">
+                                            <i class="bi bi-person-check-fill me-1"></i>Directly paid by customer (₹{{ app.direct_collected_total|floatformat:2 }})
+                                        </span>
+                                    </div>
+                                    {% endif %}
                                 </td>
                                 <td class="text-muted text-nowrap">{{ app.created_at|date:"d M Y" }}</td>
                                 <td class="text-end">

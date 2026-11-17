@@ -81,6 +81,9 @@
                             <div class="col-12 col-md-4">
                                 <span class="text-muted small text-uppercase fw-semibold d-block">Mobile Model</span>
                                 <span class="fw-bold fs-6 text-dark">{{ application.mobile_model }}</span>
+                                {% if application.variant %}
+                                <span class="badge bg-primary-subtle text-primary border ms-1">{{ application.variant }}</span>
+                                {% endif %}
                             </div>
                             <div class="col-12 col-md-4">
                                 <span class="text-muted small text-uppercase fw-semibold d-block">EMI Scheme</span>

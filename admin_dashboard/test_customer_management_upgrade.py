@@ -796,14 +796,15 @@ class CustomerManagementUpgradeTests(TestCase):
         app.refresh_from_db()
 
         self.assertEqual(sched1.amount_paid, Decimal("2000.00"))
-        self.assertEqual(sched1.amount, Decimal("2000.00"))
-        self.assertEqual(sched1.remaining_amount, Decimal("0.00"))
+        # Present amount due is preserved (not subtracted) while next month is added
+        self.assertEqual(sched1.amount, Decimal("5000.00"))
+        self.assertEqual(sched1.remaining_amount, Decimal("3000.00"))
         self.assertEqual(sched1.status, CustomerEMISchedule.InstallmentStatus.PARTIAL)
         self.assertEqual(sched2.amount, Decimal("8000.00"))
-        # Total outstanding balance must NOT count the 3000 twice (15000 - 2000 = 13000)
+        # Total outstanding balance: 15000 - 2000 = 13000
         self.assertEqual(app.customer_remaining_balance, Decimal("13000.00"))
-        # Next unpaid schedule should advance to Inst #2
-        self.assertEqual(app.next_unpaid_schedule.pk, sched2.pk)
+        # Next unpaid schedule remains Inst #1 because current due is preserved and has 3000 remaining
+        self.assertEqual(app.next_unpaid_schedule.pk, sched1.pk)
 
         # Audit entry recorded
         cf_audit = CustomerUpdateHistory.objects.filter(customer=cust, field_name="Partial Due Carry-Forward").first()
