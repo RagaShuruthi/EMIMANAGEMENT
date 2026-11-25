@@ -312,6 +312,13 @@
                 </div>
                 {% if item.customer_remaining_balance > 0 and not customer.is_loss %}
                 <div class="d-flex gap-2">
+                    <form method="post" action="{% url 'admin_move_to_next_due' pk=customer.pk %}" class="d-inline" onsubmit="this.querySelector('button').disabled=true;">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <button type="submit" class="btn btn-sm btn-outline-warning text-dark fw-semibold" title="Advance next unpaid due date forward by 1 monthly cycle">
+                            <i class="bi bi-calendar-plus me-1"></i> Move to Next Due
+                        </button>
+                    </form>
                     <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#detailEditDueDateModal">
                         <i class="bi bi-calendar-event me-1"></i> Edit Next Due Date
                     </button>
@@ -415,9 +422,16 @@
 
                                 <!-- Save / Update Action -->
                                 <td class="text-end text-nowrap">
-                                    <button type="submit" form="formSched{{ sched.pk }}" class="btn btn-sm btn-primary py-1 px-2" title="Save Due Date, Amount Due, Amount Paid, Status & Update Note">
-                                        <i class="bi bi-check-lg me-1"></i>Save
-                                    </button>
+                                    <div class="d-inline-flex gap-1">
+                                        {% if not sched.is_paid %}
+                                        <button type="submit" name="move_to_next_due" value="1" form="formSched{{ sched.pk }}" class="btn btn-sm btn-outline-secondary py-1 px-1.5" title="Save and advance this due date forward by 1 month">
+                                            <i class="bi bi-calendar-plus"></i>
+                                        </button>
+                                        {% endif %}
+                                        <button type="submit" form="formSched{{ sched.pk }}" class="btn btn-sm btn-primary py-1 px-2" title="Save Due Date, Amount Due, Amount Paid, Status & Update Note">
+                                            <i class="bi bi-check-lg me-1"></i>Save
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                             {% empty %}

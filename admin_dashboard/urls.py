@@ -20,6 +20,7 @@ urlpatterns = [
     path("customers/<int:pk>/change-status/", views.admin_customer_change_application_status_view, name="admin_customer_change_status"),
     path("customers/<int:pk>/update-status/", views.admin_customer_update_status_view, name="admin_customer_update_status"),
     path("customers/<int:pk>/edit-due-date/", views.admin_customer_edit_due_date_view, name="admin_customer_edit_due_date"),
+    path("customers/<int:pk>/move-to-next-due/", views.admin_move_to_next_due_view, name="admin_move_to_next_due"),
     path("customers/<int:pk>/record-payment/", views.admin_customer_record_payment_view, name="admin_customer_record_payment"),
     path("customer-payments/<int:pk>/edit/", views.admin_edit_customer_payment_view, name="admin_edit_customer_payment"),
     path("customers/<int:pk>/move-to-loss/", views.admin_customer_move_to_loss_view, name="admin_customer_move_to_loss"),

@@ -27,6 +27,7 @@ urlpatterns = [
     path("customers/<int:pk>/", views.followup_customer_detail_view, name="followup_customer_detail"),
     path("customers/<int:pk>/quick-update/", views.followup_quick_update_view, name="followup_quick_update"),
     path("customers/<int:pk>/edit-due-date/", views.followup_edit_due_date_view, name="followup_edit_due_date"),
+    path("customers/<int:pk>/move-to-next-due/", views.followup_move_to_next_due_view, name="followup_move_to_next_due"),
     path("activities/<int:pk>/complete/", views.followup_complete_activity_view, name="followup_complete_activity"),
 
     # Secure Password Setup Workflow for Employees

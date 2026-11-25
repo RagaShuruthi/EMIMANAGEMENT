@@ -685,27 +685,40 @@ def get_shop_financials(shop, start_date=None, end_date=None):
 
 def sync_all_customer_installment_payments():
     """
-    Issue 2: Synchronizes any CustomerEMISchedule records where amount_paid > 0
+    Synchronizes any CustomerEMISchedule records where amount_paid > 0
     to have a matching CustomerEMIPayment record so Financial Reports
-    accurately reflect all actual collections.
+    accurately reflect actual collections, while strictly preventing duplicate payments.
     """
-    from payments.models import CustomerEMISchedule
+    import uuid
+    from payments.models import CustomerEMISchedule, CustomerEMIPayment
     schedules = (
         CustomerEMISchedule.objects.filter(amount_paid__gt=Decimal("0.00"))
         .select_related("customer", "application")
     )
     for sched in schedules:
         if not sched.payments.exists():
-            pay_date = sched.paid_date or sched.due_date or timezone.localdate()
-            CustomerEMIPayment.objects.create(
-                application=sched.application,
-                customer=sched.customer,
-                schedule=sched,
-                amount=sched.amount_paid,
-                payment_date=pay_date,
-                payment_mode=CustomerEMIPayment.PaymentMode.CASH,
-                remarks=f"EMI Installment #{sched.installment_number} collection."
-            )
+            # Check if there is already an unlinked payment for this application
+            unlinked = sched.application.customer_emi_payments.filter(schedule__isnull=True).first()
+            if unlinked:
+                unlinked.schedule = sched
+                unlinked.save(update_fields=["schedule"])
+            else:
+                # Check total application customer payments vs total schedules paid
+                app_total_paid = sched.application.customer_emi_payments.aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
+                scheds_total_paid = sched.application.emi_schedules.aggregate(t=Sum("amount_paid"))["t"] or Decimal("0.00")
+                if app_total_paid < scheds_total_paid:
+                    diff = scheds_total_paid - app_total_paid
+                    pay_date = sched.paid_date or sched.due_date or timezone.localdate()
+                    CustomerEMIPayment.objects.create(
+                        application=sched.application,
+                        customer=sched.customer,
+                        schedule=sched,
+                        amount=diff,
+                        payment_date=pay_date,
+                        payment_mode=CustomerEMIPayment.PaymentMode.CASH,
+                        transaction_reference=f"SYNC-{sched.id}-{uuid.uuid4().hex[:8].upper()}",
+                        remarks=f"EMI Installment #{sched.installment_number} collection."
+                    )
 
 
 def sync_all_existing_shop_collections():

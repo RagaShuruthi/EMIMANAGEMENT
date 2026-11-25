@@ -359,9 +359,10 @@ class FinanceApplication(models.Model):
 
         CustomerEMISchedule.objects.bulk_create(schedules)
 
-    def record_customer_payment(self, amount, payment_date=None, payment_mode="UPI", transaction_reference="", recorded_by=None, remarks=""):
+    def record_customer_payment(self, amount, payment_date=None, payment_mode="UPI", transaction_reference="", recorded_by=None, remarks="", collected_by_shop=False):
         """
         Records a customer EMI payment and applies it sequentially across unpaid schedule installments.
+        Guarantees idempotency and prevents duplicate payment transactions.
         """
         from payments.models import CustomerEMIPayment, CustomerEMISchedule
         if payment_date is None:
@@ -372,20 +373,38 @@ class FinanceApplication(models.Model):
 
         self.generate_default_schedule_if_missing()
 
+        # Prevent payments exceeding the customer's remaining outstanding balance
+        outstanding = self.customer_remaining_balance
+        if outstanding <= Decimal("0.00"):
+            return None
+        if amt > outstanding:
+            amt = outstanding
+
+        # Idempotency check: if transaction_reference is provided, prevent duplicate creation
+        if transaction_reference:
+            existing_pay = self.customer_emi_payments.filter(transaction_reference=transaction_reference).first()
+            if existing_pay:
+                return existing_pay
+
+        ref = transaction_reference or f"TXN-{uuid.uuid4().hex[:10].upper()}"
+
+        unpaid_schedules = list(self.emi_schedules.filter(is_paid=False).order_by("installment_number"))
+        primary_sched = unpaid_schedules[0] if unpaid_schedules else None
+
         payment = CustomerEMIPayment.objects.create(
             application=self,
             customer=self.customer,
+            schedule=primary_sched,
             amount=amt,
             payment_date=payment_date,
             payment_mode=payment_mode,
-            transaction_reference=transaction_reference,
+            transaction_reference=ref,
             recorded_by=recorded_by,
             remarks=remarks,
+            collected_by_shop=collected_by_shop,
         )
 
         remaining_to_distribute = amt
-        unpaid_schedules = self.emi_schedules.filter(is_paid=False).order_by("installment_number")
-
         for sched in unpaid_schedules:
             if remaining_to_distribute <= Decimal("0.00"):
                 break
@@ -401,6 +420,7 @@ class FinanceApplication(models.Model):
             else:
                 sched.amount_paid += remaining_to_distribute
                 sched.status = CustomerEMISchedule.InstallmentStatus.PARTIAL
+                sched.is_paid = False
                 remaining_to_distribute = Decimal("0.00")
             sched.save(update_fields=["amount_paid", "is_paid", "paid_date", "status", "updated_at"])
 

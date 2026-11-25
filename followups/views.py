@@ -1474,3 +1474,14 @@ def followup_edit_due_date_view(request, pk):
     messages.success(request, f"Updated next due date to {new_date} for '{customer.name}'.")
     return redirect(next_url)
 
+
+@require_POST
+@login_required
+def followup_move_to_next_due_view(request, pk):
+    """
+    Follow-up Employee Portal: Move customer next due date to next monthly cycle.
+    """
+    from admin_dashboard.views import admin_move_to_next_due_view
+    return admin_move_to_next_due_view(request, pk)
+
+

@@ -391,11 +391,15 @@ def admin_dashboard_view(request):
         total=Sum("financier_request_amount")
     )["total"] or Decimal("0.00")
 
-    total_actual_paid = FinancierPayment.objects.aggregate(
+    total_actual_paid = FinancierPayment.objects.filter(
+        Q(application__status__in=approved_statuses) | Q(application__isnull=True)
+    ).aggregate(
         total=Sum("amount_received")
     )["total"] or Decimal("0.00")
 
-    total_shop_adjusted = ShopCollectionRecord.objects.aggregate(
+    total_shop_adjusted = ShopCollectionRecord.objects.filter(
+        Q(application__status__in=approved_statuses) | Q(application__isnull=True)
+    ).aggregate(
         total=Sum("adjusted_to_loan")
     )["total"] or Decimal("0.00")
 
@@ -795,6 +799,64 @@ def admin_update_installment_view(request, pk):
             messages.error(request, "Invalid due date format. Please use YYYY-MM-DD.")
             return redirect(next_url)
 
+    if request.POST.get("move_to_next_due") == "1":
+        # Handle Move to Next Due directly for this installment
+        from datetime import date as dt_date
+        import calendar
+        old_due = schedule.due_date
+        target_day = app.monthly_due_day or old_due.day
+        y = old_due.year
+        m = old_due.month + 1
+        if m > 12:
+            m = 1
+            y += 1
+        last_day = calendar.monthrange(y, m)[1]
+        new_due = dt_date(y, m, min(target_day, last_day))
+
+        schedule.due_date = new_due
+        schedule.save(update_fields=["due_date", "updated_at"])
+
+        # Maintain chronological order across subsequent unpaid schedules
+        subsequent = (
+            app.emi_schedules
+            .filter(installment_number__gt=schedule.installment_number, is_paid=False)
+            .order_by("installment_number")
+        )
+        prev_due = new_due
+        for sub in subsequent:
+            if sub.due_date <= prev_due:
+                sy = prev_due.year
+                sm = prev_due.month + 1
+                if sm > 12:
+                    sm = 1
+                    sy += 1
+                slast = calendar.monthrange(sy, sm)[1]
+                sub_next = dt_date(sy, sm, min(target_day, slast))
+                sub.due_date = sub_next
+                sub.save(update_fields=["due_date", "updated_at"])
+                prev_due = sub_next
+            else:
+                prev_due = sub.due_date
+
+        log_msg = f"Installment #{schedule.installment_number} due date moved from {old_due.strftime('%d-%m-%Y')} to {new_due.strftime('%d-%m-%Y')}."
+        customer.latest_update_status = log_msg
+        customer.latest_update_at = timezone.now()
+        customer.latest_update_by = request.user
+        customer.save(update_fields=["latest_update_status", "latest_update_at", "latest_update_by", "updated_at"])
+
+        CustomerUpdateHistory.objects.create(
+            customer=customer,
+            user=request.user,
+            section="EMI Installments",
+            field_name="Move to Next Due",
+            previous_value=old_due.strftime("%d-%m-%Y"),
+            new_value=new_due.strftime("%d-%m-%Y"),
+            description=log_msg,
+            notes=log_msg
+        )
+        messages.success(request, f"Installment #{schedule.installment_number} due date moved to {new_due.strftime('%d-%m-%Y')}.")
+        return redirect(next_url)
+
     # Determine status & is_paid
     valid_statuses = [
         CustomerEMISchedule.InstallmentStatus.PENDING,
@@ -847,40 +909,58 @@ def admin_update_installment_view(request, pk):
 
         schedule.save()
 
-        # Issue 2: Synchronize CustomerEMIPayment record for Financial Reports & Ledger
+        # Issue 2 & 3: Synchronize CustomerEMIPayment record for Financial Reports & Ledger without duplicate transactions
         pay_date = schedule.paid_date or schedule.due_date or timezone.localdate()
         existing_payments = list(schedule.payments.all().order_by("created_at"))
+        existing_paid = sum((p.amount for p in existing_payments), Decimal("0.00"))
 
         if new_amount_paid > Decimal("0.00"):
-            if existing_payments:
-                first_pay = existing_payments[0]
-                first_pay.amount = new_amount_paid
-                first_pay.payment_date = pay_date
-                first_pay.customer = customer
-                first_pay.application = app
-                first_pay.save(update_fields=["amount", "payment_date", "customer", "application"])
-                for extra_pay in existing_payments[1:]:
-                    extra_pay.delete()
-                synced_pay = first_pay
+            if len(existing_payments) == 1:
+                synced_pay = existing_payments[0]
+                synced_pay.amount = new_amount_paid
+                synced_pay.payment_date = pay_date
+                synced_pay.save(update_fields=["amount", "payment_date"])
             else:
-                synced_pay = CustomerEMIPayment.objects.create(
-                    application=app,
-                    customer=customer,
-                    schedule=schedule,
-                    amount=new_amount_paid,
-                    payment_date=pay_date,
-                    payment_mode=CustomerEMIPayment.PaymentMode.CASH,
-                    recorded_by=request.user,
-                    remarks=f"EMI Installment #{schedule.installment_number} collection recorded by admin."
-                )
+                delta = new_amount_paid - existing_paid
+                if delta > Decimal("0.00"):
+                    import uuid
+                    synced_pay = CustomerEMIPayment.objects.create(
+                        application=app,
+                        customer=customer,
+                        schedule=schedule,
+                        amount=delta,
+                        payment_date=pay_date,
+                        payment_mode=CustomerEMIPayment.PaymentMode.CASH,
+                        transaction_reference=f"PAY-INST-{schedule.id}-{uuid.uuid4().hex[:8].upper()}",
+                        recorded_by=request.user,
+                        remarks=f"EMI Installment #{schedule.installment_number} payment recorded by admin."
+                    )
+                elif delta < Decimal("0.00"):
+                    to_reduce = abs(delta)
+                    for p in reversed(existing_payments):
+                        if to_reduce <= Decimal("0.00"):
+                            break
+                        if p.amount <= to_reduce:
+                            to_reduce -= p.amount
+                            p.delete()
+                        else:
+                            p.amount -= to_reduce
+                            p.save(update_fields=["amount"])
+                            to_reduce = Decimal("0.00")
+                    synced_pay = schedule.payments.first()
+                else:
+                    # delta == 0: Amount paid did not change; zero new transactions created!
+                    synced_pay = existing_payments[0] if existing_payments else None
 
-            if synced_pay.collected_by_shop:
+            if synced_pay and synced_pay.collected_by_shop:
                 process_shop_collection(synced_pay, user=request.user, force=True)
         else:
             # Reversal: amount paid cleared to 0
             for p in existing_payments:
                 was_shop_coll = p.collected_by_shop
                 p.delete()
+                if was_shop_coll:
+                    recalculate_shop_financials(customer.shop)
                 if was_shop_coll:
                     recalculate_shop_financials(customer.shop)
 
@@ -1111,6 +1191,11 @@ def admin_customer_change_application_status_view(request, pk):
     if old_status != new_status:
         app.status = new_status
         app.save(update_fields=["status", "updated_at"])
+
+        if new_status == FinanceApplication.Status.APPROVED:
+            app.generate_default_schedule_if_missing()
+            from payments.services import auto_adjust_shop_available_collections_for_new_loan
+            auto_adjust_shop_available_collections_for_new_loan(app, user=request.user)
 
         old_display = dict(FinanceApplication.Status.choices).get(old_status, old_status)
         new_display = dict(FinanceApplication.Status.choices).get(new_status, new_status)
@@ -1859,6 +1944,109 @@ def admin_customer_edit_due_date_view(request, pk):
 
 @require_POST
 @login_required
+def admin_move_to_next_due_view(request, pk):
+    """
+    Moves the current unpaid EMI due date to the next scheduled due date (1 monthly cycle forward),
+    maintaining strict chronological order across subsequent installments, without modifying amounts,
+    payment history, or creating duplicate records.
+    Accessible to both admins and authorized follow-up employees.
+    """
+    user = request.user
+    customer = get_object_or_404(Customer, pk=pk)
+    if not (user.is_admin_role or user.is_superuser):
+        from followups.models import FollowUpAssignment
+        is_assigned = FollowUpAssignment.objects.filter(employee=user, shop=customer.shop, is_active=True).exists()
+        if not is_assigned:
+            return HttpResponseForbidden("Access Denied: You are not authorized to update records for this customer.")
+
+    next_url = request.POST.get("next") or request.META.get("HTTP_REFERER") or reverse("admin_customer_detail", kwargs={"pk": customer.pk})
+
+    app = customer.applications.first()
+    if not app:
+        messages.error(request, "No finance application found for this customer.")
+        return redirect(next_url)
+
+    app.generate_default_schedule_if_missing()
+
+    sched_id = request.POST.get("schedule_id")
+    if sched_id:
+        schedule = get_object_or_404(CustomerEMISchedule, pk=sched_id, application=app)
+    else:
+        schedule = app.next_unpaid_schedule
+
+    if not schedule:
+        messages.info(request, "All installments for this customer are already settled.")
+        return redirect(next_url)
+
+    # Prevent accidental multiple updates from rapid duplicate clicks (within 2 seconds)
+    now = timezone.now()
+    if schedule.updated_at and (now - schedule.updated_at).total_seconds() < 2:
+        messages.warning(request, "A due date update was just processed. Please wait a moment.")
+        return redirect(next_url)
+
+    with transaction.atomic():
+        from datetime import date as dt_date
+        import calendar
+        old_due = schedule.due_date
+        target_day = app.monthly_due_day or old_due.day
+
+        # Calculate next scheduled date (monthly frequency)
+        y = old_due.year
+        m = old_due.month + 1
+        if m > 12:
+            m = 1
+            y += 1
+        last_day = calendar.monthrange(y, m)[1]
+        new_due = dt_date(y, m, min(target_day, last_day))
+
+        schedule.due_date = new_due
+        schedule.save(update_fields=["due_date", "updated_at"])
+
+        # Maintain chronological order of subsequent unpaid schedules
+        subsequent = (
+            app.emi_schedules
+            .filter(installment_number__gt=schedule.installment_number, is_paid=False)
+            .order_by("installment_number")
+        )
+        prev_due = new_due
+        for sub in subsequent:
+            if sub.due_date <= prev_due:
+                sy = prev_due.year
+                sm = prev_due.month + 1
+                if sm > 12:
+                    sm = 1
+                    sy += 1
+                slast = calendar.monthrange(sy, sm)[1]
+                sub_next = dt_date(sy, sm, min(target_day, slast))
+                sub.due_date = sub_next
+                sub.save(update_fields=["due_date", "updated_at"])
+                prev_due = sub_next
+            else:
+                prev_due = sub.due_date
+
+        log_msg = f"Installment #{schedule.installment_number} due date moved from {old_due.strftime('%d-%m-%Y')} to {new_due.strftime('%d-%m-%Y')}."
+        customer.latest_update_status = log_msg
+        customer.latest_update_at = now
+        customer.latest_update_by = user
+        customer.save(update_fields=["latest_update_status", "latest_update_at", "latest_update_by", "updated_at"])
+
+        CustomerUpdateHistory.objects.create(
+            customer=customer,
+            user=user,
+            section="EMI Installments",
+            field_name="Move to Next Due",
+            previous_value=old_due.strftime("%d-%m-%Y"),
+            new_value=new_due.strftime("%d-%m-%Y"),
+            description=log_msg,
+            notes=log_msg
+        )
+
+    messages.success(request, f"Installment #{schedule.installment_number} due date moved to {new_due.strftime('%d-%m-%Y')}.")
+    return redirect(next_url)
+
+
+@require_POST
+@login_required
 @admin_required
 def admin_customer_record_payment_view(request, pk):
     """
@@ -1884,6 +2072,15 @@ def admin_customer_record_payment_view(request, pk):
     app = customer.applications.first()
     if not app:
         messages.error(request, "Customer does not have an active finance application.")
+        return redirect(next_url)
+
+    rem_balance = app.customer_remaining_balance
+    if rem_balance <= Decimal("0.00"):
+        messages.info(request, f"Customer '{customer.name}' has already fully settled all EMI payments.")
+        return redirect(next_url)
+
+    if amt > rem_balance:
+        messages.error(request, f"Payment amount (₹{amt:,.2f}) cannot exceed customer's outstanding balance of ₹{rem_balance:,.2f}.")
         return redirect(next_url)
 
     payment = app.record_customer_payment(
@@ -2634,18 +2831,15 @@ def get_analytics_dataset(year_val, month_val, shop_id_val):
         shop_name = "All Partner Shops"
         shop_id = "all"
 
-    # Synchronize all installment collections so financial reports always reflect actual collections
-    sync_all_customer_installment_payments()
-
-    # Base QuerySets
+    # Base QuerySets - Only include applications and customers with approved/funded status
     approved_statuses = [
         FinanceApplication.Status.APPROVED,
         FinanceApplication.Status.PAID,
         FinanceApplication.Status.PARTIALLY_PAID,
     ]
-    cust_qs = Customer.objects.all()
-    payout_qs = FinancierPayment.objects.all()
-    coll_qs = CustomerEMIPayment.objects.all()
+    cust_qs = Customer.objects.filter(applications__status__in=approved_statuses).distinct()
+    payout_qs = FinancierPayment.objects.filter(Q(application__status__in=approved_statuses) | Q(application__isnull=True))
+    coll_qs = CustomerEMIPayment.objects.filter(application__status__in=approved_statuses)
     app_qs = FinanceApplication.objects.filter(status__in=approved_statuses)
 
     # Shop filtering
@@ -2878,7 +3072,7 @@ def admin_reports_view(request):
     all_shops_qs = Shop.objects.all()
     shop_rankings = []
     for s in all_shops_qs:
-        s_cust = Customer.objects.filter(shop=s, created_at__year=sel_year, created_at__month=sel_month).count()
+        s_cust = Customer.objects.filter(shop=s, applications__status__in=approved_statuses, created_at__year=sel_year, created_at__month=sel_month).distinct().count()
         s_sales = FinanceApplication.objects.filter(
             shop=s,
             status__in=approved_statuses,
@@ -2889,11 +3083,13 @@ def admin_reports_view(request):
         )["tot"] or Decimal("0.00")
         s_payout = FinancierPayment.objects.filter(
             Q(shop=s) | Q(application__shop=s),
+            Q(application__status__in=approved_statuses) | Q(application__isnull=True),
             payment_date__year=sel_year,
             payment_date__month=sel_month
         ).aggregate(tot=Sum("amount_received"))["tot"] or Decimal("0.00")
         s_coll = CustomerEMIPayment.objects.filter(
             customer__shop=s,
+            application__status__in=approved_statuses,
             payment_date__year=sel_year,
             payment_date__month=sel_month
         ).aggregate(tot=Sum("amount"))["tot"] or Decimal("0.00")
@@ -2934,11 +3130,19 @@ def admin_reports_view(request):
             m_calc += 12
             y_calc -= 1
 
-        t_cust = Customer.objects.filter(created_at__year=y_calc, created_at__month=m_calc).count()
-        t_payout = FinancierPayment.objects.filter(payment_date__year=y_calc, payment_date__month=m_calc).aggregate(
+        t_cust = Customer.objects.filter(applications__status__in=approved_statuses, created_at__year=y_calc, created_at__month=m_calc).distinct().count()
+        t_payout = FinancierPayment.objects.filter(
+            Q(application__status__in=approved_statuses) | Q(application__isnull=True),
+            payment_date__year=y_calc,
+            payment_date__month=m_calc
+        ).aggregate(
             tot=Sum("amount_received")
         )["tot"] or Decimal("0.00")
-        t_coll = CustomerEMIPayment.objects.filter(payment_date__year=y_calc, payment_date__month=m_calc).aggregate(
+        t_coll = CustomerEMIPayment.objects.filter(
+            application__status__in=approved_statuses,
+            payment_date__year=y_calc,
+            payment_date__month=m_calc
+        ).aggregate(
             tot=Sum("amount")
         )["tot"] or Decimal("0.00")
         t_profit = t_coll - t_payout
@@ -2951,9 +3155,15 @@ def admin_reports_view(request):
 
     # Month-by-month Financial & Profit matrix for Year A
     monthly_matrix = []
-    base_cust = Customer.objects.filter(created_at__year=sel_year)
-    base_payout = FinancierPayment.objects.filter(payment_date__year=sel_year)
-    base_coll = CustomerEMIPayment.objects.filter(payment_date__year=sel_year)
+    base_cust = Customer.objects.filter(applications__status__in=approved_statuses, created_at__year=sel_year).distinct()
+    base_payout = FinancierPayment.objects.filter(
+        Q(application__status__in=approved_statuses) | Q(application__isnull=True),
+        payment_date__year=sel_year
+    )
+    base_coll = CustomerEMIPayment.objects.filter(
+        application__status__in=approved_statuses,
+        payment_date__year=sel_year
+    )
     base_app = FinanceApplication.objects.filter(
         created_at__year=sel_year,
         status__in=approved_statuses,
