@@ -405,6 +405,7 @@ class ShopFinancialTransaction(models.Model):
         SHOP_RECEIPT = "SHOP_RECEIPT", "Amount Received from Shop"
         PARTIAL_RECEIPT = "PARTIAL_RECEIPT", "Partial Receipt"
         LOAN_SETTLEMENT = "LOAN_SETTLEMENT", "Loan Settlement"
+        NEW_LOAN_ADJUSTMENT = "NEW_LOAN_ADJUSTMENT", "New Loan Adjustment"
 
     class TransactionStatus(models.TextChoices):
         PENDING = "PENDING", "Pending"

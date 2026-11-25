@@ -143,8 +143,7 @@
                     <div
                         class="metric-value {% if outstanding_excess %}text-success{% else %}text-warning-emphasis{% endif %} fs-3">
                         {% if outstanding_excess %}+{% endif %}₹{{ outstanding_amount|floatformat:2 }}</div>
-                    <small class="text-muted">{% if outstanding_excess %}Excess collected above financier due{% else
-                        %}Pending disbursement{% endif %}</small>
+                    <small class="text-muted">{% if outstanding_excess %}Excess collected above financier due{% else %}Pending disbursement{% endif %}</small>
                 </div>
                 <div class="metric-icon-box bg-warning-subtle text-warning-emphasis">
                     <i class="bi bi-hourglass-split"></i>

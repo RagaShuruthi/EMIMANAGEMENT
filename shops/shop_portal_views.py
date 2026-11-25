@@ -24,6 +24,7 @@ from shops.models import Shop
 from customers.models import Customer, CustomerUpdateHistory
 from applications.models import FinanceApplication, CustomerDocument, ApplicationHistory
 from payments.models import FinancierPayment, CustomerEMISchedule, CustomerEMIPayment
+from payments.services import get_shop_financials, calculate_application_remaining_loan
 
 
 def get_authenticated_shop(request):
@@ -186,29 +187,28 @@ def shop_dashboard_view(request):
         shop=shop, status=FinanceApplication.Status.REJECTED
     ).count()
 
-    # 6. Total Amount Requested from Financier (Only for Approved Applications)
-    amount_requested_agg = FinanceApplication.objects.filter(
-        shop=shop, status__in=approved_statuses
+    # 6. Authoritative Financials via get_shop_financials
+    fin = get_shop_financials(shop)
+    total_amount_requested = FinanceApplication.objects.filter(
+        shop=shop
+    ).exclude(
+        status=FinanceApplication.Status.REJECTED
     ).aggregate(
         total=Sum("financier_request_amount")
     )["total"] or Decimal("0.00")
+    total_amount_received = fin["amount_disbursed"]
 
-    # 7. Total Amount Received from Financier (Direct Shop Payout or Application Payout)
-    amount_received_agg = FinancierPayment.objects.filter(
-        Q(shop=shop) | Q(application__shop=shop)
-    ).aggregate(total=Sum("amount_received"))["total"] or Decimal("0.00")
-
-    # 7b. EMI Collected Directly by Shop (added to amount received and deducted from outstanding)
-    shop_collected_emi = CustomerEMIPayment.objects.filter(
-        customer__shop=shop, collected_by_shop=True
-    ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
-
-    total_amount_received = amount_received_agg + shop_collected_emi
-
-    # 8. Outstanding Amount Yet to Be Received (or +Excess if customer EMI collected exceeds payable)
-    raw_outstanding = amount_requested_agg - amount_received_agg - shop_collected_emi
-    outstanding_excess = raw_outstanding < Decimal("0.00")
-    outstanding_amount = abs(raw_outstanding) if outstanding_excess else raw_outstanding
+    # 8. Outstanding Amount (or excess if collections/disbursements exceed requested, or shop holds unadjusted funds)
+    raw_outstanding = total_amount_requested - total_amount_received
+    if raw_outstanding < Decimal("0.00"):
+        outstanding_amount = abs(raw_outstanding)
+        outstanding_excess = True
+    elif fin["shop_collectible_balance"] > Decimal("0.00"):
+        outstanding_amount = fin["shop_collectible_balance"]
+        outstanding_excess = True
+    else:
+        outstanding_amount = max(Decimal("0.00"), raw_outstanding)
+        outstanding_excess = False
 
     # Recent Applications
     recent_applications = (
@@ -232,7 +232,7 @@ def shop_dashboard_view(request):
         "pending_applications": under_review_applications,
         "approved_applications": approved_applications,
         "rejected_applications": rejected_applications,
-        "total_amount_requested": amount_requested_agg,
+        "total_amount_requested": total_amount_requested,
         "total_amount_received": total_amount_received,
         "outstanding_amount": outstanding_amount,
         "outstanding_excess": outstanding_excess,
@@ -767,26 +767,20 @@ def financier_payments_view(request):
     if current_group:
         daily_groups.append(current_group)
 
-    # Global shop aggregates (Strictly only Approved applications)
-    approved_statuses = [
-        FinanceApplication.Status.APPROVED,
-        FinanceApplication.Status.PAID,
-        FinanceApplication.Status.PARTIALLY_PAID,
-    ]
-    total_requested_gross = FinanceApplication.objects.filter(
-        shop=shop, status__in=approved_statuses
-    ).aggregate(
-        total=Sum("financier_request_amount")
-    )["total"] or Decimal("0.00")
-    total_received_payouts = payments_qs.aggregate(total=Sum("amount_received"))["total"] or Decimal("0.00")
-    shop_collected_emi = CustomerEMIPayment.objects.filter(
-        customer__shop=shop, collected_by_shop=True
-    ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
-    total_requested = total_requested_gross
-    total_received = total_received_payouts + shop_collected_emi
-    raw_outstanding = total_requested_gross - total_received_payouts - shop_collected_emi
-    outstanding_excess = raw_outstanding < Decimal("0.00")
-    outstanding = abs(raw_outstanding) if outstanding_excess else raw_outstanding
+    # Global shop aggregates via authoritative get_shop_financials
+    fin = get_shop_financials(shop)
+    total_requested = fin["total_payable"]
+    total_received = fin["amount_disbursed"]
+    raw_outstanding = total_requested - total_received
+    if raw_outstanding < Decimal("0.00"):
+        outstanding = abs(raw_outstanding)
+        outstanding_excess = True
+    elif fin["shop_collectible_balance"] > Decimal("0.00"):
+        outstanding = fin["shop_collectible_balance"]
+        outstanding_excess = True
+    else:
+        outstanding = max(Decimal("0.00"), raw_outstanding)
+        outstanding_excess = False
 
     today_received = payments_qs.filter(payment_date=today).aggregate(
         total=Sum("amount_received")
@@ -1054,6 +1048,12 @@ def shop_reports_view(request):
     # ---------------------------------------------------------
     # 5. Status counts breakdown & Financial Sums (Preserved)
     # ---------------------------------------------------------
+    # Re-evaluate remaining loans to ensure settled ones are marked PAID
+    for app in FinanceApplication.objects.filter(shop=shop, status__in=[FinanceApplication.Status.APPROVED, FinanceApplication.Status.PARTIALLY_PAID]):
+        if calculate_application_remaining_loan(app) <= Decimal("0.00"):
+            app.status = FinanceApplication.Status.PAID
+            app.save(update_fields=["status", "updated_at"])
+
     statuses = [
         ("SUBMITTED", "Submitted Applications", FinanceApplication.Status.SUBMITTED, "primary"),
         ("APPROVED", "Approved Applications", FinanceApplication.Status.APPROVED, "success"),
@@ -1075,14 +1075,11 @@ def shop_reports_view(request):
             "badge_color": badge_color,
         })
 
-    # Financial sums
-    total_req = FinanceApplication.objects.filter(shop=shop).exclude(
-        status=FinanceApplication.Status.REJECTED
-    ).aggregate(total=Sum("financier_request_amount"))["total"] or Decimal("0.00")
-    total_rec = FinancierPayment.objects.filter(
-        Q(shop=shop) | Q(application__shop=shop)
-    ).aggregate(total=Sum("amount_received"))["total"] or Decimal("0.00")
-    outstanding = max(Decimal("0.00"), total_req - total_rec)
+    # Financial sums via authoritative calculation
+    fin = get_shop_financials(shop)
+    total_req = fin["total_payable"]
+    total_rec = fin["amount_disbursed"]
+    outstanding = fin["remaining_due"]
 
     context = {
         "shop": shop,

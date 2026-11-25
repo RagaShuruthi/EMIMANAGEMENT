@@ -23,13 +23,21 @@ def calculate_application_remaining_loan(app, exclude_record_id=None):
     Authoritative Remaining Loan for a specific application:
     Remaining Loan = Original Loan (financier_request_amount)
                      - Admin Payments for this app
+                     - General Admin payouts allocated to this app
                      - Shop Collection Adjustments for this app
+                     - New Loan Adjustments from previously available collected balances
     """
     original_loan = app.financier_request_amount or Decimal("0.00")
 
     admin_paid_agg = FinancierPayment.objects.filter(
         application=app
     ).aggregate(total=Sum("amount_received"))["total"] or Decimal("0.00")
+
+    general_admin_paid_agg = ShopFinancialTransaction.objects.filter(
+        application=app,
+        transaction_type=ShopFinancialTransaction.TransactionType.ADMIN_PAYMENT,
+        financier_payment__application__isnull=True
+    ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
 
     adj_filter = Q(application=app)
     if exclude_record_id:
@@ -39,7 +47,16 @@ def calculate_application_remaining_loan(app, exclude_record_id=None):
         adj_filter
     ).aggregate(total=Sum("adjusted_to_loan"))["total"] or Decimal("0.00")
 
-    return max(Decimal("0.00"), original_loan - admin_paid_agg - shop_adj_agg)
+    allocated_adj_agg = ShopFinancialTransaction.objects.filter(
+        application=app,
+        transaction_type__in=[
+            ShopFinancialTransaction.TransactionType.LOAN_ADJUSTMENT,
+            ShopFinancialTransaction.TransactionType.NEW_LOAN_ADJUSTMENT,
+        ]
+    ).exclude(collection_record__application=app).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+
+    total_disbursed_to_app = admin_paid_agg + general_admin_paid_agg + shop_adj_agg + allocated_adj_agg
+    return max(Decimal("0.00"), original_loan - total_disbursed_to_app)
 
 
 def get_shop_total_pending_loan_amount(shop, exclude_record_id=None):
@@ -71,11 +88,165 @@ def get_shop_total_pending_loan_amount(shop, exclude_record_id=None):
     return max(Decimal("0.00"), total_payable - actual_admin_paid - shop_adj_agg)
 
 
+def get_shop_available_collected_balance(shop):
+    """
+    Authoritative Available Collected Balance for a shop:
+    Unadjusted Shop Collections - Amount Already Received - Amount Already Used for Loan Adjustments.
+    """
+    records = ShopCollectionRecord.objects.filter(
+        shop=shop,
+        collectible_amount__gt=Decimal("0.00")
+    ).exclude(status=ShopCollectionRecord.CollectionStatus.RECEIVED)
+    total_avail = Decimal("0.00")
+    for r in records:
+        rec_avail = max(Decimal("0.00"), r.collectible_amount - (r.amount_received_by_admin or Decimal("0.00")))
+        total_avail += rec_avail
+    return total_avail
+
+
+@transaction.atomic
+def auto_adjust_shop_available_collections_for_new_loan(application, user=None):
+    """
+    Issue 5: Automatic Adjustment of Collected Amount When a New Loan is Processed.
+    When a new loan is processed/approved for a shop, automatically checks the shop's
+    available collected balance and deducts it from the new loan settlement.
+    - If available > new loan amount: consumes only what is required and carries forward the remaining balance.
+    - If available <= new loan amount: consumes all available, leaving net amount payable.
+    - Updates ShopCollectionRecord(s) and creates NEW_LOAN_ADJUSTMENT transaction.
+    - If loan reaches 0, marks as PAID (Settled) and creates LOAN_SETTLEMENT transaction.
+    - Never uses an amount already received, adjusted, or consumed in another transaction.
+    """
+    shop = application.shop
+    approved_statuses = [
+        FinanceApplication.Status.APPROVED,
+        FinanceApplication.Status.PARTIALLY_PAID,
+    ]
+    if application.status not in approved_statuses:
+        return Decimal("0.00")
+
+    loan_due = calculate_application_remaining_loan(application)
+    if loan_due <= Decimal("0.00"):
+        if application.status != FinanceApplication.Status.PAID:
+            application.status = FinanceApplication.Status.PAID
+            application.save(update_fields=["status", "updated_at"])
+        return Decimal("0.00")
+
+    candidate_records = (
+        ShopCollectionRecord.objects.filter(
+            shop=shop,
+            collectible_amount__gt=Decimal("0.00"),
+        )
+        .exclude(status=ShopCollectionRecord.CollectionStatus.RECEIVED)
+        .order_by("collection_date", "created_at")
+    )
+
+    rem_loan = loan_due
+    total_adjusted = Decimal("0.00")
+    today_date = timezone.localdate()
+
+    for rec in candidate_records:
+        if rem_loan <= Decimal("0.00"):
+            break
+
+        rec_avail = max(Decimal("0.00"), rec.collectible_amount - (rec.amount_received_by_admin or Decimal("0.00")))
+        if rec_avail <= Decimal("0.00"):
+            continue
+
+        chunk = min(rem_loan, rec_avail)
+        prev_loan = rem_loan
+        rem_loan -= chunk
+        total_adjusted += chunk
+
+        rec.adjusted_to_loan = (rec.adjusted_to_loan or Decimal("0.00")) + chunk
+        rec.collectible_amount = max(Decimal("0.00"), rec.collectible_amount - chunk)
+
+        if rec.remaining_collectible <= Decimal("0.00"):
+            if rec.amount_received_by_admin and rec.amount_received_by_admin > Decimal("0.00"):
+                rec.status = ShopCollectionRecord.CollectionStatus.RECEIVED
+            else:
+                rec.status = ShopCollectionRecord.CollectionStatus.ADJUSTED
+        else:
+            if rec.amount_received_by_admin and rec.amount_received_by_admin > Decimal("0.00"):
+                rec.status = ShopCollectionRecord.CollectionStatus.PARTIAL
+            else:
+                rec.status = ShopCollectionRecord.CollectionStatus.PENDING
+
+        rec.save()
+
+        # Create NEW_LOAN_ADJUSTMENT transaction
+        ShopFinancialTransaction.objects.create(
+            shop=shop,
+            customer=application.customer,
+            application=application,
+            transaction_type=ShopFinancialTransaction.TransactionType.NEW_LOAN_ADJUSTMENT,
+            amount=chunk,
+            transaction_date=today_date,
+            emi_month=today_date.strftime("%B %Y"),
+            followup_person=rec.followup_person,
+            recorded_by=user or (rec.payment.recorded_by if rec.payment else None),
+            previous_balance=prev_loan,
+            updated_balance=rem_loan,
+            remarks=f"₹{chunk:,.2f} previously available collected balance adjusted against new loan #{application.application_number}.",
+            status=ShopFinancialTransaction.TransactionStatus.ADJUSTED,
+            collection_record=rec,
+        )
+
+    # Check settlement status of application
+    final_rem = calculate_application_remaining_loan(application)
+    if final_rem <= Decimal("0.00"):
+        application.status = FinanceApplication.Status.PAID
+        application.save(update_fields=["status", "updated_at"])
+
+        ShopFinancialTransaction.objects.create(
+            shop=shop,
+            customer=application.customer,
+            application=application,
+            transaction_type=ShopFinancialTransaction.TransactionType.LOAN_SETTLEMENT,
+            amount=application.financier_request_amount,
+            transaction_date=today_date,
+            emi_month=today_date.strftime("%B %Y"),
+            followup_person=rec.followup_person if 'rec' in locals() else None,
+            recorded_by=user,
+            previous_balance=loan_due,
+            updated_balance=Decimal("0.00"),
+            remarks=f"Loan #{application.application_number} fully settled through shop collection and new loan adjustment.",
+            status=ShopFinancialTransaction.TransactionStatus.SETTLED,
+        )
+    elif total_adjusted > Decimal("0.00"):
+        application.status = FinanceApplication.Status.PARTIALLY_PAID
+        application.save(update_fields=["status", "updated_at"])
+
+    return total_adjusted
+
+
+@transaction.atomic
+def auto_adjust_shop_available_collections_for_shop(shop, user=None):
+    """
+    Checks if a shop has available unadjusted collections AND pending loans,
+    and automatically adjusts them in chronological order.
+    """
+    pending_apps = (
+        FinanceApplication.objects.filter(
+            shop=shop,
+            status__in=[
+                FinanceApplication.Status.APPROVED,
+                FinanceApplication.Status.PARTIALLY_PAID,
+            ]
+        )
+        .order_by("created_at")
+    )
+    for app in pending_apps:
+        auto_adjust_shop_available_collections_for_new_loan(app, user=user)
+
+
 def get_shop_pending_loan_applications(shop):
     """
     Returns active applications that have remaining loan balances
     waiting to be settled (either by admin payout or shop collection adjustment).
     """
+    # Reconcile any available collections against pending loans first
+    auto_adjust_shop_available_collections_for_shop(shop)
+
     approved_statuses = [
         FinanceApplication.Status.APPROVED,
         FinanceApplication.Status.PARTIALLY_PAID,
@@ -505,17 +676,47 @@ def get_shop_financials(shop, start_date=None, end_date=None):
         "shop_collectible_balance": shop_collectible_balance,
         "total_received_from_shop": total_received_from_shop,
         "remaining_due": remaining_due,
+        "settled_apps_count": FinanceApplication.objects.filter(shop=shop, status=FinanceApplication.Status.PAID).count(),
         "payment_status": payment_status,
         "payment_status_display": payment_status_display,
         "badge_class": badge_class,
     }
 
 
+def sync_all_customer_installment_payments():
+    """
+    Issue 2: Synchronizes any CustomerEMISchedule records where amount_paid > 0
+    to have a matching CustomerEMIPayment record so Financial Reports
+    accurately reflect all actual collections.
+    """
+    from payments.models import CustomerEMISchedule
+    schedules = (
+        CustomerEMISchedule.objects.filter(amount_paid__gt=Decimal("0.00"))
+        .select_related("customer", "application")
+    )
+    for sched in schedules:
+        if not sched.payments.exists():
+            pay_date = sched.paid_date or sched.due_date or timezone.localdate()
+            CustomerEMIPayment.objects.create(
+                application=sched.application,
+                customer=sched.customer,
+                schedule=sched,
+                amount=sched.amount_paid,
+                payment_date=pay_date,
+                payment_mode=CustomerEMIPayment.PaymentMode.CASH,
+                remarks=f"EMI Installment #{sched.installment_number} collection."
+            )
+
+
 def sync_all_existing_shop_collections():
     """
     Synchronizes any existing CustomerEMIPayment records that have collected_by_shop=True
-    but lack a ShopCollectionRecord.
+    but lack a ShopCollectionRecord, and reconciles pending loans with available balances.
     """
+    # 1. Sync schedule payments to ensure CustomerEMIPayment records exist for financial reports
+    sync_all_customer_installment_payments()
+
+    # 2. Sync shop collections
     unprocessed = CustomerEMIPayment.objects.filter(
         collected_by_shop=True,
         shop_collection_record__isnull=True
@@ -523,3 +724,8 @@ def sync_all_existing_shop_collections():
 
     for pay in unprocessed:
         process_shop_collection(pay)
+
+    # 3. For all shops with pending loans and available collections, auto-adjust
+    from shops.models import Shop
+    for shop in Shop.objects.all():
+        auto_adjust_shop_available_collections_for_shop(shop)

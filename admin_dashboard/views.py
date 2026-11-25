@@ -39,6 +39,8 @@ from payments.services import (
     record_admin_shop_receipt,
     recalculate_shop_financials,
     sync_all_existing_shop_collections,
+    auto_adjust_shop_available_collections_for_new_loan,
+    sync_all_customer_installment_payments,
 )
 from .reports_export import export_customers_to_excel, export_customers_to_pdf
 
@@ -845,6 +847,43 @@ def admin_update_installment_view(request, pk):
 
         schedule.save()
 
+        # Issue 2: Synchronize CustomerEMIPayment record for Financial Reports & Ledger
+        pay_date = schedule.paid_date or schedule.due_date or timezone.localdate()
+        existing_payments = list(schedule.payments.all().order_by("created_at"))
+
+        if new_amount_paid > Decimal("0.00"):
+            if existing_payments:
+                first_pay = existing_payments[0]
+                first_pay.amount = new_amount_paid
+                first_pay.payment_date = pay_date
+                first_pay.customer = customer
+                first_pay.application = app
+                first_pay.save(update_fields=["amount", "payment_date", "customer", "application"])
+                for extra_pay in existing_payments[1:]:
+                    extra_pay.delete()
+                synced_pay = first_pay
+            else:
+                synced_pay = CustomerEMIPayment.objects.create(
+                    application=app,
+                    customer=customer,
+                    schedule=schedule,
+                    amount=new_amount_paid,
+                    payment_date=pay_date,
+                    payment_mode=CustomerEMIPayment.PaymentMode.CASH,
+                    recorded_by=request.user,
+                    remarks=f"EMI Installment #{schedule.installment_number} collection recorded by admin."
+                )
+
+            if synced_pay.collected_by_shop:
+                process_shop_collection(synced_pay, user=request.user, force=True)
+        else:
+            # Reversal: amount paid cleared to 0
+            for p in existing_payments:
+                was_shop_coll = p.collected_by_shop
+                p.delete()
+                if was_shop_coll:
+                    recalculate_shop_financials(customer.shop)
+
         # Handle Partial Payment Carry-Forward to Next Month if requested
         carried_forward_amount = Decimal("0.00")
         carried_to_inst_num = None
@@ -1301,6 +1340,7 @@ def admin_approve_all_pending_applications_view(request):
             app.remarks = (app.remarks + " [Bulk Approved]" if app.remarks else "Bulk Approved by Administrator").strip()
             app.save()
             app.generate_default_schedule_if_missing()
+            auto_adjust_shop_available_collections_for_new_loan(app, user=request.user)
             ApplicationHistory.objects.create(
                 application=app,
                 previous_status=old_status,
@@ -1342,6 +1382,7 @@ def admin_application_approval_view(request, pk):
         application.status = FinanceApplication.Status.APPROVED
         application.generate_default_schedule_if_missing()
         action_str = "approved"
+        auto_adjust_shop_available_collections_for_new_loan(application, user=request.user)
     elif decision in ("REJECTED", "DECLINED"):
         application.status = FinanceApplication.Status.REJECTED
         action_str = "declined"
@@ -2592,6 +2633,9 @@ def get_analytics_dataset(year_val, month_val, shop_id_val):
     else:
         shop_name = "All Partner Shops"
         shop_id = "all"
+
+    # Synchronize all installment collections so financial reports always reflect actual collections
+    sync_all_customer_installment_payments()
 
     # Base QuerySets
     approved_statuses = [

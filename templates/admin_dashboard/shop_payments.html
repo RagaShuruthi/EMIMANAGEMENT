@@ -49,12 +49,10 @@
                 <h3 class="fw-bold text-success mb-1">₹{{ total_system_disbursed|floatformat:2 }}</h3>
                 <div class="small text-muted d-flex flex-wrap gap-1 align-items-center" style="font-size: 0.74rem;">
                     <span title="Actual money paid by admin to shops"><i
-                            class="bi bi-cash-stack text-success me-0.5"></i>Cash: ₹{{
-                        total_system_actual_paid|floatformat:2 }}</span>
+                            class="bi bi-cash-stack text-success me-0.5"></i>Cash: ₹{{ total_system_actual_paid|floatformat:2 }}</span>
                     <span>•</span>
                     <span title="Amount collected by shops and adjusted against pending loans"><i
-                            class="bi bi-arrow-repeat text-primary me-0.5"></i>Shop Adj: ₹{{
-                        total_system_shop_adjusted|floatformat:2 }}</span>
+                            class="bi bi-arrow-repeat text-primary me-0.5"></i>Shop Adj: ₹{{ total_system_shop_adjusted|floatformat:2 }}</span>
                 </div>
             </div>
         </div>
@@ -238,19 +236,16 @@
                     <td class="text-end fw-semibold text-success">
                         <div>₹{{ row.financials.amount_disbursed|floatformat:2 }}</div>
                         <div class="small text-muted d-flex flex-column align-items-end" style="font-size: 0.72rem;">
-                            <span class="text-success"><i class="bi bi-cash me-0.5"></i>Cash: ₹{{
-                                row.financials.actual_admin_paid|floatformat:2 }}</span>
+                            <span class="text-success"><i class="bi bi-cash me-0.5"></i>Cash: ₹{{ row.financials.actual_admin_paid|floatformat:2 }}</span>
                             {% if row.financials.shop_collection_adjusted > 0 %}
-                            <span class="text-primary"><i class="bi bi-arrow-repeat me-0.5"></i>Shop Adj: ₹{{
-                                row.financials.shop_collection_adjusted|floatformat:2 }}</span>
+                            <span class="text-primary"><i class="bi bi-arrow-repeat me-0.5"></i>Shop Adj: ₹{{ row.financials.shop_collection_adjusted|floatformat:2 }}</span>
                             {% endif %}
                         </div>
                         {% if row.financials.shop_collectible_balance > 0 %}
                         <div class="mt-1">
                             <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle"
                                 style="font-size: 0.68rem;" title="Unadjusted shop collection available for recovery">
-                                <i class="bi bi-box-arrow-in-down-left me-0.5"></i>Recoverable: ₹{{
-                                row.financials.shop_collectible_balance|floatformat:2 }}
+                                <i class="bi bi-box-arrow-in-down-left me-0.5"></i>Recoverable: ₹{{ row.financials.shop_collectible_balance|floatformat:2 }}
                             </span>
                         </div>
                         {% endif %}
@@ -333,8 +328,7 @@
                 <select name="shop_id" class="form-select" onchange="this.form.submit()">
                     <option value="">All Shops</option>
                     {% for s in all_shops %}
-                    <option value="{{ s.id }}" {% if shop_filter == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name
-                        }}</option>
+                    <option value="{{ s.id }}" {% if shop_filter == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -487,8 +481,7 @@
                 <select name="shop_id" class="form-select" onchange="this.form.submit()">
                     <option value="">All Shops</option>
                     {% for s in all_shops %}
-                    <option value="{{ s.id }}" {% if shop_filter == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name
-                        }}</option>
+                    <option value="{{ s.id }}" {% if shop_filter == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -602,8 +595,7 @@
                         {% elif tx.transaction_type == 'LOAN_SETTLEMENT' %}
                         <span class="badge bg-success text-white">Loan Settled</span>
                         {% else %}
-                        <span class="badge bg-secondary-subtle text-secondary">{{ tx.get_transaction_type_display
-                            }}</span>
+                        <span class="badge bg-secondary-subtle text-secondary">{{ tx.get_transaction_type_display }}</span>
                         {% endif %}
                     </td>
                     <td
@@ -624,8 +616,7 @@
                         <span class="fw-semibold text-dark">₹{{ tx.updated_balance|floatformat:0 }}</span>
                     </td>
                     <td>
-                        <span class="small text-muted text-break" style="max-width: 220px; display: inline-block;">{{
-                            tx.remarks|default:"—" }}</span>
+                        <span class="small text-muted text-break" style="max-width: 220px; display: inline-block;">{{ tx.remarks|default:"—" }}</span>
                     </td>
                     <td class="text-center">
                         <span class="badge bg-light text-dark border">{{ tx.get_status_display }}</span>
@@ -684,16 +675,14 @@
                     <div class="col-6 col-md">
                         <div class="p-3 bg-light rounded-3 border border-primary-subtle h-100">
                             <div class="text-primary small text-uppercase fw-semibold">Shop Adj against Loan</div>
-                            <div class="fs-5 fw-bold text-primary">₹{{
-                                row.financials.shop_collection_adjusted|floatformat:2 }}</div>
+                            <div class="fs-5 fw-bold text-primary">₹{{ row.financials.shop_collection_adjusted|floatformat:2 }}</div>
                         </div>
                     </div>
                     <div class="col-6 col-md">
                         <div class="p-3 bg-light rounded-3 border border-warning-subtle h-100">
                             <div class="text-warning-emphasis small text-uppercase fw-semibold">Recoverable from Shop
                             </div>
-                            <div class="fs-5 fw-bold text-warning-emphasis">₹{{
-                                row.financials.shop_collectible_balance|floatformat:2 }}</div>
+                            <div class="fs-5 fw-bold text-warning-emphasis">₹{{ row.financials.shop_collectible_balance|floatformat:2 }}</div>
                         </div>
                     </div>
                     <div class="col-12 col-md">
@@ -749,10 +738,8 @@
                                 <td>
                                     {% if tx.application %}
                                     <div>
-                                        <span class="badge bg-light text-secondary border font-monospace">{{
-                                            tx.application.application_number }}</span>
-                                        <span class="fw-semibold text-dark">{{
-                                            tx.customer_name|default:tx.application.customer.name }}</span>
+                                        <span class="badge bg-light text-secondary border font-monospace">{{ tx.application.application_number }}</span>
+                                        <span class="fw-semibold text-dark">{{ tx.customer_name|default:tx.application.customer.name }}</span>
                                     </div>
                                     <small class="text-muted">{{ tx.application.mobile_model }}</small>
                                     {% elif tx.customer_name %}
@@ -799,8 +786,7 @@
 
                 <div class="modal-body p-4">
                     <div class="alert alert-light border mb-3 small">
-                        <strong>Remaining Due:</strong> <span class="fw-bold text-danger">₹{{
-                            row.financials.remaining_due|floatformat:2 }}</span><br>
+                        <strong>Remaining Due:</strong> <span class="fw-bold text-danger">₹{{ row.financials.remaining_due|floatformat:2 }}</span><br>
                         <strong>Total Payable:</strong> ₹{{ row.financials.total_payable|floatformat:2 }} &bull;
                         <strong>Disbursed So Far:</strong> ₹{{ row.financials.amount_disbursed|floatformat:2 }}
                     </div>
@@ -858,8 +844,7 @@
         <div class="modal-content border-0 shadow">
             <div class="modal-header bg-primary-subtle border-bottom">
                 <h5 class="modal-title fw-bold text-primary">
-                    <i class="bi bi-file-earmark-text me-2"></i>Pending Loans — {{ row.shop.name }} ({{
-                    row.pending_apps_count }})
+                    <i class="bi bi-file-earmark-text me-2"></i>Pending Loans — {{ row.shop.name }} ({{ row.pending_apps_count }})
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -883,14 +868,11 @@
                                 <td class="font-monospace fw-bold text-primary">{{ app.application_number }}</td>
                                 <td>
                                     <div class="fw-semibold text-dark">{{ app.customer.name }}</div>
-                                    <div class="text-muted" style="font-size: 0.72rem;">{{ app.customer.primary_mobile
-                                        }}</div>
+                                    <div class="text-muted" style="font-size: 0.72rem;">{{ app.customer.primary_mobile }}</div>
                                 </td>
                                 <td>{{ app.mobile_model }}</td>
-                                <td class="text-end font-monospace text-dark">₹{{
-                                    app.financier_request_amount|floatformat:2 }}</td>
-                                <td class="text-end font-monospace fw-bold text-danger">₹{{
-                                    app.calculated_remaining_loan|floatformat:2 }}</td>
+                                <td class="text-end font-monospace text-dark">₹{{ app.financier_request_amount|floatformat:2 }}</td>
+                                <td class="text-end font-monospace fw-bold text-danger">₹{{ app.calculated_remaining_loan|floatformat:2 }}</td>
                                 <td class="text-center">
                                     <span class="badge bg-light text-dark border">{{ app.get_status_display }}</span>
                                 </td>
@@ -941,8 +923,7 @@
                         </div>
                         <div class="d-flex justify-content-between mb-1">
                             <span class="text-muted">Customer:</span>
-                            <span class="fw-semibold text-dark">{{ rec.customer.name }} ({{ rec.customer.primary_mobile
-                                }})</span>
+                            <span class="fw-semibold text-dark">{{ rec.customer.name }} ({{ rec.customer.primary_mobile }})</span>
                         </div>
                         <div class="d-flex justify-content-between mb-1">
                             <span class="text-muted">Collection Date:</span>
@@ -959,8 +940,7 @@
                         </div>
                         <div class="d-flex justify-content-between mb-1">
                             <span class="text-muted">Amount Recoverable from Shop:</span>
-                            <span class="fw-bold text-warning-emphasis">₹{{ rec.collectible_amount|floatformat:2
-                                }}</span>
+                            <span class="fw-bold text-warning-emphasis">₹{{ rec.collectible_amount|floatformat:2 }}</span>
                         </div>
                         <div class="d-flex justify-content-between mb-1">
                             <span class="text-muted">Already Acknowledged Received:</span>

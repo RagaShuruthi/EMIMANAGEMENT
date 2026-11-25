@@ -98,8 +98,7 @@
                     </td>
                     <td>
                         <div class="fw-semibold text-dark">{{ app.customer.name }}</div>
-                        <small class="text-muted"><i class="bi bi-telephone me-1"></i>{{ app.customer.primary_mobile
-                            }}</small>
+                        <small class="text-muted"><i class="bi bi-telephone me-1"></i>{{ app.customer.primary_mobile }}</small>
                     </td>
                     <td>{{ app.mobile_model }}</td>
                     <td>₹{{ app.mobile_price|floatformat:2 }}</td>
@@ -107,8 +106,7 @@
                     <td class="fw-bold text-dark">₹{{ app.financier_request_amount|floatformat:2 }}</td>
                     <td>₹{{ app.monthly_emi|floatformat:2 }} <small class="text-muted">×{{ app.emi_duration }}m</small>
                     </td>
-                    <td><span class="badge bg-light text-primary border font-monospace">{{ app.monthly_due_day
-                            }}th</span></td>
+                    <td><span class="badge bg-light text-primary border font-monospace">{{ app.monthly_due_day }}th</span></td>
                     <td>
                         {% if app.status == 'APPROVED' or app.status == 'PAID' or app.status == 'PARTIALLY_PAID' %}
                         <span class="badge bg-success-subtle text-success px-2 py-1"><i
@@ -145,8 +143,7 @@
     <!-- Pagination -->
     {% if applications.has_other_pages %}
     <div class="card-footer bg-white border-top py-3 d-flex justify-content-between align-items-center">
-        <small class="text-muted">Showing page {{ applications.number }} of {{ applications.paginator.num_pages
-            }}</small>
+        <small class="text-muted">Showing page {{ applications.number }} of {{ applications.paginator.num_pages }}</small>
         <nav aria-label="Page navigation">
             <ul class="pagination pagination-sm mb-0">
                 {% if applications.has_previous %}

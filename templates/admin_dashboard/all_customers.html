@@ -397,8 +397,7 @@
                         <input type="hidden" name="next" value="{{ request.get_full_path }}">
                         <div class="modal-header">
                             <h5 class="modal-title fw-bold" id="allUpdateStatusModalLabel{{ row.customer_id }}">
-                                <i class="bi bi-chat-left-dots me-2 text-primary"></i>Update Status: {{
-                                row.customer_name }}
+                                <i class="bi bi-chat-left-dots me-2 text-primary"></i>Update Status: {{ row.customer_name }}
                             </h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
@@ -451,8 +450,7 @@
                         </div>
                         <div class="modal-body">
                             <div class="alert alert-light border small mb-3">
-                                <strong>Customer:</strong> {{ row.customer_name }} &bull; <strong>Model:</strong> {{
-                                row.mobile_model }}<br>
+                                <strong>Customer:</strong> {{ row.customer_name }} &bull; <strong>Model:</strong> {{ row.mobile_model }}<br>
                                 <strong>Monthly EMI:</strong> ₹{{ row.monthly_emi|floatformat:2 }} &bull;
                                 <strong>Remaining:</strong> ₹{{ row.remaining_balance|floatformat:2 }}
                             </div>
@@ -612,8 +610,7 @@
             <li class="page-item active"><span class="page-link">{{ p }}</span></li>
             {% elif p > customers.number|add:"-3" and p < customers.number|add:"3" %} <li class="page-item">
                 <a class="page-link"
-                    href="?page={{ p }}&q={{ search_query }}&shop_id={{ shop_filter }}&sort={{ sort_param }}{% if filter_due_today %}&due_today=1{% endif %}{% if filter_upcoming_due %}&upcoming_due=1{% endif %}{% if filter_pending_due %}&pending_due=1{% endif %}">{{
-                    p }}</a>
+                    href="?page={{ p }}&q={{ search_query }}&shop_id={{ shop_filter }}&sort={{ sort_param }}{% if filter_due_today %}&due_today=1{% endif %}{% if filter_upcoming_due %}&upcoming_due=1{% endif %}{% if filter_pending_due %}&pending_due=1{% endif %}">{{ p }}</a>
                 </li>
                 {% endif %}
                 {% endfor %}
