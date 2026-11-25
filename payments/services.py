@@ -634,19 +634,26 @@ def get_shop_financials(shop, start_date=None, end_date=None):
 
     records = list(ShopCollectionRecord.objects.filter(rec_filter))
 
+    # Total Collected by Shops (Actual customer collections received through shops)
     total_shop_collected = sum((r.amount_collected for r in records), Decimal("0.00"))
-    shop_collection_adjusted = sum((r.adjusted_to_loan for r in records), Decimal("0.00"))
-    total_collectible_amount = sum((r.collectible_amount for r in records), Decimal("0.00"))
     total_received_from_shop = sum((r.amount_received_by_admin for r in records), Decimal("0.00"))
 
-    # Remaining collectible from shop (Collected from Shops balance)
-    shop_collectible_balance = max(Decimal("0.00"), total_collectible_amount - total_received_from_shop)
+    # Net financier settlement obligation before shop collections:
+    max_financier_settlement = max(Decimal("0.00"), total_payable - actual_admin_paid)
+
+    # Core Mathematical Formulas (Section B & C):
+    # Financier Adjustment = min(Total Shop Collection, Financier Amount)
+    # Remaining Financier Amount = max(0, Financier Amount - Total Shop Collection)
+    # Excess Collection = max(0, Total Shop Collection - Financier Amount)
+    shop_collection_adjusted = min(total_shop_collected, max_financier_settlement)
+    remaining_due = max(Decimal("0.00"), max_financier_settlement - total_shop_collected)
+    excess_collection = max(Decimal("0.00"), total_shop_collected - max_financier_settlement)
+
+    # Remaining collectible from shop (Unadjusted recovery balance not yet received by admin)
+    shop_collectible_balance = max(Decimal("0.00"), excess_collection - total_received_from_shop)
 
     # Amount Disbursed = Actual cash paid by admin + Shop collections adjusted against pending loans
     amount_disbursed = actual_admin_paid + shop_collection_adjusted
-
-    # Remaining liability / due to shop from financier
-    remaining_due = max(Decimal("0.00"), total_payable - amount_disbursed)
 
     if total_payable == Decimal("0.00"):
         payment_status = "NO_OBLIGATIONS"
@@ -672,6 +679,8 @@ def get_shop_financials(shop, start_date=None, end_date=None):
         "shop_collected_emi": total_shop_collected,
         "total_shop_collected": total_shop_collected,
         "shop_collection_adjusted": shop_collection_adjusted,
+        "financier_adjustment": shop_collection_adjusted,
+        "excess_collection": excess_collection,
         "amount_disbursed": amount_disbursed,
         "shop_collectible_balance": shop_collectible_balance,
         "total_received_from_shop": total_received_from_shop,

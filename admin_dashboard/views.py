@@ -397,24 +397,17 @@ def admin_dashboard_view(request):
         total=Sum("amount_received")
     )["total"] or Decimal("0.00")
 
-    total_shop_adjusted = ShopCollectionRecord.objects.filter(
-        Q(application__status__in=approved_statuses) | Q(application__isnull=True)
-    ).aggregate(
-        total=Sum("adjusted_to_loan")
-    )["total"] or Decimal("0.00")
-
-    # Amount Disbursed = Actual amount paid by admin + Shop collections adjusted against pending loans
-    total_disbursed = total_actual_paid + total_shop_adjusted
-
-    total_remaining_due = max(Decimal("0.00"), total_payable_agg - total_disbursed)
-
-    # Collected from Shops (available for recovery / not yet acknowledged as received by financier)
-    total_collected_from_shops = ShopCollectionRecord.objects.exclude(
-        status=ShopCollectionRecord.CollectionStatus.RECEIVED
-    ).aggregate(
-        total=Sum(F("collectible_amount") - F("amount_received_by_admin"))
-    )["total"] or Decimal("0.00")
-    total_collected_from_shops = max(Decimal("0.00"), total_collected_from_shops)
+    # Synchronized Shop Financial Metrics across all partner shops
+    total_shop_adjusted = Decimal("0.00")
+    total_collected_from_shops = Decimal("0.00")
+    total_disbursed = Decimal("0.00")
+    total_remaining_due = Decimal("0.00")
+    for s in Shop.objects.all():
+        s_fin = get_shop_financials(s)
+        total_shop_adjusted += s_fin["shop_collection_adjusted"]
+        total_collected_from_shops += s_fin["shop_collectible_balance"]
+        total_disbursed += s_fin["amount_disbursed"]
+        total_remaining_due += s_fin["remaining_due"]
 
     # Follow-up Staff Metrics
     followup_base = User.objects.filter(role__in=[User.Role.FOLLOWUP, User.Role.EMPLOYEE])
@@ -2409,7 +2402,7 @@ def admin_shop_payments_view(request):
                 "payment_reference": tx.payment_reference,
                 "payment_screenshot": getattr(tx, "payment_screenshot", None),
                 "application": tx.application,
-                "customer_name": tx.application.customer.name if tx.application else None,
+                "customer_name": None,
                 "remarks": tx.remarks or "Admin payout to shop",
                 "is_direct_customer_pay": False,
                 "created_at": tx.created_at,
@@ -2434,8 +2427,8 @@ def admin_shop_payments_view(request):
                 "payment_reference": emi_tx.transaction_reference or f"Direct EMI ({emi_tx.get_payment_mode_display()})",
                 "payment_screenshot": None,
                 "application": emi_tx.application,
-                "customer_name": emi_tx.customer.name if emi_tx.customer else None,
-                "remarks": emi_tx.remarks or f"Directly collected by shop from customer ({emi_tx.get_payment_mode_display()}) — deducted from financier settlement",
+                "customer_name": None,
+                "remarks": emi_tx.remarks or f"Directly collected by shop ({emi_tx.get_payment_mode_display()}) — deducted from financier settlement",
                 "is_direct_customer_pay": True,
                 "created_at": emi_tx.created_at,
             })
@@ -2491,7 +2484,6 @@ def admin_shop_payments_view(request):
     if search_query and active_tab == "transactions":
         tx_ledger_qs = tx_ledger_qs.filter(
             Q(shop__name__icontains=search_query) |
-            Q(customer__name__icontains=search_query) |
             Q(transaction_id__icontains=search_query) |
             Q(remarks__icontains=search_query)
         )

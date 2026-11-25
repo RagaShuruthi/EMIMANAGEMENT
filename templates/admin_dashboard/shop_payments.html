@@ -473,7 +473,7 @@
                 <div class="input-group">
                     <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-search"></i></span>
                     <input type="text" name="q" class="form-control border-start-0"
-                        placeholder="Search remarks, customer, ID..." value="{{ search_query }}">
+                        placeholder="Search by Txn ID, shop, or remarks..." value="{{ search_query }}">
                 </div>
             </div>
 
@@ -544,17 +544,14 @@
             <thead class="table-light text-uppercase small text-muted" style="letter-spacing: 0.03em;">
                 <tr>
                     <th>Txn ID</th>
-                    <th>Date</th>
                     <th>Shop Name</th>
-                    <th>Customer Name</th>
                     <th>Transaction Type</th>
-                    <th class="text-end">Amount</th>
-                    <th>EMI Month</th>
-                    <th>Follow-up Staff</th>
-                    <th>Recorded By</th>
-                    <th class="text-end">Balance Impact</th>
+                    <th class="text-end">Transaction Amount</th>
+                    <th class="text-end">Previous Amount</th>
+                    <th class="text-end">Updated Amount</th>
+                    <th>Transaction Date</th>
+                    <th class="text-center">Transaction Status</th>
                     <th>Remarks</th>
-                    <th class="text-center">Status</th>
                 </tr>
             </thead>
             <tbody>
@@ -563,63 +560,45 @@
                     <td>
                         <code class="text-primary fw-bold">{{ tx.transaction_id }}</code>
                     </td>
-                    <td class="text-nowrap text-dark">
-                        {{ tx.transaction_date|date:"d M Y" }}
-                    </td>
                     <td>
                         <span class="fw-semibold text-dark">{{ tx.shop.name }}</span>
                     </td>
                     <td>
-                        {% if tx.customer %}
-                        <span class="text-dark">{{ tx.customer.name }}</span>
-                        {% else %}
-                        <span class="text-muted">—</span>
-                        {% endif %}
-                    </td>
-                    <td>
                         {% if tx.transaction_type == 'ADMIN_PAYMENT' %}
-                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Admin
-                            Payment</span>
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Admin Payment</span>
                         {% elif tx.transaction_type == 'SHOP_COLLECTION' %}
-                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Shop
-                            Collection</span>
+                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Shop Collection</span>
                         {% elif tx.transaction_type == 'LOAN_ADJUSTMENT' %}
-                        <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">Loan
-                            Adjustment</span>
+                        <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">Loan Adjustment</span>
+                        {% elif tx.transaction_type == 'FINANCIER_SETTLEMENT_ADJUSTMENT' %}
+                        <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">Financier Settlement</span>
                         {% elif tx.transaction_type == 'SHOP_RECEIPT' %}
-                        <span class="badge bg-success-subtle text-success border border-success-subtle">Received from
-                            Shop</span>
+                        <span class="badge bg-success-subtle text-success border border-success-subtle">Received from Shop</span>
                         {% elif tx.transaction_type == 'PARTIAL_RECEIPT' %}
-                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Partial
-                            Receipt</span>
+                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Partial Receipt</span>
                         {% elif tx.transaction_type == 'LOAN_SETTLEMENT' %}
                         <span class="badge bg-success text-white">Loan Settled</span>
                         {% else %}
                         <span class="badge bg-secondary-subtle text-secondary">{{ tx.get_transaction_type_display }}</span>
                         {% endif %}
                     </td>
-                    <td
-                        class="text-end fw-bold {% if tx.transaction_type == 'ADMIN_PAYMENT' or tx.transaction_type == 'SHOP_RECEIPT' %}text-success{% else %}text-dark{% endif %}">
+                    <td class="text-end fw-bold {% if tx.transaction_type == 'ADMIN_PAYMENT' or tx.transaction_type == 'SHOP_RECEIPT' %}text-success{% else %}text-dark{% endif %}">
                         ₹{{ tx.amount|floatformat:2 }}
                     </td>
-                    <td>
-                        {{ tx.emi_month|default:"—" }}
+                    <td class="text-end text-muted font-monospace">
+                        ₹{{ tx.previous_balance|floatformat:2 }}
                     </td>
-                    <td>
-                        {{ tx.followup_person.username|default:"—" }}
+                    <td class="text-end font-monospace fw-semibold text-dark">
+                        ₹{{ tx.updated_balance|floatformat:2 }}
                     </td>
-                    <td>
-                        <span class="small text-muted">{{ tx.recorded_by.username|default:"System" }}</span>
-                    </td>
-                    <td class="text-end text-nowrap">
-                        <small class="text-muted">₹{{ tx.previous_balance|floatformat:0 }} → </small>
-                        <span class="fw-semibold text-dark">₹{{ tx.updated_balance|floatformat:0 }}</span>
-                    </td>
-                    <td>
-                        <span class="small text-muted text-break" style="max-width: 220px; display: inline-block;">{{ tx.remarks|default:"—" }}</span>
+                    <td class="text-nowrap text-dark">
+                        {{ tx.transaction_date|date:"d M Y" }}
                     </td>
                     <td class="text-center">
                         <span class="badge bg-light text-dark border">{{ tx.get_status_display }}</span>
+                    </td>
+                    <td>
+                        <span class="small text-muted text-break" style="max-width: 250px; display: inline-block;">{{ tx.remarks|default:"—" }}</span>
                     </td>
                 </tr>
                 {% endfor %}
@@ -640,7 +619,8 @@
 <!-- MODALS -->
 <!-- ========================================================================= -->
 
-<!-- Modals: Shop Payout Details / History per Shop -->
+<!-- Modals: Shop Payout Details / History per Shop (Balances Tab Only) -->
+{% if active_tab == 'balances' %}
 {% for row in payment_rows %}
 <div class="modal fade" id="shopHistoryModal{{ row.shop.id }}" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
@@ -708,7 +688,7 @@
                                 <th>Type</th>
                                 <th class="text-end">Amount</th>
                                 <th>Reference / UTR</th>
-                                <th>Customer / Application</th>
+                                <th>Application / Reference</th>
                                 <th>Remarks / Audit</th>
                             </tr>
                         </thead>
@@ -739,11 +719,8 @@
                                     {% if tx.application %}
                                     <div>
                                         <span class="badge bg-light text-secondary border font-monospace">{{ tx.application.application_number }}</span>
-                                        <span class="fw-semibold text-dark">{{ tx.customer_name|default:tx.application.customer.name }}</span>
                                     </div>
                                     <small class="text-muted">{{ tx.application.mobile_model }}</small>
-                                    {% elif tx.customer_name %}
-                                    <div class="fw-semibold text-dark">{{ tx.customer_name }}</div>
                                     {% else %}
                                     <span class="badge bg-light text-muted border">Direct Shop Settlement</span>
                                     {% endif %}
@@ -896,8 +873,10 @@
 </div>
 {% endif %}
 {% endfor %}
+{% endif %}
 
-<!-- Modals: "Received from Shop?" Action Modals per Collectible Record -->
+<!-- Modals: "Received from Shop?" Action Modals per Collectible Record (Collected Tab Only) -->
+{% if active_tab == 'collected_from_shops' %}
 {% for rec in all_collectible_records %}
 <div class="modal fade" id="receiveCollectionModal{{ rec.id }}" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -1011,5 +990,6 @@
     </div>
 </div>
 {% endfor %}
+{% endif %}
 
 {% endblock %}

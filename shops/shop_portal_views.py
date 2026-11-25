@@ -1212,13 +1212,28 @@ def shop_emi_collection_view(request):
                     notes=status_msg
                 )
 
-                # Notify corresponding Follow-up person assigned to this shop
+                # Notify corresponding Follow-up person assigned to this shop and sync follow-up queues
                 from followups.models import FollowUpAssignment, FollowUpActivity
                 assigned_emp_id = (
                     FollowUpAssignment.objects.filter(shop=shop, is_active=True)
                     .values_list("employee_id", flat=True)
                     .first()
                 )
+
+                # Check if current/overdue installment is now settled
+                rem_unpaid_due_count = app.emi_schedules.filter(is_paid=False, due_date__lte=today).count()
+                if rem_unpaid_due_count == 0:
+                    # Fully settled for this period: mark open pending follow-ups as completed so customer drops from pending queues
+                    FollowUpActivity.objects.filter(
+                        customer=customer,
+                        status=FollowUpActivity.Status.PENDING,
+                    ).update(
+                        status=FollowUpActivity.Status.COMPLETED,
+                        outcome=FollowUpActivity.Outcome.PAID,
+                        notes=f"Auto-completed: Paid ₹{amt:,.2f} ({payment_mode}) directly at shop {shop.name}.",
+                    )
+
+                # Log payment activity entry in Follow-up activity timeline
                 FollowUpActivity.objects.create(
                     employee_id=assigned_emp_id or request.user.id,
                     customer=customer,
