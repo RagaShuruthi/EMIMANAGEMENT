@@ -73,6 +73,15 @@ class FollowUpActivity(models.Model):
         PAID = "PAID", "Paid"
         NOT_PAID = "NOT_PAID", "Not Paid"
         NEED_TWO_DAYS = "NEED_TWO_DAYS", "Need two days time"
+        PAID_REPORTED = "PAID_REPORTED", "Payment Reported / Awaiting Admin Verification"
+        PROMISED = "PROMISED", "Promised to Pay Later"
+        NOT_POSSIBLE = "NOT_POSSIBLE", "Payment Not Possible"
+
+    class ReasonNotPossible(models.TextChoices):
+        FINANCIAL_DIFFICULTY = "FINANCIAL_DIFFICULTY", "Financial Difficulty"
+        REFUSED_TO_PAY = "REFUSED_TO_PAY", "Refused to Pay"
+        UNABLE_TO_CONTACT = "UNABLE_TO_CONTACT", "Unable to Contact"
+        OTHER = "OTHER", "Other"
 
     employee = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -99,14 +108,14 @@ class FollowUpActivity(models.Model):
         help_text="Channel or type of follow-up interaction."
     )
     outcome = models.CharField(
-        max_length=20,
+        max_length=30,
         choices=Outcome.choices,
         default=Outcome.NOT_PAID,
-        help_text="Update status logged by follow-up person (Paid, Not Paid, Need two days time)."
+        help_text="Update status logged by follow-up person."
     )
     is_flagged = models.BooleanField(
         default=False,
-        help_text="Flagged when customer needs two days time and requires follow-up callback."
+        help_text="Flagged when customer needs callback or admin review."
     )
     status = models.CharField(
         max_length=20,
@@ -119,10 +128,100 @@ class FollowUpActivity(models.Model):
         default="",
         help_text="Detailed notes on the conversation, agreement, or status."
     )
+    reason_not_possible = models.CharField(
+        max_length=50,
+        choices=ReasonNotPossible.choices,
+        blank=True,
+        default="",
+        help_text="Mandatory reason when payment is not possible."
+    )
+    reason_other_notes = models.TextField(
+        blank=True,
+        default="",
+        help_text="Mandatory additional notes when reason is Other."
+    )
+    payment_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Payment amount reported by employee."
+    )
+    payment_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date of payment reported."
+    )
+    payment_mode = models.CharField(
+        max_length=50,
+        blank=True,
+        default="UPI",
+        help_text="Payment mode reported."
+    )
+    payment_reference = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        help_text="Payment transaction reference or UTR."
+    )
+    payment_verified = models.BooleanField(
+        default=False,
+        help_text="True if admin verified and confirmed this reported payment."
+    )
+    payment_rejected = models.BooleanField(
+        default=False,
+        help_text="True if admin rejected the payment report."
+    )
+    verified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="verified_followup_activities",
+        help_text="Admin user who verified this payment."
+    )
+    verified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when payment was verified by admin."
+    )
+    original_due_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Original scheduled EMI due date prior to follow-up."
+    )
+    previous_callback_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Previous scheduled callback date if applicable."
+    )
+    previous_status = models.CharField(
+        max_length=80,
+        blank=True,
+        default="",
+        help_text="Customer follow-up status before this action."
+    )
+    new_status = models.CharField(
+        max_length=80,
+        blank=True,
+        default="",
+        help_text="Customer follow-up status resulting from this action."
+    )
+    admin_action = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+        help_text="Decision taken by admin on this record."
+    )
+    admin_notes = models.TextField(
+        blank=True,
+        default="",
+        help_text="Notes recorded by admin during review or decision."
+    )
     next_followup_date = models.DateField(
         null=True,
         blank=True,
-        help_text="Scheduled date for the next follow-up action."
+        help_text="Scheduled date for the next follow-up action / callback."
     )
     completed_at = models.DateTimeField(
         null=True,
@@ -147,13 +246,23 @@ class FollowUpActivity(models.Model):
             self.status = self.Status.PENDING
             if not self.next_followup_date:
                 self.next_followup_date = timezone.localdate() + timedelta(days=2)
+        elif self.outcome == self.Outcome.PROMISED:
+            self.is_flagged = True
+            self.status = self.Status.PENDING
+            if not self.next_followup_date:
+                self.next_followup_date = timezone.localdate() + timedelta(days=2)
+        elif self.outcome == self.Outcome.NOT_POSSIBLE:
+            self.is_flagged = True
+            self.status = self.Status.PENDING
+        elif self.outcome == self.Outcome.PAID_REPORTED:
+            self.is_flagged = False
+            self.status = self.Status.PENDING
         elif self.outcome == self.Outcome.PAID:
             self.is_flagged = False
             self.status = self.Status.COMPLETED
             if not self.completed_at:
                 self.completed_at = timezone.now()
         elif self.status == self.Status.COMPLETED:
-            # Respect completed status if explicitly marked completed
             self.is_flagged = False
         elif self.outcome == self.Outcome.NOT_PAID:
             self.is_flagged = False
@@ -163,3 +272,61 @@ class FollowUpActivity(models.Model):
 
     def __str__(self):
         return f"{self.get_outcome_display()} - {self.customer.name} by {self.employee.username}"
+
+
+class FollowUpNotification(models.Model):
+    """
+    In-app alert for administrators regarding follow-up actions:
+    - Employee reported a payment (awaiting verification)
+    - Employee scheduled a promised payment / callback
+    - Customer marked Payment Not Possible (highlighted red)
+    - Customer needs decision for Loss / Review
+    - Admin action or payment verification resolves an alert
+    """
+    class NotificationType(models.TextChoices):
+        PAYMENT_REPORTED = "PAYMENT_REPORTED", "Payment Reported"
+        PAYMENT_NOT_POSSIBLE = "PAYMENT_NOT_POSSIBLE", "Payment Not Possible"
+        PROMISED_PAYMENT = "PROMISED_PAYMENT", "Promised Payment Scheduled"
+        LOSS_REVIEW_NEEDED = "LOSS_REVIEW_NEEDED", "Loss Review Needed"
+        ADMIN_RESOLVED = "ADMIN_RESOLVED", "Action Completed / Resolved"
+
+    customer = models.ForeignKey(
+        "customers.Customer",
+        on_delete=models.CASCADE,
+        related_name="followup_notifications"
+    )
+    employee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sent_followup_notifications"
+    )
+    activity = models.ForeignKey(
+        FollowUpActivity,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="notifications"
+    )
+    notification_type = models.CharField(
+        max_length=40,
+        choices=NotificationType.choices,
+        default=NotificationType.PAYMENT_REPORTED
+    )
+    title = models.CharField(max_length=200)
+    message = models.TextField()
+    is_read = models.BooleanField(default=False, db_index=True)
+    is_resolved = models.BooleanField(default=False, db_index=True)
+    is_highlighted_red = models.BooleanField(default=False)
+    action_url = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Follow-up Notification"
+        verbose_name_plural = "Follow-up Notifications"
+
+    def __str__(self):
+        return f"[{self.get_notification_type_display()}] {self.customer.name} - {self.title}"

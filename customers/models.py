@@ -67,6 +67,11 @@ class Customer(models.Model):
         default="",
         help_text="Reason or notes when customer was moved to Loss."
     )
+    failed_payment_reason = models.TextField(
+        blank=True,
+        default="",
+        help_text="Preserved previous failed payment reason when customer is reopened."
+    )
     completed_date = models.DateField(
         null=True,
         blank=True,
