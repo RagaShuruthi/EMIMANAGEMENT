@@ -258,7 +258,44 @@ class CustomerEMIPayment(models.Model):
         db_index=True,
         help_text="True if this EMI installment was directly collected by the retail shop (deducted from financier payable)."
     )
+    is_reversed = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="True if this payment has been reversed/cancelled."
+    )
+    reversed_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        help_text="Amount of this payment that was reversed."
+    )
+    reversed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when payment was reversed."
+    )
+    reversal_reason = models.TextField(
+        blank=True,
+        default="",
+        help_text="Reason for payment reversal."
+    )
+    reversal_of = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reversals",
+        help_text="Link to original payment if this record is a reversal entry."
+    )
     created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def net_amount(self):
+        """Actual unreversed collected amount for this payment transaction."""
+        if self.is_reversed:
+            return Decimal("0.00")
+        rev = self.reversed_amount or Decimal("0.00")
+        return max(Decimal("0.00"), self.amount - rev)
 
     class Meta:
         ordering = ["-payment_date", "-created_at"]

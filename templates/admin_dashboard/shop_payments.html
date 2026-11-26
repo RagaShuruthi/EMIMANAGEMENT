@@ -48,11 +48,9 @@
                 </span>
                 <h3 class="fw-bold text-success mb-1">₹{{ total_system_disbursed|floatformat:2 }}</h3>
                 <div class="small text-muted d-flex flex-wrap gap-1 align-items-center" style="font-size: 0.74rem;">
-                    <span title="Actual money paid by admin to shops"><i
-                            class="bi bi-cash-stack text-success me-0.5"></i>Cash: ₹{{ total_system_actual_paid|floatformat:2 }}</span>
+                    <span title="Actual money paid by admin to shops"><i class="bi bi-cash-stack text-success me-0.5"></i>Cash: ₹{{ total_system_actual_paid|floatformat:2 }}</span>
                     <span>•</span>
-                    <span title="Amount collected by shops and adjusted against pending loans"><i
-                            class="bi bi-arrow-repeat text-primary me-0.5"></i>Shop Adj: ₹{{ total_system_shop_adjusted|floatformat:2 }}</span>
+                    <span title="Amount collected by shops and adjusted against pending loans"><i class="bi bi-arrow-repeat text-primary me-0.5"></i>Shop Adj: ₹{{ total_system_shop_adjusted|floatformat:2 }}</span>
                 </div>
             </div>
         </div>

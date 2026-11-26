@@ -445,10 +445,10 @@ class FinanceApplication(models.Model):
         if self.emi_schedules.exists():
             sched_paid = self.emi_schedules.aggregate(total=models.Sum("amount_paid"))["total"] or Decimal("0.00")
             if not self.emi_schedules.filter(is_paid=False).exists():
-                actual_paid = self.customer_emi_payments.aggregate(total=models.Sum("amount"))["total"] or Decimal("0.00")
+                actual_paid = self.customer_emi_payments.filter(is_reversed=False, reversal_of__isnull=True).aggregate(total=models.Sum("amount"))["total"] or Decimal("0.00")
                 return max(actual_paid, sched_paid)
             return sched_paid
-        return self.customer_emi_payments.aggregate(total=models.Sum("amount"))["total"] or Decimal("0.00")
+        return self.customer_emi_payments.filter(is_reversed=False, reversal_of__isnull=True).aggregate(total=models.Sum("amount"))["total"] or Decimal("0.00")
 
     @property
     def customer_remaining_balance(self):

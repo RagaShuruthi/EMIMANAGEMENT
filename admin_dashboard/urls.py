@@ -23,6 +23,7 @@ urlpatterns = [
     path("customers/<int:pk>/move-to-next-due/", views.admin_move_to_next_due_view, name="admin_move_to_next_due"),
     path("customers/<int:pk>/record-payment/", views.admin_customer_record_payment_view, name="admin_customer_record_payment"),
     path("customer-payments/<int:pk>/edit/", views.admin_edit_customer_payment_view, name="admin_edit_customer_payment"),
+    path("customer-payments/<int:pk>/reverse/", views.admin_reverse_customer_payment_view, name="admin_reverse_customer_payment"),
     path("customers/<int:pk>/move-to-loss/", views.admin_customer_move_to_loss_view, name="admin_customer_move_to_loss"),
     path("customers/<int:pk>/restore-from-loss/", views.admin_customer_restore_from_loss_view, name="admin_customer_restore_from_loss"),
     path("customers/<int:pk>/edit-financials/", views.admin_customer_edit_financials_view, name="admin_customer_edit_financials"),

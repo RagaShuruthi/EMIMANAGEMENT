@@ -171,11 +171,17 @@ def prepare_customer_management_dataset(customers_qs, request, today=None, exclu
             due_status = app.due_classification(today=today)
             price = app.mobile_price or Decimal("0.00")
             down = app.down_payment or Decimal("0.00")
-            monthly_emi = app.monthly_emi or Decimal("0.00")
+            is_completed = bool(app.emi_schedules.exists() and (rem <= Decimal("0.00") or due_status == "PAID" or not next_sched))
+
+            # Requirement E: Display outstanding amount for relevant EMI, not original amount when partial payment exists
+            if is_completed or rem <= Decimal("0.00") or not next_sched:
+                monthly_emi = Decimal("0.00")
+            else:
+                monthly_emi = next_sched.remaining_amount
+
             mobile_model = app.mobile_model
             app_id = app.id
             next_sched_id = next_sched.id if next_sched else None
-            is_completed = bool(app.emi_schedules.exists() and (rem <= Decimal("0.00") or due_status == "PAID" or not next_sched))
         else:
             app_id = None
             next_sched_id = None
@@ -904,15 +910,38 @@ def admin_update_installment_view(request, pk):
 
         # Issue 2 & 3: Synchronize CustomerEMIPayment record for Financial Reports & Ledger without duplicate transactions
         pay_date = schedule.paid_date or schedule.due_date or timezone.localdate()
-        existing_payments = list(schedule.payments.all().order_by("created_at"))
-        existing_paid = sum((p.amount for p in existing_payments), Decimal("0.00"))
+        existing_payments = list(schedule.payments.filter(is_reversed=False, reversal_of__isnull=True).order_by("created_at"))
+        existing_paid = sum((p.net_amount for p in existing_payments), Decimal("0.00"))
 
         if new_amount_paid > Decimal("0.00"):
             if len(existing_payments) == 1:
                 synced_pay = existing_payments[0]
-                synced_pay.amount = new_amount_paid
-                synced_pay.payment_date = pay_date
-                synced_pay.save(update_fields=["amount", "payment_date"])
+                if new_amount_paid < synced_pay.amount:
+                    diff = synced_pay.amount - new_amount_paid
+                    synced_pay.is_reversed = True
+                    synced_pay.reversed_amount = (synced_pay.reversed_amount or Decimal("0.00")) + diff
+                    synced_pay.reversed_at = timezone.now()
+                    synced_pay.reversal_reason = "Admin updated installment amount paid."
+                    synced_pay.save(update_fields=["is_reversed", "reversed_amount", "reversed_at", "reversal_reason"])
+                    import uuid
+                    CustomerEMIPayment.objects.create(
+                        application=app,
+                        customer=customer,
+                        schedule=schedule,
+                        amount=diff,
+                        payment_date=timezone.localdate(),
+                        payment_mode=synced_pay.payment_mode,
+                        transaction_reference=f"REV-{synced_pay.id}-{uuid.uuid4().hex[:6].upper()}",
+                        recorded_by=request.user,
+                        is_reversed=True,
+                        reversal_of=synced_pay,
+                        reversal_reason="Admin updated installment amount paid.",
+                        remarks=f"Partial reversal of Payment #{synced_pay.id} (₹{diff:,.2f}) due to installment update."
+                    )
+                else:
+                    synced_pay.amount = new_amount_paid
+                    synced_pay.payment_date = pay_date
+                    synced_pay.save(update_fields=["amount", "payment_date"])
             else:
                 delta = new_amount_paid - existing_paid
                 if delta > Decimal("0.00"):
@@ -930,17 +959,35 @@ def admin_update_installment_view(request, pk):
                     )
                 elif delta < Decimal("0.00"):
                     to_reduce = abs(delta)
+                    import uuid
                     for p in reversed(existing_payments):
                         if to_reduce <= Decimal("0.00"):
                             break
-                        if p.amount <= to_reduce:
-                            to_reduce -= p.amount
-                            p.delete()
-                        else:
-                            p.amount -= to_reduce
-                            p.save(update_fields=["amount"])
-                            to_reduce = Decimal("0.00")
-                    synced_pay = schedule.payments.first()
+                        avail = p.net_amount
+                        if avail <= Decimal("0.00"):
+                            continue
+                        rev_amt = min(avail, to_reduce)
+                        p.is_reversed = True
+                        p.reversed_amount = (p.reversed_amount or Decimal("0.00")) + rev_amt
+                        p.reversed_at = timezone.now()
+                        p.reversal_reason = "Admin reduced installment amount paid."
+                        p.save(update_fields=["is_reversed", "reversed_amount", "reversed_at", "reversal_reason"])
+                        CustomerEMIPayment.objects.create(
+                            application=app,
+                            customer=customer,
+                            schedule=schedule,
+                            amount=rev_amt,
+                            payment_date=timezone.localdate(),
+                            payment_mode=p.payment_mode,
+                            transaction_reference=f"REV-{p.id}-{uuid.uuid4().hex[:6].upper()}",
+                            recorded_by=request.user,
+                            is_reversed=True,
+                            reversal_of=p,
+                            reversal_reason="Admin reduced installment amount paid.",
+                            remarks=f"Reversal of Payment #{p.id} (₹{rev_amt:,.2f}) due to installment update."
+                        )
+                        to_reduce -= rev_amt
+                    synced_pay = schedule.payments.filter(is_reversed=False, reversal_of__isnull=True).first()
                 else:
                     # delta == 0: Amount paid did not change; zero new transactions created!
                     synced_pay = existing_payments[0] if existing_payments else None
@@ -948,14 +995,94 @@ def admin_update_installment_view(request, pk):
             if synced_pay and synced_pay.collected_by_shop:
                 process_shop_collection(synced_pay, user=request.user, force=True)
         else:
-            # Reversal: amount paid cleared to 0
+            # Reversal: amount paid cleared to 0 (Do NOT delete transactions; record reversal)
+            import uuid
             for p in existing_payments:
-                was_shop_coll = p.collected_by_shop
-                p.delete()
-                if was_shop_coll:
+                if p.net_amount > Decimal("0.00"):
+                    rev_amt = p.net_amount
+                    p.is_reversed = True
+                    p.reversed_amount = (p.reversed_amount or Decimal("0.00")) + rev_amt
+                    p.reversed_at = timezone.now()
+                    p.reversal_reason = "Admin cleared installment amount paid to 0."
+                    p.save(update_fields=["is_reversed", "reversed_amount", "reversed_at", "reversal_reason"])
+                    CustomerEMIPayment.objects.create(
+                        application=app,
+                        customer=customer,
+                        schedule=schedule,
+                        amount=rev_amt,
+                        payment_date=timezone.localdate(),
+                        payment_mode=p.payment_mode,
+                        transaction_reference=f"REV-{p.id}-{uuid.uuid4().hex[:6].upper()}",
+                        recorded_by=request.user,
+                        is_reversed=True,
+                        reversal_of=p,
+                        reversal_reason="Admin cleared installment amount paid to 0.",
+                        remarks=f"Reversal of Payment #{p.id} (₹{rev_amt:,.2f}) due to installment amount cleared."
+                    )
+                if p.collected_by_shop:
                     recalculate_shop_financials(customer.shop)
-                if was_shop_coll:
-                    recalculate_shop_financials(customer.shop)
+
+        # Handle Partial Payment Decisions: Move to Next Due vs Keep as Present
+        partial_action = request.POST.get("partial_action", "").strip().lower()
+        if new_status == CustomerEMISchedule.InstallmentStatus.PARTIAL:
+            if partial_action == "move_to_next":
+                from datetime import date as dt_date
+                import calendar
+                old_due = schedule.due_date
+                target_day = app.monthly_due_day or old_due.day
+                y = old_due.year
+                m = old_due.month + 1
+                if m > 12:
+                    m = 1
+                    y += 1
+                last_day = calendar.monthrange(y, m)[1]
+                new_due = dt_date(y, m, min(target_day, last_day))
+                schedule.due_date = new_due
+                schedule.save(update_fields=["due_date", "updated_at"])
+
+                # Maintain chronological order across subsequent unpaid schedules
+                subsequent = (
+                    app.emi_schedules
+                    .filter(installment_number__gt=schedule.installment_number, is_paid=False)
+                    .order_by("installment_number")
+                )
+                prev_due = new_due
+                for sub in subsequent:
+                    if sub.due_date <= prev_due:
+                        sy = prev_due.year
+                        sm = prev_due.month + 1
+                        if sm > 12:
+                            sm = 1
+                            sy += 1
+                        slast = calendar.monthrange(sy, sm)[1]
+                        sub_next = dt_date(sy, sm, min(target_day, slast))
+                        sub.due_date = sub_next
+                        sub.save(update_fields=["due_date", "updated_at"])
+                        prev_due = sub_next
+                    else:
+                        prev_due = sub.due_date
+
+                CustomerUpdateHistory.objects.create(
+                    customer=customer,
+                    user=request.user,
+                    section="EMI Installments",
+                    field_name="Partial Action: Move to Next Due",
+                    previous_value=old_due.strftime("%d-%m-%Y"),
+                    new_value=new_due.strftime("%d-%m-%Y"),
+                    description=f"Installment #{schedule.installment_number} partial balance kept; due date moved to {new_due.strftime('%d-%m-%Y')}.",
+                    notes=f"Partial Payment — Action: Move to Next Due. Retained amount paid ₹{new_amount_paid:,.2f}, remaining ₹{(new_amount - new_amount_paid):,.2f}. Due date updated to {new_due.strftime('%d-%m-%Y')}."
+                )
+            elif partial_action == "keep_present":
+                CustomerUpdateHistory.objects.create(
+                    customer=customer,
+                    user=request.user,
+                    section="EMI Installments",
+                    field_name="Partial Action: Keep as Present",
+                    previous_value=schedule.due_date.strftime("%d-%m-%Y"),
+                    new_value=schedule.due_date.strftime("%d-%m-%Y"),
+                    description=f"Installment #{schedule.installment_number} partial balance kept with present due date retained.",
+                    notes=f"Partial Payment — Action: Keep as Present. Retained amount paid ₹{new_amount_paid:,.2f}, remaining ₹{(new_amount - new_amount_paid):,.2f}. Due date {schedule.due_date.strftime('%d-%m-%Y')} retained."
+                )
 
         # Handle Partial Payment Carry-Forward to Next Month if requested
         carried_forward_amount = Decimal("0.00")
@@ -2045,6 +2172,7 @@ def admin_customer_record_payment_view(request, pk):
     """
     Records a customer-to-shop EMI payment transaction.
     Applies the amount across unpaid EMI installments in sequence.
+    Supports partial action (keep_present vs move_to_next).
     """
     customer = get_object_or_404(Customer, pk=pk)
     amount_str = request.POST.get("amount", "").replace(",", "").strip()
@@ -2052,6 +2180,7 @@ def admin_customer_record_payment_view(request, pk):
     payment_mode = request.POST.get("payment_mode", "UPI").strip()
     ref = request.POST.get("transaction_reference", "").strip()
     remarks = request.POST.get("remarks", "").strip()
+    partial_action = request.POST.get("partial_action", "keep_present").strip().lower()
     next_url = request.POST.get("next") or request.META.get("HTTP_REFERER") or reverse("admin_all_customers")
 
     try:
@@ -2096,6 +2225,55 @@ def admin_customer_record_payment_view(request, pk):
             description=f"EMI Payment #{payment.id} of ₹{amt:,.2f} ({payment_mode}) logged by {request.user.username}",
             notes=f"Payment Recorded — ₹{amt:,.2f} ({payment_mode}) [Payment #{payment.id}]"
         )
+
+        if partial_action == "move_to_next":
+            partial_sched = app.emi_schedules.filter(status=CustomerEMISchedule.InstallmentStatus.PARTIAL).order_by("installment_number").first()
+            if partial_sched:
+                from datetime import date as dt_date
+                import calendar
+                old_due = partial_sched.due_date
+                target_day = app.monthly_due_day or old_due.day
+                y = old_due.year
+                m = old_due.month + 1
+                if m > 12:
+                    m = 1
+                    y += 1
+                last_day = calendar.monthrange(y, m)[1]
+                new_due = dt_date(y, m, min(target_day, last_day))
+                partial_sched.due_date = new_due
+                partial_sched.save(update_fields=["due_date", "updated_at"])
+
+                subsequent = (
+                    app.emi_schedules
+                    .filter(installment_number__gt=partial_sched.installment_number, is_paid=False)
+                    .order_by("installment_number")
+                )
+                prev_due = new_due
+                for sub in subsequent:
+                    if sub.due_date <= prev_due:
+                        sy = prev_due.year
+                        sm = prev_due.month + 1
+                        if sm > 12:
+                            sm = 1
+                            sy += 1
+                        slast = calendar.monthrange(sy, sm)[1]
+                        sub_next = dt_date(sy, sm, min(target_day, slast))
+                        sub.due_date = sub_next
+                        sub.save(update_fields=["due_date", "updated_at"])
+                        prev_due = sub_next
+                    else:
+                        prev_due = sub.due_date
+
+                CustomerUpdateHistory.objects.create(
+                    customer=customer,
+                    user=request.user,
+                    section="EMI Installments",
+                    field_name="Partial Action: Move to Next Due",
+                    previous_value=old_due.strftime("%d-%m-%Y"),
+                    new_value=new_due.strftime("%d-%m-%Y"),
+                    description=f"Installment #{partial_sched.installment_number} partial due date moved to {new_due.strftime('%d-%m-%Y')}.",
+                    notes=f"Payment recorded and partial installment #{partial_sched.installment_number} moved to next due ({new_due.strftime('%d-%m-%Y')})."
+                )
 
     messages.success(request, f"Payment of ₹{amt:,.2f} recorded for '{customer.name}'.")
     return redirect(next_url)
@@ -2278,6 +2456,132 @@ def admin_edit_customer_payment_view(request, pk):
             recalculate_shop_financials(customer.shop)
 
     messages.success(request, f"Payment #{payment.id} updated successfully.")
+    return redirect(next_url)
+
+
+@require_POST
+@login_required
+@admin_required
+def admin_reverse_customer_payment_view(request, pk):
+    """
+    Reverses a previously recorded CustomerEMIPayment transaction (full or partial).
+    Maintains a reversal audit record linked to the original payment via reversal_of.
+    Does NOT delete transaction history.
+    Deducts reversed amount from schedule and recalculates remaining balance and Business Analytics.
+    URL: /admin-dashboard/customer-payments/<int:pk>/reverse/
+    """
+    payment = get_object_or_404(CustomerEMIPayment.objects.select_related("customer", "application", "schedule"), pk=pk)
+    app = payment.application
+    customer = payment.customer
+    next_url = request.POST.get("next") or request.META.get("HTTP_REFERER") or reverse("admin_customer_detail", kwargs={"pk": customer.pk})
+
+    reversal_type = request.POST.get("reversal_type", "full").strip().lower()
+    reverse_amount_str = request.POST.get("reverse_amount", "").replace(",", "").strip()
+    reversal_reason = request.POST.get("reversal_reason", "").strip() or "Admin initiated payment reversal."
+
+    available_to_reverse = payment.net_amount
+    if available_to_reverse <= Decimal("0.00"):
+        messages.error(request, f"Payment #{payment.id} has already been fully reversed.")
+        return redirect(next_url)
+
+    if reversal_type == "partial":
+        try:
+            rev_amt = Decimal(reverse_amount_str)
+            if rev_amt <= Decimal("0.00") or rev_amt > available_to_reverse:
+                messages.error(request, f"Reversal amount must be between ₹0.01 and ₹{available_to_reverse:,.2f}.")
+                return redirect(next_url)
+        except Exception:
+            messages.error(request, "Invalid reversal amount provided.")
+            return redirect(next_url)
+    else:
+        rev_amt = available_to_reverse
+
+    with transaction.atomic():
+        now = timezone.now()
+        payment.is_reversed = True
+        payment.reversed_amount = (payment.reversed_amount or Decimal("0.00")) + rev_amt
+        payment.reversed_at = now
+        payment.reversal_reason = reversal_reason
+        payment.save(update_fields=["is_reversed", "reversed_amount", "reversed_at", "reversal_reason"])
+
+        import uuid
+        rev_record = CustomerEMIPayment.objects.create(
+            application=app,
+            customer=customer,
+            schedule=payment.schedule,
+            amount=rev_amt,
+            payment_date=timezone.localdate(),
+            payment_mode=payment.payment_mode,
+            transaction_reference=f"REV-{payment.id}-{uuid.uuid4().hex[:6].upper()}",
+            recorded_by=request.user,
+            is_reversed=True,
+            reversal_of=payment,
+            reversal_reason=reversal_reason,
+            remarks=f"Reversal of Payment #{payment.id} (₹{rev_amt:,.2f}): {reversal_reason}"
+        )
+
+        # Synchronize schedule amount_paid
+        remaining_to_deduct = rev_amt
+        if payment.schedule and payment.schedule.amount_paid > Decimal("0.00"):
+            sched = payment.schedule
+            deduct = min(sched.amount_paid, remaining_to_deduct)
+            sched.amount_paid -= deduct
+            remaining_to_deduct -= deduct
+            sched.is_paid = (sched.amount_paid >= sched.amount and sched.amount > Decimal("0.00"))
+            if sched.is_paid:
+                sched.status = CustomerEMISchedule.InstallmentStatus.PAID
+            elif sched.amount_paid > Decimal("0.00"):
+                sched.status = CustomerEMISchedule.InstallmentStatus.PARTIAL
+                sched.paid_date = None
+            else:
+                sched.status = CustomerEMISchedule.InstallmentStatus.PENDING
+                sched.paid_date = None
+            sched.save(update_fields=["amount_paid", "is_paid", "paid_date", "status", "updated_at"])
+
+        if remaining_to_deduct > Decimal("0.00"):
+            for sched in app.emi_schedules.filter(amount_paid__gt=Decimal("0.00")).order_by("-installment_number"):
+                if remaining_to_deduct <= Decimal("0.00"):
+                    break
+                deduct = min(sched.amount_paid, remaining_to_deduct)
+                sched.amount_paid -= deduct
+                remaining_to_deduct -= deduct
+                sched.is_paid = (sched.amount_paid >= sched.amount and sched.amount > Decimal("0.00"))
+                if sched.is_paid:
+                    sched.status = CustomerEMISchedule.InstallmentStatus.PAID
+                elif sched.amount_paid > Decimal("0.00"):
+                    sched.status = CustomerEMISchedule.InstallmentStatus.PARTIAL
+                    sched.paid_date = None
+                else:
+                    sched.status = CustomerEMISchedule.InstallmentStatus.PENDING
+                    sched.paid_date = None
+                sched.save(update_fields=["amount_paid", "is_paid", "paid_date", "status", "updated_at"])
+
+        # If payment was collected by shop, synchronize shop financials
+        if payment.collected_by_shop and customer.shop:
+            recalculate_shop_financials(customer.shop)
+
+        # Reset completed_date if balance is now outstanding
+        rem_balance = app.customer_remaining_balance
+        if rem_balance > Decimal("0.00"):
+            if app.completed_date:
+                app.completed_date = None
+                app.save(update_fields=["completed_date", "updated_at"])
+            if customer.completed_date:
+                customer.completed_date = None
+                customer.save(update_fields=["completed_date", "updated_at"])
+
+        CustomerUpdateHistory.objects.create(
+            customer=customer,
+            user=request.user,
+            section="Customer Payments",
+            field_name="Payment Reversal",
+            previous_value=f"₹{payment.amount:,.2f}",
+            new_value=f"Reversed ₹{rev_amt:,.2f}",
+            description=f"Payment #{payment.id} reversed (₹{rev_amt:,.2f}). Reason: {reversal_reason}",
+            notes=f"Payment #{payment.id} reversed by {request.user.username} — Amount: ₹{rev_amt:,.2f}. Reason: {reversal_reason}"
+        )
+
+    messages.success(request, f"Payment #{payment.id} reversal of ₹{rev_amt:,.2f} processed successfully.")
     return redirect(next_url)
 
 
@@ -2831,7 +3135,11 @@ def get_analytics_dataset(year_val, month_val, shop_id_val):
     ]
     cust_qs = Customer.objects.filter(applications__status__in=approved_statuses).distinct()
     payout_qs = FinancierPayment.objects.filter(Q(application__status__in=approved_statuses) | Q(application__isnull=True))
-    coll_qs = CustomerEMIPayment.objects.filter(application__status__in=approved_statuses)
+    coll_qs = CustomerEMIPayment.objects.filter(
+        application__status__in=approved_statuses,
+        is_reversed=False,
+        reversal_of__isnull=True
+    )
     app_qs = FinanceApplication.objects.filter(status__in=approved_statuses)
 
     # Shop filtering
@@ -2864,8 +3172,8 @@ def get_analytics_dataset(year_val, month_val, shop_id_val):
     total_customers = cust_qs.count()
     # 1. Total Financed This Month = Total amount paid out to shops during selected month
     total_payouts = payout_qs.aggregate(s=Sum("amount_received"))["s"] or Decimal("0.00")
-    # 2. Total Collected This Month = Total customer payments actually received during selected month
-    total_collections = coll_qs.aggregate(s=Sum("amount"))["s"] or Decimal("0.00")
+    # 2. Total Collected This Month = Total customer payments actually received during selected month (net of reversals)
+    total_collections = sum((p.net_amount for p in coll_qs), Decimal("0.00"))
     # 3. Cash Flow Difference = Customer Collections minus Shop Payouts
     cash_flow_diff = total_collections - total_payouts
     total_financed = app_qs.aggregate(s=Sum("financier_request_amount"))["s"] or Decimal("0.00")
@@ -2907,9 +3215,10 @@ def get_analytics_dataset(year_val, month_val, shop_id_val):
             if p_day and 1 <= p_day <= num_days:
                 chart_payouts[p_day - 1] += float(p_amt or 0)
 
-        for c_day, c_amt in coll_qs.values_list("payment_date__day", "amount"):
+        for p in coll_qs:
+            c_day = p.payment_date.day if p.payment_date else None
             if c_day and 1 <= c_day <= num_days:
-                chart_collections[c_day - 1] += float(c_amt or 0)
+                chart_collections[c_day - 1] += float(p.net_amount)
     else:
         chart_labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
         chart_customers = [0] * 12
@@ -2924,9 +3233,10 @@ def get_analytics_dataset(year_val, month_val, shop_id_val):
             if p_m and 1 <= p_m <= 12:
                 chart_payouts[p_m - 1] += float(p_amt or 0)
 
-        for c_m, c_amt in coll_qs.values_list("payment_date__month", "amount"):
+        for p in coll_qs:
+            c_m = p.payment_date.month if p.payment_date else None
             if c_m and 1 <= c_m <= 12:
-                chart_collections[c_m - 1] += float(c_amt or 0)
+                chart_collections[c_m - 1] += float(p.net_amount)
 
     return {
         "year": year,
@@ -3079,12 +3389,14 @@ def admin_reports_view(request):
             payment_date__year=sel_year,
             payment_date__month=sel_month
         ).aggregate(tot=Sum("amount_received"))["tot"] or Decimal("0.00")
-        s_coll = CustomerEMIPayment.objects.filter(
+        s_coll = sum((p.net_amount for p in CustomerEMIPayment.objects.filter(
             customer__shop=s,
             application__status__in=approved_statuses,
+            is_reversed=False,
+            reversal_of__isnull=True,
             payment_date__year=sel_year,
             payment_date__month=sel_month
-        ).aggregate(tot=Sum("amount"))["tot"] or Decimal("0.00")
+        )), Decimal("0.00"))
         s_profit = s_coll - s_payout
 
         shop_rankings.append({
@@ -3130,13 +3442,13 @@ def admin_reports_view(request):
         ).aggregate(
             tot=Sum("amount_received")
         )["tot"] or Decimal("0.00")
-        t_coll = CustomerEMIPayment.objects.filter(
+        t_coll = sum((p.net_amount for p in CustomerEMIPayment.objects.filter(
             application__status__in=approved_statuses,
+            is_reversed=False,
+            reversal_of__isnull=True,
             payment_date__year=y_calc,
             payment_date__month=m_calc
-        ).aggregate(
-            tot=Sum("amount")
-        )["tot"] or Decimal("0.00")
+        )), Decimal("0.00"))
         t_profit = t_coll - t_payout
 
         trend_labels.append(f"{calendar.month_abbr[m_calc]} {y_calc}")
@@ -3154,6 +3466,8 @@ def admin_reports_view(request):
     )
     base_coll = CustomerEMIPayment.objects.filter(
         application__status__in=approved_statuses,
+        is_reversed=False,
+        reversal_of__isnull=True,
         payment_date__year=sel_year
     )
     base_app = FinanceApplication.objects.filter(
@@ -3179,7 +3493,7 @@ def admin_reports_view(request):
         m_cust = base_cust.filter(created_at__month=m).count()
         m_fin = base_app.filter(created_at__month=m).aggregate(s=Sum("financier_request_amount"))["s"] or Decimal("0.00")
         m_payout = base_payout.filter(payment_date__month=m).aggregate(s=Sum("amount_received"))["s"] or Decimal("0.00")
-        m_coll = base_coll.filter(payment_date__month=m).aggregate(s=Sum("amount"))["s"] or Decimal("0.00")
+        m_coll = sum((p.net_amount for p in base_coll.filter(payment_date__month=m)), Decimal("0.00"))
         m_cash_flow = m_coll - m_payout
 
         # New Finance Margin for customers financed in month m
