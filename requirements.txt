@@ -10,4 +10,4 @@ reportlab>=4.0.0
 # psycopg2-binary>=2.9
 
 # Production server (uncomment for deployment)
-# gunicorn>=22.0
+gunicorn>=22.0
